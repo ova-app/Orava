@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Stack, router, useSegments } from 'expo-router'
 import { Session } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
+import { WorkoutProvider } from '../context/WorkoutContext'
 
 export default function RootLayout() {
   const [session, setSession] = useState<Session | null>(null)
@@ -33,9 +34,12 @@ export default function RootLayout() {
   if (!initialized) return null
 
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="(tabs)" />
-      <Stack.Screen name="auth" />
-    </Stack>
+    <WorkoutProvider>
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="auth" />
+        <Stack.Screen name="workout" />
+      </Stack>
+    </WorkoutProvider>
   )
 }
