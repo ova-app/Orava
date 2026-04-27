@@ -18,7 +18,7 @@ interface WorkoutSummary {
   id: string
   title: string
   started_at: string
-  duration_seconds: number
+  duration_sec: number
   exercise_count: number
   total_sets: number
   total_volume: number
@@ -53,7 +53,7 @@ function computeStats(raw: any): WorkoutSummary {
     id: raw.id,
     title: raw.title ?? 'Séance',
     started_at: raw.started_at,
-    duration_seconds: raw.duration_seconds ?? 0,
+    duration_sec: raw.duration_sec ?? 0,
     exercise_count: exercises.length,
     total_sets: allSets.length,
     total_volume: allSets.reduce((sum: number, s: any) => sum + (s.weight_kg ?? 0) * (s.reps ?? 0), 0),
@@ -78,7 +78,7 @@ export default function HistoryScreen() {
     const { data, error } = await supabase
       .from('workouts')
       .select(`
-        id, title, started_at, duration_seconds,
+        id, title, started_at, duration_sec,
         workout_exercises (
           id,
           workout_sets ( weight_kg, reps, is_pr )
@@ -161,7 +161,7 @@ function WorkoutCard({ workout }: { workout: WorkoutSummary }) {
           <Text style={styles.cardTitle} numberOfLines={1}>{workout.title}</Text>
           <Text style={styles.cardDate}>{formatDate(workout.started_at)}</Text>
         </View>
-        <Text style={styles.cardDuration}>{formatDuration(workout.duration_seconds)}</Text>
+        <Text style={styles.cardDuration}>{formatDuration(workout.duration_sec)}</Text>
       </View>
 
       <View style={styles.cardStats}>

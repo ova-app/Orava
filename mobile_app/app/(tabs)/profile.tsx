@@ -94,7 +94,7 @@ export default function ProfileScreen() {
     const { data } = await supabase
       .from('workouts')
       .select(`
-        duration_seconds,
+        duration_sec,
         workout_exercises (
           workout_sets ( weight_kg, reps )
         )
@@ -110,7 +110,7 @@ export default function ProfileScreen() {
     let totalVolume = 0
 
     for (const w of data as any[]) {
-      totalDuration += w.duration_seconds ?? 0
+      totalDuration += w.duration_sec ?? 0
       for (const we of (w.workout_exercises ?? []) as any[]) {
         const sets = we.workout_sets ?? []
         totalSets += sets.length

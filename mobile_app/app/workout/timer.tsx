@@ -6,7 +6,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import {
-  View, Text, TouchableOpacity, StyleSheet, Vibration, SafeAreaView,
+  View, Text, TouchableOpacity, StyleSheet, Vibration, SafeAreaView, AppState,
 } from 'react-native'
 import { router } from 'expo-router'
 
@@ -28,9 +28,15 @@ export default function TimerScreen() {
   const [remaining, setRemaining] = useState(DEFAULT_SECONDS)
   const [running, setRunning] = useState(false)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const startTimestampRef = useRef<number | null>(null)
+  const startRemainingRef = useRef<number>(DEFAULT_SECONDS)
+  const runningRef = useRef(false)
+  runningRef.current = running
 
   useEffect(() => {
     if (running) {
+      startTimestampRef.current = Date.now()
+      startRemainingRef.current = remaining
       intervalRef.current = setInterval(() => {
         setRemaining(prev => {
           if (prev <= 1) {
@@ -48,6 +54,24 @@ export default function TimerScreen() {
     }
     return () => { if (intervalRef.current) clearInterval(intervalRef.current) }
   }, [running])
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', nextState => {
+      if (nextState === 'active' && runningRef.current && startTimestampRef.current !== null) {
+        const elapsed = Math.floor((Date.now() - startTimestampRef.current) / 1000)
+        const newRemaining = Math.max(0, startRemainingRef.current - elapsed)
+        setRemaining(newRemaining)
+        startTimestampRef.current = Date.now()
+        startRemainingRef.current = newRemaining
+        if (newRemaining === 0) {
+          setRunning(false)
+          Vibration.vibrate([0, 300, 150, 300, 150, 500])
+          setTimeout(() => router.back(), 1200)
+        }
+      }
+    })
+    return () => sub.remove()
+  }, [])
 
   function selectPreset(seconds: number) {
     if (intervalRef.current) clearInterval(intervalRef.current)

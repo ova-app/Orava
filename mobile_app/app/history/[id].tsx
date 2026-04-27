@@ -31,7 +31,7 @@ interface WorkoutDetail {
   id: string
   title: string
   started_at: string
-  duration_seconds: number
+  duration_sec: number
   exercises: ExerciseDetail[]
   total_volume: number
   total_sets: number
@@ -77,7 +77,7 @@ export default function WorkoutDetailScreen() {
     const { data, error } = await supabase
       .from('workouts')
       .select(`
-        id, title, started_at, ended_at, duration_seconds,
+        id, title, started_at, ended_at, duration_sec,
         workout_exercises (
           order_index,
           exercises ( name, equipment ),
@@ -106,7 +106,7 @@ export default function WorkoutDetailScreen() {
       id: data.id,
       title: data.title ?? 'Séance',
       started_at: data.started_at,
-      duration_seconds: data.duration_seconds ?? 0,
+      duration_sec: data.duration_sec ?? 0,
       exercises,
       total_volume: allSets.reduce((sum, s) => sum + s.weight_kg * s.reps, 0),
       total_sets: allSets.length,
@@ -152,7 +152,7 @@ export default function WorkoutDetailScreen() {
       >
         {/* Stats */}
         <View style={styles.statsRow}>
-          <StatBox label="Durée" value={formatDuration(workout.duration_seconds)} />
+          <StatBox label="Durée" value={formatDuration(workout.duration_sec)} />
           <StatBox label="Séries" value={String(workout.total_sets)} />
           <StatBox
             label="Volume"

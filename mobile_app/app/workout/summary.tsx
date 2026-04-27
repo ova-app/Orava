@@ -61,7 +61,7 @@ export default function SummaryScreen() {
   const [title, setTitle] = useState('')
   const [gyms, setGyms] = useState<Gym[]>([])
   const [selectedGymId, setSelectedGymId] = useState<string | null>(null)
-  const [isPublic, setIsPublic] = useState(false)
+  const [isPublic, setIsPublic] = useState(true)
   const [saving, setSaving] = useState(false)
 
   // Exercices avec au moins une série validée
@@ -110,7 +110,7 @@ export default function SummaryScreen() {
           title: title.trim() || 'Séance',
           started_at: workout.startedAt?.toISOString(),
           ended_at: new Date().toISOString(),
-          duration_seconds: workout.elapsedSeconds,
+          duration_sec: workout.elapsedSeconds,
           gym_id: selectedGymId,
           is_public: isPublic,
         })
