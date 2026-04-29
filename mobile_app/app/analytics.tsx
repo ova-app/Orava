@@ -34,7 +34,7 @@ interface TopExercise { name: string; set_count: number; volume: number }
 
 interface BalanceData { push: number; pull: number; upper: number; lower: number }
 
-interface PRStats { charge: number; serie: number; rm: number }
+interface PRStats { charge: number; serie: number; rm: number; gold: number; silver: number; bronze: number }
 
 // ─── Constantes ──────────────────────────────────────────────────────────────
 
@@ -110,7 +110,7 @@ export default function AnalyticsScreen() {
   const [progressList, setProgressList] = useState<ExerciseProgress[]>([])
   const [topExercises, setTopExercises] = useState<TopExercise[]>([])
   const [balance, setBalance] = useState<BalanceData>({ push: 0, pull: 0, upper: 0, lower: 0 })
-  const [prStats, setPRStats] = useState<PRStats>({ charge: 0, serie: 0, rm: 0 })
+  const [prStats, setPRStats] = useState<PRStats>({ charge: 0, serie: 0, rm: 0, gold: 0, silver: 0, bronze: 0 })
 
   useEffect(() => { loadAll() }, [period])
 
@@ -384,7 +384,7 @@ export default function AnalyticsScreen() {
     let query = supabase
       .from('workout_sets')
       .select(`
-        pr_charge, pr_serie, pr_1rm,
+        pr_charge, pr_serie, pr_1rm, pr_level,
         workout_exercises!inner ( workouts!inner ( user_id, started_at ) )
       `)
       .eq('workout_exercises.workouts.user_id', userId)
@@ -395,13 +395,16 @@ export default function AnalyticsScreen() {
     const { data } = await query
     if (!data) return
 
-    let charge = 0, serie = 0, rm = 0
+    let charge = 0, serie = 0, rm = 0, gold = 0, silver = 0, bronze = 0
     for (const s of data as any[]) {
       if (s.pr_charge) charge++
       if (s.pr_serie) serie++
       if (s.pr_1rm) rm++
+      if (s.pr_level === 'gold') gold++
+      else if (s.pr_level === 'silver') silver++
+      else if (s.pr_level === 'bronze') bronze++
     }
-    setPRStats({ charge, serie, rm })
+    setPRStats({ charge, serie, rm, gold, silver, bronze })
   }
 
   // ─── Render ──────────────────────────────────────────────────────────────
@@ -660,6 +663,20 @@ export default function AnalyticsScreen() {
             </>
           )}
 
+          {/* ── 8. Podium des niveaux ── */}
+          {(prStats.gold + prStats.silver + prStats.bronze) > 0 && (
+            <>
+              <SectionTitle label="Podium des performances" colors={colors} />
+              <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.separator, flexDirection: 'row' }]}>
+                <MedalStatBox emoji="🥇" color="#FAC775" count={prStats.gold} label="Records absolus" />
+                <View style={[styles.prStatDivider, { backgroundColor: colors.separator }]} />
+                <MedalStatBox emoji="🥈" color="#C0C0C0" count={prStats.silver} label="2e meilleures" />
+                <View style={[styles.prStatDivider, { backgroundColor: colors.separator }]} />
+                <MedalStatBox emoji="🥉" color="#CD7F32" count={prStats.bronze} label="3e meilleures" />
+              </View>
+            </>
+          )}
+
           <View style={{ height: 40 }} />
         </ScrollView>
       )}
@@ -700,6 +717,18 @@ function PRStatBox({ icon, count, label, colors }: {
       {icon}
       <Text style={[styles.prStatCount, { color: colors.textPrimary }]}>{count}</Text>
       <Text style={[styles.prStatLabel, { color: colors.textSecondary }]}>{label}</Text>
+    </View>
+  )
+}
+
+function MedalStatBox({ emoji, color, count, label }: {
+  emoji: string; color: string; count: number; label: string
+}) {
+  return (
+    <View style={styles.prStatBox}>
+      <Text style={{ fontSize: 22 }}>{emoji}</Text>
+      <Text style={[styles.prStatCount, { color }]}>{count}</Text>
+      <Text style={[styles.prStatLabel, { color: '#8E8E93' }]}>{label}</Text>
     </View>
   )
 }

@@ -9,6 +9,8 @@ import { useTheme } from '../../context/ThemeContext'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
+type PrLevel = 'gold' | 'silver' | 'bronze' | null
+
 interface SetDetail {
   set_number: number
   weight_kg: number
@@ -17,6 +19,7 @@ interface SetDetail {
   pr_charge: boolean
   pr_serie: boolean
   pr_1rm: boolean
+  pr_level: PrLevel
 }
 
 interface ExerciseDetail {
@@ -74,14 +77,14 @@ export default function WorkoutDetailScreen() {
   useEffect(() => { if (id) fetchWorkout(id) }, [id])
 
   async function fetchWorkout(workoutId: string) {
+    // Step 1: workout + structure (no exercises join — avoids cross-table RLS issues)
     const { data, error } = await supabase
       .from('workouts')
       .select(`
         id, title, started_at, duration_sec,
         workout_exercises (
-          order_index,
-          exercises ( name_fr, equipment_type ),
-          workout_sets ( set_number, weight_kg, reps, is_pr, pr_charge, pr_serie, pr_1rm )
+          id, order_index, exercise_id,
+          workout_sets ( set_number, weight_kg, reps, is_pr, pr_charge, pr_serie, pr_1rm, pr_level )
         )
       `)
       .eq('id', workoutId)
@@ -90,11 +93,26 @@ export default function WorkoutDetailScreen() {
     setLoading(false)
     if (error || !data) return
 
-    const exercises: ExerciseDetail[] = ((data.workout_exercises ?? []) as any[])
+    // Step 2: fetch exercise names separately (same pattern as library.tsx — known to work)
+    const weRows = (data.workout_exercises ?? []) as any[]
+    const exerciseIds = [...new Set(weRows.map(we => we.exercise_id).filter(Boolean))]
+    let exMap: Record<string, { name_fr: string; equipment_type: string | null }> = {}
+
+    if (exerciseIds.length > 0) {
+      const { data: exData } = await supabase
+        .from('exercises')
+        .select('id, name_fr, equipment_type')
+        .in('id', exerciseIds)
+      if (exData) {
+        for (const ex of exData as any[]) exMap[ex.id] = ex
+      }
+    }
+
+    const exercises: ExerciseDetail[] = weRows
       .sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0))
       .map(we => ({
-        name: we.exercises?.name_fr ?? 'Exercice',
-        equipment: we.exercises?.equipment_type ?? null,
+        name: exMap[we.exercise_id]?.name_fr ?? 'Exercice',
+        equipment: exMap[we.exercise_id]?.equipment_type ?? null,
         order_index: we.order_index,
         sets: ((we.workout_sets ?? []) as any[])
           .sort((a: any, b: any) => a.set_number - b.set_number)
@@ -106,6 +124,7 @@ export default function WorkoutDetailScreen() {
             pr_charge: s.pr_charge ?? false,
             pr_serie: s.pr_serie ?? false,
             pr_1rm: s.pr_1rm ?? false,
+            pr_level: (s.pr_level ?? null) as PrLevel,
           })),
       }))
 
@@ -215,17 +234,31 @@ export default function WorkoutDetailScreen() {
 
 // ─── PRBadges ────────────────────────────────────────────────────────────────
 
+const PR_LEVEL_COLORS: Record<NonNullable<PrLevel>, string> = {
+  gold: '#FAC775', silver: '#C0C0C0', bronze: '#CD7F32',
+}
+
 function PRBadges({ set, colors }: { set: SetDetail; colors: ReturnType<typeof useTheme>['colors'] }) {
-  if (!set.is_pr) return <View style={{ width: 60 }} />
+  if (!set.is_pr && !set.pr_level) return <View style={{ width: 60 }} />
   return (
     <View style={styles.prIcons}>
-      {set.pr_charge && <Zap size={14} color="#FFD700" fill="#FFD700" />}
-      {set.pr_serie && <Flame size={14} color={colors.accent} fill={colors.accent} />}
-      {set.pr_1rm && <Trophy size={14} color="#FAC775" fill="#FAC775" />}
-      {!set.pr_charge && !set.pr_serie && !set.pr_1rm && (
-        <View style={[styles.prBadge, { backgroundColor: colors.prAmber + '20' }]}>
-          <Text style={[styles.prBadgeText, { color: colors.prAmber }]}>PR</Text>
+      {set.pr_level ? (
+        <View style={[styles.prBadge, { backgroundColor: PR_LEVEL_COLORS[set.pr_level] + '25', borderColor: PR_LEVEL_COLORS[set.pr_level] + '60' }]}>
+          <Text style={[styles.prBadgeText, { color: PR_LEVEL_COLORS[set.pr_level] }]}>
+            {set.pr_level === 'gold' ? '🥇' : set.pr_level === 'silver' ? '🥈' : '🥉'}
+          </Text>
         </View>
+      ) : (
+        <>
+          {set.pr_charge && <Zap size={14} color="#FFD700" fill="#FFD700" />}
+          {set.pr_serie && <Flame size={14} color={colors.accent} fill={colors.accent} />}
+          {set.pr_1rm && <Trophy size={14} color="#FAC775" fill="#FAC775" />}
+          {!set.pr_charge && !set.pr_serie && !set.pr_1rm && (
+            <View style={[styles.prBadge, { backgroundColor: colors.prAmber + '20' }]}>
+              <Text style={[styles.prBadgeText, { color: colors.prAmber }]}>PR</Text>
+            </View>
+          )}
+        </>
       )}
     </View>
   )

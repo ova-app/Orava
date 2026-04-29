@@ -5,7 +5,7 @@ import {
   KeyboardAvoidingView, Platform,
 } from 'react-native'
 import { router, useFocusEffect } from 'expo-router'
-import { Zap, Flame, Trophy } from 'lucide-react-native'
+import { Zap, Flame, Trophy, MapPin } from 'lucide-react-native'
 import { supabase } from '../../lib/supabase'
 import { useTheme } from '../../context/ThemeContext'
 
@@ -30,6 +30,7 @@ interface FeedPost {
   comment_count: number
   is_liked: boolean
   is_own: boolean
+  location_city: string | null
 }
 
 interface Comment {
@@ -75,6 +76,7 @@ export default function FeedScreen() {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [commentWorkoutId, setCommentWorkoutId] = useState<string | null>(null)
+  const [likersWorkoutId, setLikersWorkoutId] = useState<string | null>(null)
   const currentUserIdRef = useRef<string | null>(null)
 
   useFocusEffect(useCallback(() => { fetchFeed() }, []))
@@ -96,7 +98,7 @@ export default function FeedScreen() {
     const { data: workoutsData, error } = await supabase
       .from('workouts')
       .select(`
-        id, title, started_at, duration_sec, user_id,
+        id, title, started_at, duration_sec, user_id, location_city,
         workout_exercises (
           workout_sets ( weight_kg, reps, is_pr, pr_charge, pr_serie, pr_1rm )
         ),
@@ -144,6 +146,7 @@ export default function FeedScreen() {
         comment_count: (w.comments ?? []).length,
         is_liked: (w.likes ?? []).some((l: any) => l.user_id === user.id),
         is_own: w.user_id === user.id,
+        location_city: w.location_city ?? null,
       }
     })
 
@@ -207,6 +210,7 @@ export default function FeedScreen() {
               colors={colors}
               onLike={() => toggleLike(item.id, item.is_liked)}
               onComment={() => setCommentWorkoutId(item.id)}
+              onLikers={() => setLikersWorkoutId(item.id)}
               onPress={() => router.push(`/history/${item.id}`)}
             />
           )}
@@ -231,17 +235,25 @@ export default function FeedScreen() {
         ))}
         colors={colors}
       />
+
+      <LikersModal
+        workoutId={likersWorkoutId}
+        visible={likersWorkoutId !== null}
+        onClose={() => setLikersWorkoutId(null)}
+        colors={colors}
+      />
     </View>
   )
 }
 
 // ─── PostCard ─────────────────────────────────────────────────────────────────
 
-function PostCard({ post, colors, onLike, onComment, onPress }: {
+function PostCard({ post, colors, onLike, onComment, onLikers, onPress }: {
   post: FeedPost
   colors: ReturnType<typeof useTheme>['colors']
   onLike: () => void
   onComment: () => void
+  onLikers: () => void
   onPress: () => void
 }) {
   const hasPrTypes = post.has_pr_charge || post.has_pr_serie || post.has_pr_1rm
@@ -268,8 +280,14 @@ function PostCard({ post, colors, onLike, onComment, onPress }: {
         <Text style={[styles.duration, { color: colors.textSecondary }]}>{formatDuration(post.duration_sec)}</Text>
       </View>
 
-      {/* Titre */}
+      {/* Titre + ville */}
       <Text style={[styles.workoutTitle, { color: colors.textPrimary }]}>{post.title}</Text>
+      {post.location_city && (
+        <View style={styles.locationRow}>
+          <MapPin size={11} color={colors.textSecondary} />
+          <Text style={[styles.locationText, { color: colors.textSecondary }]}>{post.location_city}</Text>
+        </View>
+      )}
 
       {/* Stats */}
       <View style={styles.statsRow}>
@@ -307,9 +325,11 @@ function PostCard({ post, colors, onLike, onComment, onPress }: {
             {post.is_liked ? '♥' : '♡'}
           </Text>
           {post.like_count > 0 && (
-            <Text style={[styles.actionCount, { color: colors.textSecondary }, post.is_liked && { color: colors.accent }]}>
-              {post.like_count}
-            </Text>
+            <TouchableOpacity onPress={e => { e.stopPropagation(); onLikers() }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Text style={[styles.actionCount, { color: colors.textSecondary }, post.is_liked && { color: colors.accent }]}>
+                {post.like_count}
+              </Text>
+            </TouchableOpacity>
           )}
         </TouchableOpacity>
 
@@ -459,6 +479,86 @@ function CommentsModal({ workoutId, visible, onClose, onCommentSent, colors }: {
   )
 }
 
+// ─── LikersModal ─────────────────────────────────────────────────────────────
+
+interface Liker { id: string; display_name: string }
+
+function LikersModal({ workoutId, visible, onClose, colors }: {
+  workoutId: string | null
+  visible: boolean
+  onClose: () => void
+  colors: ReturnType<typeof useTheme>['colors']
+}) {
+  const [likers, setLikers] = useState<Liker[]>([])
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    if (visible && workoutId) fetchLikers(workoutId)
+    else setLikers([])
+  }, [visible, workoutId])
+
+  async function fetchLikers(id: string) {
+    setLoading(true)
+    const { data } = await supabase
+      .from('likes')
+      .select('user_id, users(username, full_name)')
+      .eq('workout_id', id)
+      .order('created_at', { ascending: false })
+    if (data) {
+      setLikers((data as any[]).map(l => ({
+        id: l.user_id,
+        display_name: (l.users as any)?.full_name ?? (l.users as any)?.username ?? 'Anonyme',
+      })))
+    }
+    setLoading(false)
+  }
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <View style={cm.overlay}>
+        <TouchableOpacity style={cm.backdrop} onPress={onClose} activeOpacity={1} />
+        <View style={[cm.sheet, { backgroundColor: colors.card }, cm.sheetWrapper]}>
+          <View style={[cm.handle, { backgroundColor: colors.separator }]} />
+          <View style={[cm.sheetHeader, { borderBottomColor: colors.separator }]}>
+            <Text style={[cm.sheetTitle, { color: colors.textPrimary }]}>
+              {likers.length > 0 ? `${likers.length} j'aime` : "J'aime"}
+            </Text>
+            <TouchableOpacity onPress={onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Text style={[cm.closeText, { color: colors.textSecondary }]}>✕</Text>
+            </TouchableOpacity>
+          </View>
+          {loading ? (
+            <ActivityIndicator color={colors.accent} style={cm.loader} />
+          ) : likers.length === 0 ? (
+            <View style={cm.emptyComments}>
+              <Text style={[cm.emptyCommentsText, { color: colors.textSecondary }]}>Aucun j'aime pour l'instant.</Text>
+            </View>
+          ) : (
+            <FlatList
+              data={likers}
+              keyExtractor={l => l.id}
+              style={cm.commentList}
+              renderItem={({ item }) => (
+                <View style={cm.commentRow}>
+                  <View style={[cm.commentAvatar, { backgroundColor: colors.accent + '22' }]}>
+                    <Text style={[cm.commentAvatarText, { color: colors.accent }]}>
+                      {item.display_name[0]?.toUpperCase() ?? '?'}
+                    </Text>
+                  </View>
+                  <Text style={[cm.commentAuthor, { color: colors.textPrimary, alignSelf: 'center' }]}>
+                    {item.display_name}
+                  </Text>
+                  <Text style={{ fontSize: 16, marginLeft: 'auto' }}>♥</Text>
+                </View>
+              )}
+            />
+          )}
+        </View>
+      </View>
+    </Modal>
+  )
+}
+
 // ─── MiniStat ─────────────────────────────────────────────────────────────────
 
 function MiniStat({ icon, label, colors }: {
@@ -501,6 +601,8 @@ const styles = StyleSheet.create({
   duration: { fontSize: 13 },
 
   workoutTitle: { fontSize: 17, fontWeight: '700' },
+  locationRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
+  locationText: { fontSize: 11 },
 
   statsRow: { flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' },
   miniStat: { flexDirection: 'row', alignItems: 'center', gap: 4 },

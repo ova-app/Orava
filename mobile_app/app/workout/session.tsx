@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   View, Text, TouchableOpacity, StyleSheet, FlatList,
   TextInput, Modal, ActivityIndicator, Alert, ScrollView,
@@ -6,9 +6,21 @@ import {
 } from 'react-native'
 import { router } from 'expo-router'
 import { supabase } from '../../lib/supabase'
-import { useWorkout, WorkoutExercise, WorkoutSet } from '../../context/WorkoutContext'
+import { useWorkout, WorkoutExercise, WorkoutSet, PrLevel } from '../../context/WorkoutContext'
 import { useTheme } from '../../context/ThemeContext'
 import { Zap, Flame } from 'lucide-react-native'
+
+const PR_LEVEL_COLORS: Record<NonNullable<PrLevel>, { badge: string; text: string; bg: string }> = {
+  gold:   { badge: '#FAC775', text: '#412402', bg: '#FAC77520' },
+  silver: { badge: '#C0C0C0', text: '#2C2C2C', bg: '#C0C0C020' },
+  bronze: { badge: '#CD7F32', text: '#2C1800', bg: '#CD7F3220' },
+}
+
+const PR_LEVEL_LABELS: Record<NonNullable<PrLevel>, string> = {
+  gold:   '🥇 Record absolu !',
+  silver: '🥈 2e meilleure perf !',
+  bronze: '🥉 3e meilleure perf !',
+}
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -209,7 +221,7 @@ export default function WorkoutSessionScreen() {
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<ExerciseResult[]>([])
   const [searching, setSearching] = useState(false)
-  const [prFlash, setPrFlash] = useState<{ isPrCharge: boolean; isPrSerie: boolean; isPr1rm: boolean } | null>(null)
+  const [prFlash, setPrFlash] = useState<{ isPrCharge: boolean; isPrSerie: boolean; isPr1rm: boolean; prLevel: PrLevel } | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Démarrage automatique si on arrive depuis le FAB
@@ -297,7 +309,7 @@ export default function WorkoutSessionScreen() {
       return
     }
     const result = workout.validateSet(workout.currentIndex)
-    if (result.isPrCharge || result.isPrSerie || result.isPr1rm) {
+    if (result.isPrCharge || result.isPrSerie || result.isPr1rm || result.prLevel) {
       setPrFlash(result)
       setTimeout(() => setPrFlash(null), 2500)
     }
@@ -425,7 +437,12 @@ export default function WorkoutSessionScreen() {
       {/* PR Flash */}
       {prFlash && (
         <View style={styles.prFlashBanner}>
-          {prFlash.isPrCharge && (
+          {prFlash.prLevel && (
+            <Text style={[styles.prFlashText, { color: PR_LEVEL_COLORS[prFlash.prLevel].badge, fontSize: 17 }]}>
+              {PR_LEVEL_LABELS[prFlash.prLevel]}
+            </Text>
+          )}
+          {!prFlash.prLevel && prFlash.isPrCharge && (
             <View style={styles.prFlashItem}>
               <Zap color="#FFD700" size={16} fill="#FFD700" />
               <Text style={[styles.prFlashText, { color: '#FFD700' }]}>PR Charge !</Text>
@@ -504,6 +521,7 @@ export default function WorkoutSessionScreen() {
 // ─── SetRow ──────────────────────────────────────────────────────────────────
 
 function SetRow({ set, onRemove, colors }: { set: WorkoutSet; onRemove: () => void; colors: ReturnType<typeof useTheme>['colors'] }) {
+  const levelCfg = set.pr_level ? PR_LEVEL_COLORS[set.pr_level] : null
   return (
     <View style={[setStyles.row, { borderBottomColor: colors.separator }]}>
       <Text style={[setStyles.number, { color: colors.textSecondary }]}>Série {set.set_number}</Text>
@@ -512,12 +530,22 @@ function SetRow({ set, onRemove, colors }: { set: WorkoutSet; onRemove: () => vo
           ? `${formatWeight(set.weight_kg)} kg × ${set.reps} reps`
           : `${set.reps} reps`}
       </Text>
-      {set.pr_charge && <Zap color="#FFD700" size={14} fill="#FFD700" />}
-      {set.pr_serie && <Flame color="#D85A30" size={14} fill="#D85A30" />}
-      {set.is_pr && !set.pr_charge && !set.pr_serie && (
-        <View style={setStyles.prBadge}>
-          <Text style={setStyles.prBadgeText}>PR</Text>
+      {levelCfg ? (
+        <View style={[setStyles.prBadge, { backgroundColor: levelCfg.bg, borderColor: levelCfg.badge + '60' }]}>
+          <Text style={[setStyles.prBadgeText, { color: levelCfg.badge }]}>
+            {set.pr_level === 'gold' ? '🥇' : set.pr_level === 'silver' ? '🥈' : '🥉'}
+          </Text>
         </View>
+      ) : (
+        <>
+          {set.pr_charge && <Zap color="#FFD700" size={14} fill="#FFD700" />}
+          {set.pr_serie && <Flame color="#D85A30" size={14} fill="#D85A30" />}
+          {set.is_pr && !set.pr_charge && !set.pr_serie && (
+            <View style={[setStyles.prBadge, { backgroundColor: '#FAC77520', borderColor: '#FAC77540' }]}>
+              <Text style={[setStyles.prBadgeText, { color: '#FAC775' }]}>PR</Text>
+            </View>
+          )}
+        </>
       )}
       <TouchableOpacity style={setStyles.deleteBtn} onPress={onRemove} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
         <Text style={[setStyles.deleteText, { color: colors.textSecondary }]}>×</Text>
@@ -537,8 +565,8 @@ const setStyles = StyleSheet.create({
   },
   number: { fontSize: 13, width: 54 },
   data: { fontSize: 15, fontWeight: '500', flex: 1 },
-  prBadge: { backgroundColor: '#FAC77520', borderWidth: 1, borderColor: '#FAC77540', borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 },
-  prBadgeText: { color: '#FAC775', fontSize: 11, fontWeight: '700' },
+  prBadge: { borderWidth: 1, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 },
+  prBadgeText: { fontSize: 13, fontWeight: '700' },
   deleteBtn: { paddingHorizontal: 4 },
   deleteText: { fontSize: 20, lineHeight: 22 },
 })

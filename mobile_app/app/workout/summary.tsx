@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react'
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView,
-  StyleSheet, ActivityIndicator, Alert,
+  StyleSheet, ActivityIndicator, Alert, Image,
 } from 'react-native'
 import { router } from 'expo-router'
-import { Zap, Flame, Trophy } from 'lucide-react-native'
+import * as ImagePicker from 'expo-image-picker'
+import * as Location from 'expo-location'
+import { Zap, Flame, Trophy, Camera, X, MapPin } from 'lucide-react-native'
 import { supabase } from '../../lib/supabase'
-import { useWorkout, WorkoutExercise } from '../../context/WorkoutContext'
+import { useWorkout, WorkoutExercise, PrLevel } from '../../context/WorkoutContext'
 import { useTheme } from '../../context/ThemeContext'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -16,29 +18,107 @@ interface Gym { id: string; name: string }
 interface PREntry {
   exerciseName: string
   type: 'charge' | 'serie' | '1rm'
+  prLevel: PrLevel
   value: number
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
+const MUSCLE_GROUP_LABELS: Record<string, string> = {
+  pectoraux: 'Pectoraux', dos: 'Dos', epaules: 'Épaules',
+  biceps: 'Biceps', triceps: 'Triceps', quadriceps: 'Quadriceps',
+  ischio_jambiers: 'Ischio', fessiers: 'Fessiers',
+  mollets: 'Mollets', abdominaux: 'Abdos', avant_bras: 'Avant-bras',
+}
+
 function generateName(exercises: WorkoutExercise[]): string {
-  const MUSCLE_GROUP_LABELS: Record<string, string> = {
-    pectoraux: 'Pectoraux', dos: 'Dos', epaules: 'Épaules',
-    biceps: 'Biceps', triceps: 'Triceps', quadriceps: 'Quadriceps',
-    ischio_jambiers: 'Ischio', fessiers: 'Fessiers',
-    mollets: 'Mollets', abdominaux: 'Abdos', avant_bras: 'Avant-bras',
+  if (exercises.length === 0) {
+    const today = new Date()
+    return `Séance du ${today.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}`
   }
-  const groups = [...new Set(
-    exercises.map(e => e.muscle_group).filter((g): g is string => Boolean(g))
-  )]
-  if (groups.length === 0) return 'Séance'
-  if (groups.length === 1) return `Séance ${MUSCLE_GROUP_LABELS[groups[0]] ?? groups[0]}`
+
+  if (exercises.length === 1) {
+    return `Séance ${exercises[0].name}`
+  }
+
+  const muscleVolume: Record<string, number> = {}
+  let totalVol = 0
+  for (const ex of exercises) {
+    if (!ex.muscle_group) continue
+    const vol = ex.sets.filter(s => s.validated).reduce((sum, s) => sum + s.weight_kg * s.reps, 0)
+    muscleVolume[ex.muscle_group] = (muscleVolume[ex.muscle_group] ?? 0) + vol
+    totalVol += vol
+  }
+
+  const groups = Object.entries(muscleVolume).sort((a, b) => b[1] - a[1])
+
+  if (groups.length === 0) {
+    const today = new Date()
+    return `Séance du ${today.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}`
+  }
+
+  if (groups.length === 1 || (totalVol > 0 && groups[0][1] / totalVol > 0.6)) {
+    return `Séance ${MUSCLE_GROUP_LABELS[groups[0][0]] ?? groups[0][0]}`
+  }
+
   if (groups.length === 2) {
-    const a = MUSCLE_GROUP_LABELS[groups[0]] ?? groups[0]
-    const b = MUSCLE_GROUP_LABELS[groups[1]] ?? groups[1]
-    return `${a} · ${b}`
+    const a = MUSCLE_GROUP_LABELS[groups[0][0]] ?? groups[0][0]
+    const b = MUSCLE_GROUP_LABELS[groups[1][0]] ?? groups[1][0]
+    return `Séance ${a} / ${b}`
   }
+
   return 'Full Body'
+}
+
+const PUSH_MUSCLES = new Set(['pectoraux', 'epaules', 'triceps'])
+const PULL_MUSCLES = new Set(['dos', 'biceps', 'avant_bras'])
+const LOWER_MUSCLES = new Set(['quadriceps', 'ischio_jambiers', 'fessiers', 'mollets'])
+
+function generateSuggestions(exercises: WorkoutExercise[]): string[] {
+  const today = new Date()
+  const hour = today.getHours()
+  const timeLabel = hour < 12 ? 'matin' : hour < 17 ? 'après-midi' : 'soir'
+
+  if (exercises.length === 0) {
+    return [
+      `Séance du ${timeLabel}`,
+      today.toLocaleDateString('fr-FR', { weekday: 'long' }),
+      'Full Body',
+    ]
+  }
+
+  const muscleVolume: Record<string, number> = {}
+  let totalVol = 0
+  for (const ex of exercises) {
+    if (!ex.muscle_group) continue
+    const vol = ex.sets.filter(s => s.validated).reduce((sum, s) => sum + s.weight_kg * s.reps, 0)
+    muscleVolume[ex.muscle_group] = (muscleVolume[ex.muscle_group] ?? 0) + vol
+    totalVol += vol
+  }
+
+  let pushVol = 0, pullVol = 0, lowerVol = 0
+  for (const [mg, vol] of Object.entries(muscleVolume)) {
+    if (PUSH_MUSCLES.has(mg)) pushVol += vol
+    if (PULL_MUSCLES.has(mg)) pullVol += vol
+    if (LOWER_MUSCLES.has(mg)) lowerVol += vol
+  }
+
+  const candidates: string[] = []
+
+  // Push/Pull/Legs label
+  if (totalVol > 0 && pushVol / totalVol > 0.55) candidates.push('Push')
+  else if (totalVol > 0 && pullVol / totalVol > 0.55) candidates.push('Pull')
+  else if (totalVol > 0 && lowerVol / totalVol > 0.55) candidates.push('Legs')
+  else candidates.push('Full Body')
+
+  // Time label
+  candidates.push(`Séance du ${timeLabel}`)
+
+  // Weekday
+  const weekday = today.toLocaleDateString('fr-FR', { weekday: 'long' })
+  candidates.push(weekday.charAt(0).toUpperCase() + weekday.slice(1))
+
+  return candidates.slice(0, 3)
 }
 
 function formatDuration(s: number): string {
@@ -50,8 +130,34 @@ function formatDuration(s: number): string {
   return `${sec}s`
 }
 
+function formatRest(s: number): string {
+  const m = Math.floor(s / 60)
+  const sec = s % 60
+  if (m > 0) return `${m}min ${sec > 0 ? sec + 's' : ''}`
+  return `${sec}s`
+}
+
 function formatWeight(v: number): string {
   return v % 1 === 0 ? String(v) : v.toFixed(1)
+}
+
+function computeMuscleStats(exercises: WorkoutExercise[]): Array<{ group: string; label: string; pct: number }> {
+  const muscleVolume: Record<string, number> = {}
+  let totalVol = 0
+  for (const ex of exercises) {
+    if (!ex.muscle_group) continue
+    const vol = ex.sets.filter(s => s.validated).reduce((sum, s) => sum + s.weight_kg * s.reps, 0)
+    muscleVolume[ex.muscle_group] = (muscleVolume[ex.muscle_group] ?? 0) + vol
+    totalVol += vol
+  }
+  if (totalVol === 0) return []
+  return Object.entries(muscleVolume)
+    .map(([group, vol]) => ({
+      group,
+      label: MUSCLE_GROUP_LABELS[group] ?? group,
+      pct: vol / totalVol,
+    }))
+    .sort((a, b) => b.pct - a.pct)
 }
 
 // ─── Composant ───────────────────────────────────────────────────────────────
@@ -61,6 +167,10 @@ export default function SummaryScreen() {
   const workout = useWorkout()
 
   const [title, setTitle] = useState('')
+  const [suggestions, setSuggestions] = useState<string[]>([])
+  const [photoUri, setPhotoUri] = useState<string | null>(null)
+  const [locationCity, setLocationCity] = useState<string | null>(null)
+  const [locationLoading, setLocationLoading] = useState(false)
   const [gyms, setGyms] = useState<Gym[]>([])
   const [selectedGymId, setSelectedGymId] = useState<string | null>(null)
   const [isPublic, setIsPublic] = useState(true)
@@ -74,24 +184,75 @@ export default function SummaryScreen() {
     0
   )
 
-  // Collecte tous les PRs réalisés pendant la séance
+  // Average rest time across all sets
+  const allRestSeconds = doneExercises
+    .flatMap(ex => ex.sets.filter(s => s.validated && s.rest_seconds !== null && s.rest_seconds < 600))
+    .map(s => s.rest_seconds as number)
+  const avgRestSeconds = allRestSeconds.length > 0
+    ? Math.round(allRestSeconds.reduce((a, b) => a + b, 0) / allRestSeconds.length)
+    : null
+
+  const muscleStats = computeMuscleStats(doneExercises)
+
+  // Collect all PRs from the session
   const sessionPRs: PREntry[] = []
   for (const ex of doneExercises) {
     for (const s of ex.sets.filter(s => s.validated)) {
-      if (s.pr_charge) sessionPRs.push({ exerciseName: ex.name, type: 'charge', value: s.weight_kg })
-      if (s.pr_serie) sessionPRs.push({ exerciseName: ex.name, type: 'serie', value: s.weight_kg * s.reps })
-      if (s.pr_1rm) sessionPRs.push({ exerciseName: ex.name, type: '1rm', value: s.weight_kg * (1 + s.reps / 30) })
+      if (s.pr_charge || s.pr_level) {
+        sessionPRs.push({ exerciseName: ex.name, type: 'charge', prLevel: s.pr_level, value: s.weight_kg })
+      }
+      if (s.pr_serie && !s.pr_charge) {
+        sessionPRs.push({ exerciseName: ex.name, type: 'serie', prLevel: null, value: s.weight_kg * s.reps })
+      }
+      if (s.pr_1rm && !s.pr_charge && !s.pr_serie) {
+        sessionPRs.push({ exerciseName: ex.name, type: '1rm', prLevel: null, value: s.weight_kg * (1 + s.reps / 30) })
+      }
     }
   }
 
   useEffect(() => {
-    setTitle(generateName(doneExercises))
+    const name = generateName(doneExercises)
+    setTitle(name)
+    setSuggestions(generateSuggestions(doneExercises).filter(s => s !== name))
     fetchGyms()
   }, [])
 
   async function fetchGyms() {
     const { data } = await supabase.from('gyms').select('id, name').order('name').limit(20)
     if (data) setGyms(data as Gym[])
+  }
+
+  async function fetchLocation() {
+    setLocationLoading(true)
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync()
+      if (status !== 'granted') { setLocationLoading(false); return }
+      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
+      const [geo] = await Location.reverseGeocodeAsync(pos.coords)
+      if (geo) {
+        setLocationCity(geo.city ?? geo.subregion ?? geo.region ?? null)
+      }
+    } catch {
+      // geolocation failure is non-blocking
+    }
+    setLocationLoading(false)
+  }
+
+  async function pickPhoto() {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync()
+    if (status !== 'granted') {
+      Alert.alert('Permission requise', 'Autorise l\'accès à ta galerie pour ajouter une photo.')
+      return
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'] as any,
+      allowsEditing: true,
+      aspect: [16, 9],
+      quality: 0.8,
+    })
+    if (!result.canceled && result.assets[0]) {
+      setPhotoUri(result.assets[0].uri)
+    }
   }
 
   async function handleSave() {
@@ -104,6 +265,26 @@ export default function SummaryScreen() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('Non authentifié')
 
+      // Upload photo if selected
+      let photoUrl: string | null = null
+      if (photoUri) {
+        try {
+          const ext = photoUri.split('.').pop() ?? 'jpg'
+          const path = `${user.id}/${Date.now()}.${ext}`
+          const response = await fetch(photoUri)
+          const blob = await response.blob()
+          const { error: uploadError } = await supabase.storage
+            .from('workout-photos')
+            .upload(path, blob, { contentType: `image/${ext}`, upsert: false })
+          if (!uploadError) {
+            const { data: urlData } = supabase.storage.from('workout-photos').getPublicUrl(path)
+            photoUrl = urlData.publicUrl
+          }
+        } catch {
+          // Photo upload failure is non-blocking
+        }
+      }
+
       const { data: workoutData, error: workoutError } = await supabase
         .from('workouts')
         .insert({
@@ -114,6 +295,9 @@ export default function SummaryScreen() {
           duration_sec: workout.elapsedSeconds,
           gym_id: selectedGymId,
           is_public: isPublic,
+          avg_rest_seconds: avgRestSeconds,
+          photo_url: photoUrl,
+          location_city: locationCity,
         })
         .select('id')
         .single()
@@ -128,12 +312,12 @@ export default function SummaryScreen() {
           .select('id')
           .single()
 
-        if (weError || !weData) continue
+        if (weError || !weData) throw weError ?? new Error('Erreur insertion workout_exercise')
 
         const validatedSets = ex.sets.filter(s => s.validated)
         if (validatedSets.length === 0) continue
 
-        await supabase.from('workout_sets').insert(
+        const { error: setsError } = await supabase.from('workout_sets').insert(
           validatedSets.map(s => ({
             workout_exercise_id: weData.id,
             set_number: s.set_number,
@@ -143,9 +327,12 @@ export default function SummaryScreen() {
             pr_charge: s.pr_charge,
             pr_serie: s.pr_serie,
             pr_1rm: s.pr_1rm,
+            pr_level: s.pr_level,
+            rest_seconds: s.rest_seconds,
             logged_at: new Date().toISOString(),
           }))
         )
+        if (setsError) throw setsError
       }
 
       workout.resetWorkout()
@@ -194,12 +381,29 @@ export default function SummaryScreen() {
           placeholderTextColor={colors.textSecondary}
           maxLength={60}
         />
+        {suggestions.length > 0 && (
+          <View style={styles.suggestionsRow}>
+            {suggestions.map(s => (
+              <TouchableOpacity
+                key={s}
+                style={[styles.suggestionChip, { backgroundColor: colors.card, borderColor: colors.separator }]}
+                onPress={() => setTitle(s)}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.suggestionChipText, { color: colors.textSecondary }]}>{s}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
 
         {/* Stats */}
         <View style={styles.statsRow}>
           <StatCard label="Durée" value={formatDuration(workout.elapsedSeconds)} colors={colors} />
           <StatCard label="Séries" value={String(totalSets)} colors={colors} />
           <StatCard label="Volume" value={`${totalVolume.toLocaleString('fr')} kg`} colors={colors} />
+          {avgRestSeconds !== null && (
+            <StatCard label="Repos moy." value={formatRest(avgRestSeconds)} colors={colors} />
+          )}
           {sessionPRs.length > 0 && (
             <StatCard label="PRs" value={String(sessionPRs.length)} colors={colors} highlight />
           )}
@@ -217,25 +421,96 @@ export default function SummaryScreen() {
           </>
         )}
 
+        {/* Muscles travaillés */}
+        {muscleStats.length > 0 && (
+          <>
+            <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>Muscles travaillés</Text>
+            <View style={[styles.muscleBlock, { backgroundColor: colors.card, borderColor: colors.separator }]}>
+              {muscleStats.map(m => (
+                <View key={m.group} style={styles.muscleRow}>
+                  <Text style={[styles.muscleLabel, { color: colors.textPrimary }]}>{m.label}</Text>
+                  <View style={[styles.muscleBarBg, { backgroundColor: colors.backgroundSecondary }]}>
+                    <View style={[styles.muscleBarFill, { width: `${Math.round(m.pct * 100)}%` as any, backgroundColor: colors.accent }]} />
+                  </View>
+                  <Text style={[styles.musclePct, { color: colors.textSecondary }]}>{Math.round(m.pct * 100)}%</Text>
+                </View>
+              ))}
+            </View>
+          </>
+        )}
+
         {/* Exercices */}
         <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>Exercices</Text>
         {doneExercises.map((ex, eIdx) => (
           <View key={eIdx} style={[styles.exerciseCard, { backgroundColor: colors.card, borderColor: colors.separator }]}>
             <Text style={[styles.exerciseName, { color: colors.textPrimary }]}>{ex.name}</Text>
-            {ex.sets.filter(s => s.validated).map((set, sIdx) => (
-              <View key={sIdx} style={[styles.setRow, { borderTopColor: colors.separator }]}>
-                <Text style={[styles.setNumber, { color: colors.textSecondary }]}>Série {set.set_number}</Text>
-                <Text style={[styles.setData, { color: colors.textPrimary }]}>
-                  {set.weight_kg > 0
-                    ? `${formatWeight(set.weight_kg)} kg × ${set.reps} reps`
-                    : `${set.reps} reps`}
-                </Text>
-                {set.pr_charge && <Zap color="#FFD700" size={13} fill="#FFD700" />}
-                {set.pr_serie && <Flame color="#D85A30" size={13} fill="#D85A30" />}
-              </View>
-            ))}
+            {ex.sets.filter(s => s.validated).map((set, sIdx) => {
+              const levelCfg = set.pr_level
+                ? { gold: { badge: '#FAC775', bg: '#FAC77515' }, silver: { badge: '#C0C0C0', bg: '#C0C0C015' }, bronze: { badge: '#CD7F32', bg: '#CD7F3215' } }[set.pr_level]
+                : null
+              return (
+                <View key={sIdx} style={[styles.setRow, { borderTopColor: colors.separator }]}>
+                  <Text style={[styles.setNumber, { color: colors.textSecondary }]}>Série {set.set_number}</Text>
+                  <Text style={[styles.setData, { color: colors.textPrimary }]}>
+                    {set.weight_kg > 0
+                      ? `${formatWeight(set.weight_kg)} kg × ${set.reps} reps`
+                      : `${set.reps} reps`}
+                  </Text>
+                  {levelCfg ? (
+                    <Text style={{ fontSize: 14 }}>
+                      {set.pr_level === 'gold' ? '🥇' : set.pr_level === 'silver' ? '🥈' : '🥉'}
+                    </Text>
+                  ) : (
+                    <>
+                      {set.pr_charge && <Zap color="#FFD700" size={13} fill="#FFD700" />}
+                      {set.pr_serie && <Flame color="#D85A30" size={13} fill="#D85A30" />}
+                    </>
+                  )}
+                </View>
+              )
+            })}
           </View>
         ))}
+
+        {/* Localisation */}
+        <TouchableOpacity
+          style={[styles.locationRow, { backgroundColor: colors.card, borderColor: locationCity ? colors.accent + '50' : colors.separator }]}
+          onPress={locationCity ? () => setLocationCity(null) : fetchLocation}
+          activeOpacity={0.7}
+        >
+          <MapPin color={locationCity ? colors.accent : colors.textSecondary} size={16} />
+          {locationLoading ? (
+            <ActivityIndicator size="small" color={colors.accent} style={{ flex: 1 }} />
+          ) : (
+            <Text style={[styles.locationText, { color: locationCity ? colors.accent : colors.textSecondary }]}>
+              {locationCity ?? 'Ajouter ma ville'}
+            </Text>
+          )}
+          {locationCity && <X color={colors.textSecondary} size={14} />}
+        </TouchableOpacity>
+
+        {/* Photo */}
+        <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>Photo de séance</Text>
+        {photoUri ? (
+          <View style={styles.photoWrapper}>
+            <Image source={{ uri: photoUri }} style={styles.photoPreview} resizeMode="cover" />
+            <TouchableOpacity
+              style={[styles.photoRemove, { backgroundColor: colors.card }]}
+              onPress={() => setPhotoUri(null)}
+            >
+              <X color={colors.textSecondary} size={16} />
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <TouchableOpacity
+            style={[styles.photoBtn, { backgroundColor: colors.card, borderColor: colors.separator }]}
+            onPress={pickPhoto}
+            activeOpacity={0.7}
+          >
+            <Camera color={colors.textSecondary} size={20} />
+            <Text style={[styles.photoBtnText, { color: colors.textSecondary }]}>Ajouter une photo</Text>
+          </TouchableOpacity>
+        )}
 
         {/* Salle */}
         {gyms.length > 0 && (
@@ -297,6 +572,9 @@ export default function SummaryScreen() {
 
 // ─── PRRow ────────────────────────────────────────────────────────────────────
 
+const PR_LEVEL_EMOJI: Record<NonNullable<PrLevel>, string> = { gold: '🥇', silver: '🥈', bronze: '🥉' }
+const PR_LEVEL_COLOR: Record<NonNullable<PrLevel>, string> = { gold: '#FAC775', silver: '#C0C0C0', bronze: '#CD7F32' }
+
 const PR_CONFIG = {
   charge: { icon: Zap, color: '#FFD700', label: 'PR Charge', fill: true },
   serie:  { icon: Flame, color: '#D85A30', label: 'PR Série', fill: true },
@@ -304,6 +582,19 @@ const PR_CONFIG = {
 }
 
 function PRRow({ pr, colors }: { pr: PREntry; colors: ReturnType<typeof useTheme>['colors'] }) {
+  if (pr.type === 'charge' && pr.prLevel) {
+    const emoji = PR_LEVEL_EMOJI[pr.prLevel]
+    const color = PR_LEVEL_COLOR[pr.prLevel]
+    const label = pr.prLevel === 'gold' ? 'Nouveau record' : pr.prLevel === 'silver' ? '2e meilleure perf' : '3e meilleure perf'
+    return (
+      <View style={prStyles.row}>
+        <Text style={{ fontSize: 16 }}>{emoji}</Text>
+        <Text style={[prStyles.label, { color }]}>{label}</Text>
+        <Text style={[prStyles.exName, { color: colors.textPrimary }]} numberOfLines={1}>{pr.exerciseName}</Text>
+        <Text style={[prStyles.value, { color: colors.textSecondary }]}>{pr.value.toFixed(1)} kg</Text>
+      </View>
+    )
+  }
   const cfg = PR_CONFIG[pr.type]
   const Icon = cfg.icon
   return (
@@ -320,7 +611,7 @@ function PRRow({ pr, colors }: { pr: PREntry; colors: ReturnType<typeof useTheme
 
 const prStyles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8 },
-  label: { fontSize: 12, fontWeight: '700', width: 90 },
+  label: { fontSize: 12, fontWeight: '700', width: 110 },
   exName: { flex: 1, fontSize: 13 },
   value: { fontSize: 13, fontWeight: '600' },
 })
@@ -343,9 +634,9 @@ function StatCard({ label, value, colors, highlight = false }: {
 }
 
 const statStyles = StyleSheet.create({
-  card: { flex: 1, borderRadius: 12, padding: 14, alignItems: 'center', gap: 4, borderWidth: 1 },
-  value: { fontSize: 18, fontWeight: '700' },
-  label: { fontSize: 11 },
+  card: { flex: 1, borderRadius: 12, padding: 10, alignItems: 'center', gap: 4, borderWidth: 1 },
+  value: { fontSize: 15, fontWeight: '700' },
+  label: { fontSize: 10 },
 })
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
@@ -369,11 +660,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16, paddingVertical: 14,
     fontSize: 17, fontWeight: '600',
   },
-  statsRow: { flexDirection: 'row', gap: 8, marginTop: 4 },
+  statsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 },
   prBlock: {
     borderRadius: 14, borderWidth: 1,
     paddingHorizontal: 16, paddingVertical: 4,
   },
+  muscleBlock: {
+    borderRadius: 14, borderWidth: 1,
+    paddingHorizontal: 16, paddingVertical: 12, gap: 10,
+  },
+  muscleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  muscleLabel: { fontSize: 13, fontWeight: '500', width: 90 },
+  muscleBarBg: { flex: 1, height: 6, borderRadius: 3, overflow: 'hidden' },
+  muscleBarFill: { height: 6, borderRadius: 3 },
+  musclePct: { fontSize: 12, width: 34, textAlign: 'right' },
   exerciseCard: {
     borderRadius: 12, borderWidth: 1, padding: 14, marginBottom: 4, gap: 0,
   },
@@ -384,6 +684,26 @@ const styles = StyleSheet.create({
   },
   setNumber: { fontSize: 13, width: 54 },
   setData: { fontSize: 13, flex: 1 },
+  suggestionsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: -2 },
+  suggestionChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1 },
+  suggestionChipText: { fontSize: 13 },
+  locationRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    borderRadius: 12, borderWidth: 1, paddingHorizontal: 16, paddingVertical: 14,
+  },
+  locationText: { flex: 1, fontSize: 15 },
+  photoWrapper: { borderRadius: 14, overflow: 'hidden', position: 'relative' },
+  photoPreview: { width: '100%', height: 180, borderRadius: 14 },
+  photoRemove: {
+    position: 'absolute', top: 8, right: 8,
+    width: 28, height: 28, borderRadius: 14,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  photoBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 10, borderRadius: 12, borderWidth: 1, paddingVertical: 16,
+  },
+  photoBtnText: { fontSize: 15, fontWeight: '500' },
   gymList: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   gymChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1 },
   gymChipText: { fontSize: 14 },

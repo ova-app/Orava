@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Animated, StyleSheet } from 'react-native'
+import { Animated, StyleSheet, TouchableOpacity } from 'react-native'
 import { Stack, router, useSegments } from 'expo-router'
 import { Session } from '@supabase/supabase-js'
 import { StatusBar } from 'expo-status-bar'
@@ -16,6 +16,10 @@ function AppStack() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="auth" />
         <Stack.Screen name="workout" />
+        <Stack.Screen name="prs" />
+        <Stack.Screen name="analytics" />
+        <Stack.Screen name="settings" />
+        <Stack.Screen name="edit-profile" />
       </Stack>
     </>
   )
@@ -62,7 +66,9 @@ function SplashOverlay({ onDone, initialized }: { onDone: () => void; initialize
   const logoOpacity = useRef(new Animated.Value(0)).current
   const logoScale = useRef(new Animated.Value(0.82)).current
   const taglineOpacity = useRef(new Animated.Value(0)).current
+  const tapHintOpacity = useRef(new Animated.Value(0)).current
   const firedRef = useRef(false)
+  const [ready, setReady] = useState(false)
 
   useEffect(() => {
     Animated.parallel([
@@ -75,25 +81,41 @@ function SplashOverlay({ onDone, initialized }: { onDone: () => void; initialize
   useEffect(() => {
     if (!initialized || firedRef.current) return
     firedRef.current = true
+    // Wait for animation to finish, then show tap hint
     const t = setTimeout(() => {
-      Animated.timing(containerOpacity, { toValue: 0, duration: 380, useNativeDriver: true })
-        .start(onDone)
-    }, 650)
+      setReady(true)
+      Animated.timing(tapHintOpacity, { toValue: 1, duration: 400, useNativeDriver: true }).start()
+    }, 800)
     return () => clearTimeout(t)
   }, [initialized])
 
+  function dismiss() {
+    if (!ready) return
+    Animated.timing(containerOpacity, { toValue: 0, duration: 300, useNativeDriver: true })
+      .start(onDone)
+  }
+
   return (
-    <Animated.View style={[splashStyles.overlay, { opacity: containerOpacity }]}>
-      <Animated.Text style={[
-        splashStyles.logo,
-        { opacity: logoOpacity, transform: [{ scale: logoScale }] },
-      ]}>
-        Orava
-      </Animated.Text>
-      <Animated.Text style={[splashStyles.tagline, { opacity: taglineOpacity }]}>
-        Forge ta progression
-      </Animated.Text>
-    </Animated.View>
+    <TouchableOpacity
+      style={StyleSheet.absoluteFillObject}
+      onPress={dismiss}
+      activeOpacity={1}
+    >
+      <Animated.View style={[splashStyles.overlay, { opacity: containerOpacity }]}>
+        <Animated.Text style={[
+          splashStyles.logo,
+          { opacity: logoOpacity, transform: [{ scale: logoScale }] },
+        ]}>
+          Orava
+        </Animated.Text>
+        <Animated.Text style={[splashStyles.tagline, { opacity: taglineOpacity }]}>
+          Forge ta progression
+        </Animated.Text>
+        <Animated.Text style={[splashStyles.tapHint, { opacity: tapHintOpacity }]}>
+          Touche pour continuer
+        </Animated.Text>
+      </Animated.View>
+    </TouchableOpacity>
   )
 }
 
@@ -116,6 +138,12 @@ const splashStyles = StyleSheet.create({
     color: '#8E8E93',
     fontSize: 14,
     letterSpacing: 0.3,
+  },
+  tapHint: {
+    color: '#555',
+    fontSize: 12,
+    letterSpacing: 0.5,
+    marginTop: 40,
   },
   dot: {
     width: 6,

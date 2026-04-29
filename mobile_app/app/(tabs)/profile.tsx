@@ -4,7 +4,7 @@ import {
   ActivityIndicator, Alert,
 } from 'react-native'
 import { useFocusEffect, router } from 'expo-router'
-import { Settings, TrendingUp } from 'lucide-react-native'
+import { Settings, TrendingUp, Trophy } from 'lucide-react-native'
 import { supabase } from '../../lib/supabase'
 import { useTheme } from '../../context/ThemeContext'
 
@@ -148,6 +148,9 @@ export default function ProfileScreen() {
       <View style={[styles.header, { borderBottomColor: colors.separator }]}>
         <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Profil</Text>
         <View style={styles.headerActions}>
+          <TouchableOpacity onPress={() => router.push('/prs' as any)} style={styles.iconBtn}>
+            <Trophy color={colors.textSecondary} size={22} />
+          </TouchableOpacity>
           <TouchableOpacity onPress={() => router.push('/analytics' as any)} style={styles.iconBtn}>
             <TrendingUp color={colors.textSecondary} size={22} />
           </TouchableOpacity>

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import {
   View, Text, TouchableOpacity, ScrollView,
-  StyleSheet, Switch, Alert,
+  StyleSheet, Switch, Alert, Modal,
 } from 'react-native'
 import { router } from 'expo-router'
 import AsyncStorage from '@react-native-async-storage/async-storage'
@@ -23,6 +23,7 @@ export default function SettingsScreen() {
   const [vibration, setVibration] = useState(true)
   const [defaultRest, setDefaultRest] = useState<RestDefault>('90')
   const [visibility, setVisibility] = useState<Visibility>('public')
+  const [showHelp, setShowHelp] = useState(false)
 
   useEffect(() => {
     loadSettings()
@@ -206,6 +207,16 @@ export default function SettingsScreen() {
           </TouchableOpacity>
         </SettingCard>
 
+        {/* ── À propos ── */}
+        <SectionTitle label="À propos" colors={c} />
+
+        <SettingCard colors={c}>
+          <TouchableOpacity style={styles.actionRow} onPress={() => setShowHelp(true)}>
+            <Text style={[styles.actionLabel, { color: c.textPrimary }]}>Comment ça marche ?</Text>
+            <Text style={[styles.chevron, { color: c.textSecondary }]}>›</Text>
+          </TouchableOpacity>
+        </SettingCard>
+
         {/* ── Données ── */}
         <SectionTitle label="Données" colors={c} />
 
@@ -217,9 +228,72 @@ export default function SettingsScreen() {
 
         <View style={{ height: 40 }} />
       </ScrollView>
+
+      <HelpModal visible={showHelp} onClose={() => setShowHelp(false)} colors={c} />
     </View>
   )
 }
+
+// ─── HelpModal ────────────────────────────────────────────────────────────────
+
+const HELP_ITEMS = [
+  { icon: '💪', title: 'Lance une séance', body: 'Appuie sur le bouton central (+) pour démarrer. Ajoute des exercices, saisis tes séries et valide.' },
+  { icon: '⏱️', title: 'Timer de repos', body: 'Après chaque série validée, un timer se lance automatiquement. Tu peux le mettre en pause ou changer la durée.' },
+  { icon: '🥇', title: 'Records personnels', body: 'Orava détecte automatiquement tes records : 🥇 Record absolu, 🥈 2e meilleure perf, 🥉 3e meilleure perf.' },
+  { icon: '📊', title: 'Statistiques', body: 'Retrouve tes stats détaillées (volume, régularité, progression) depuis l\'icône graphe sur ton profil.' },
+  { icon: '🏆', title: 'Armurerie des PRs', body: 'L\'icône trophée sur ton profil affiche le podium de tes meilleures performances pour chaque exercice.' },
+  { icon: '👥', title: 'Fil social', body: 'Tes séances publiques apparaissent dans le fil de tes abonnés. Tu peux liker et commenter.' },
+]
+
+function HelpModal({ visible, onClose, colors }: {
+  visible: boolean; onClose: () => void
+  colors: ReturnType<typeof useTheme>['colors']
+}) {
+  return (
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+      <View style={[helpStyles.container, { backgroundColor: colors.background }]}>
+        <View style={[helpStyles.header, { borderBottomColor: colors.separator }]}>
+          <Text style={[helpStyles.title, { color: colors.textPrimary }]}>Comment ça marche ?</Text>
+          <TouchableOpacity onPress={onClose} style={helpStyles.closeBtn}>
+            <Text style={[helpStyles.closeText, { color: colors.accent }]}>Fermer</Text>
+          </TouchableOpacity>
+        </View>
+        <ScrollView contentContainerStyle={helpStyles.content} showsVerticalScrollIndicator={false}>
+          {HELP_ITEMS.map((item, idx) => (
+            <View key={idx} style={[helpStyles.item, { backgroundColor: colors.card, borderColor: colors.separator }]}>
+              <Text style={helpStyles.itemIcon}>{item.icon}</Text>
+              <View style={helpStyles.itemText}>
+                <Text style={[helpStyles.itemTitle, { color: colors.textPrimary }]}>{item.title}</Text>
+                <Text style={[helpStyles.itemBody, { color: colors.textSecondary }]}>{item.body}</Text>
+              </View>
+            </View>
+          ))}
+          <View style={{ height: 40 }} />
+        </ScrollView>
+      </View>
+    </Modal>
+  )
+}
+
+const helpStyles = StyleSheet.create({
+  container: { flex: 1 },
+  header: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingTop: 24, paddingHorizontal: 20, paddingBottom: 16, borderBottomWidth: 1,
+  },
+  title: { fontSize: 18, fontWeight: '700' },
+  closeBtn: { padding: 4 },
+  closeText: { fontSize: 16, fontWeight: '600' },
+  content: { padding: 20, gap: 12 },
+  item: {
+    flexDirection: 'row', gap: 14, borderRadius: 14, borderWidth: 1,
+    padding: 16, alignItems: 'flex-start',
+  },
+  itemIcon: { fontSize: 26, marginTop: 2 },
+  itemText: { flex: 1, gap: 4 },
+  itemTitle: { fontSize: 15, fontWeight: '700' },
+  itemBody: { fontSize: 13, lineHeight: 19 },
+})
 
 // ─── Sous-composants ─────────────────────────────────────────────────────────
 

@@ -3,6 +3,8 @@ import { supabase } from '../lib/supabase'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
+export type PrLevel = 'gold' | 'silver' | 'bronze' | null
+
 export interface WorkoutSet {
   set_number: number
   weight_kg: number
@@ -11,6 +13,9 @@ export interface WorkoutSet {
   pr_charge: boolean
   pr_serie: boolean
   pr_1rm: boolean
+  pr_level: PrLevel
+  rest_seconds: number | null
+  validated_at: number | null  // internal ms timestamp, not persisted
   validated: boolean
 }
 
@@ -23,6 +28,7 @@ export interface WorkoutExercise {
   previous_pr_weight: number | null
   previous_pr_set_volume: number | null
   previous_pr_1rm: number | null
+  pr_top3: { pr1: number; pr2: number | null; pr3: number | null }
 }
 
 export type WorkoutStatus = 'idle' | 'active' | 'done'
@@ -40,7 +46,7 @@ interface WorkoutContextValue {
   removeExercise: (index: number) => void
   setCurrentIndex: (i: number) => void
   updateDraftSet: (exerciseIndex: number, field: 'weight_kg' | 'reps', value: number) => void
-  validateSet: (exerciseIndex: number) => { isPrCharge: boolean; isPrSerie: boolean; isPr1rm: boolean }
+  validateSet: (exerciseIndex: number) => { isPrCharge: boolean; isPrSerie: boolean; isPr1rm: boolean; prLevel: PrLevel }
   removeSet: (exerciseIndex: number, setIndex: number) => void
 }
 
@@ -62,6 +68,9 @@ function makeDraft(setNumber: number, weight = 0, reps = 0): WorkoutSet {
     pr_charge: false,
     pr_serie: false,
     pr_1rm: false,
+    pr_level: null,
+    rest_seconds: null,
+    validated_at: null,
     validated: false,
   }
 }
@@ -69,6 +78,13 @@ function makeDraft(setNumber: number, weight = 0, reps = 0): WorkoutSet {
 function epley1rm(weight: number, reps: number): number {
   if (reps === 1) return weight
   return weight * (1 + reps / 30)
+}
+
+function computePrLevel(weight: number, top3: { pr1: number; pr2: number | null; pr3: number | null }): PrLevel {
+  if (weight > top3.pr1) return 'gold'
+  if (top3.pr2 !== null && weight > top3.pr2) return 'silver'
+  if (top3.pr3 !== null && weight > top3.pr3) return 'bronze'
+  return null
 }
 
 // ─── Context ─────────────────────────────────────────────────────────────────
@@ -90,6 +106,8 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
   const [currentIndex, setCurrentIndex] = useState(0)
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  // Tracks the timestamp of the last validated set across the whole workout
+  const lastValidatedAtRef = useRef<number | null>(null)
 
   useEffect(() => {
     if (status === 'active') {
@@ -106,6 +124,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
     setElapsedSeconds(0)
     setExercises([])
     setCurrentIndex(0)
+    lastValidatedAtRef.current = null
   }
 
   function finishWorkout() {
@@ -118,6 +137,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
     setElapsedSeconds(0)
     setExercises([])
     setCurrentIndex(0)
+    lastValidatedAtRef.current = null
   }
 
   async function addExercise(
@@ -129,6 +149,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
     let prevPrWeight: number | null = null
     let prevPrSetVolume: number | null = null
     let prevPr1rm: number | null = null
+    let pr_top3: WorkoutExercise['pr_top3'] = { pr1: 0, pr2: null, pr3: null }
 
     try {
       const { data: { user } } = await supabase.auth.getUser()
@@ -149,18 +170,30 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
           let maxWeight = 0
           let maxSetVol = 0
           let max1rm = 0
+          const allWeights: number[] = []
+
           for (const s of data as any[]) {
             const w = s.weight_kg ?? 0
             const r = s.reps ?? 0
+            if (w > 0) allWeights.push(w)
             if (w > maxWeight) maxWeight = w
             const sv = w * r
             if (sv > maxSetVol) maxSetVol = sv
             const rm = epley1rm(w, r)
             if (rm > max1rm) max1rm = rm
           }
+
           prevPrWeight = maxWeight || null
           prevPrSetVolume = maxSetVol || null
           prevPr1rm = max1rm || null
+
+          // Compute top 3 distinct weights for pr_level
+          const sortedDistinct = [...new Set(allWeights)].sort((a, b) => b - a)
+          pr_top3 = {
+            pr1: sortedDistinct[0] ?? 0,
+            pr2: sortedDistinct[1] ?? null,
+            pr3: sortedDistinct[2] ?? null,
+          }
         }
       }
     } catch (_) {
@@ -175,6 +208,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       previous_pr_weight: prevPrWeight,
       previous_pr_set_volume: prevPrSetVolume,
       previous_pr_1rm: prevPr1rm,
+      pr_top3,
       sets: [makeDraft(1)],
     }
 
@@ -200,15 +234,15 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
     })
   }
 
-  function validateSet(exerciseIndex: number): { isPrCharge: boolean; isPrSerie: boolean; isPr1rm: boolean } {
+  function validateSet(exerciseIndex: number): { isPrCharge: boolean; isPrSerie: boolean; isPr1rm: boolean; prLevel: PrLevel } {
     const ex = exercises[exerciseIndex]
-    if (!ex) return { isPrCharge: false, isPrSerie: false, isPr1rm: false }
+    if (!ex) return { isPrCharge: false, isPrSerie: false, isPr1rm: false, prLevel: null }
 
     const draftIdx = lastDraftIndex(ex.sets)
-    if (draftIdx === -1) return { isPrCharge: false, isPrSerie: false, isPr1rm: false }
+    if (draftIdx === -1) return { isPrCharge: false, isPrSerie: false, isPr1rm: false, prLevel: null }
 
     const draft = ex.sets[draftIdx]
-    if (draft.weight_kg <= 0 || draft.reps <= 0) return { isPrCharge: false, isPrSerie: false, isPr1rm: false }
+    if (draft.weight_kg <= 0 || draft.reps <= 0) return { isPrCharge: false, isPrSerie: false, isPr1rm: false, prLevel: null }
 
     // Compute session max values before this set
     const validatedSets = ex.sets.filter((s, i) => s.validated && i !== draftIdx)
@@ -225,6 +259,16 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
     const isPr1rm = epley1rm(draft.weight_kg, draft.reps) > effectivePr1rm
     const isAnyPr = isPrCharge || isPrSerie || isPr1rm
 
+    // PR level based on top-3 historical weights
+    const prLevel = computePrLevel(draft.weight_kg, ex.pr_top3)
+
+    // Rest time since last validated set (across all exercises)
+    const now = Date.now()
+    const rest_seconds = lastValidatedAtRef.current !== null
+      ? Math.round((now - lastValidatedAtRef.current) / 1000)
+      : null
+    lastValidatedAtRef.current = now
+
     setExercises(prev => {
       const next = [...prev]
       const exCopy = { ...next[exerciseIndex], sets: [...next[exerciseIndex].sets] }
@@ -238,6 +282,9 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
         pr_charge: isPrCharge,
         pr_serie: isPrSerie,
         pr_1rm: isPr1rm,
+        pr_level: prLevel,
+        rest_seconds,
+        validated_at: now,
       }
 
       const validatedCount = exCopy.sets.filter(s => s.validated).length
@@ -251,7 +298,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       return next
     })
 
-    return { isPrCharge, isPrSerie, isPr1rm }
+    return { isPrCharge, isPrSerie, isPr1rm, prLevel }
   }
 
   function removeSet(exerciseIndex: number, setIndex: number) {
