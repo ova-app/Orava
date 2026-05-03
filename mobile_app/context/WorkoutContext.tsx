@@ -46,6 +46,7 @@ interface WorkoutContextValue {
   updateDraftSet: (exerciseIndex: number, field: 'weight_kg' | 'reps', value: number) => void
   validateSet: (exerciseIndex: number) => { prCharge: PrLevel; prSerie: PrLevel }
   removeSet: (exerciseIndex: number, setIndex: number) => void
+  editSet: (exerciseIndex: number, setIndex: number) => void
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -297,12 +298,31 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
     })
   }
 
+  function editSet(exerciseIndex: number, setIndex: number) {
+    setExercises(prev => {
+      const next = [...prev]
+      const ex = { ...next[exerciseIndex], sets: [...next[exerciseIndex].sets] }
+      const target = ex.sets[setIndex]
+      if (!target?.validated) return prev
+
+      const filtered = ex.sets.filter((_, i) => i !== setIndex)
+      let counter = 0
+      ex.sets = filtered.map(s => {
+        if (s.validated) { counter++; return { ...s, set_number: counter } }
+        return { ...s, set_number: counter + 1, weight_kg: target.weight_kg, reps: target.reps }
+      })
+
+      next[exerciseIndex] = ex
+      return next
+    })
+  }
+
   return (
     <WorkoutContext.Provider value={{
       status, startedAt, exercises, currentIndex, elapsedSeconds,
       startWorkout, finishWorkout, resetWorkout,
       addExercise, removeExercise, setCurrentIndex,
-      updateDraftSet, validateSet, removeSet,
+      updateDraftSet, validateSet, removeSet, editSet,
     }}>
       {children}
     </WorkoutContext.Provider>

@@ -783,9 +783,9 @@ function PRTypeRow({ icon, label, stats, colors }: {
       {icon}
       <Text style={[styles.prStatLabel, { color: colors.textPrimary, flex: 1 }]}>{label}</Text>
       <Text style={[styles.prStatCount, { color: colors.textPrimary }]}>{stats.total}×</Text>
-      {stats.gold > 0 && <Text style={{ fontSize: 13 }}>🥇{stats.gold}</Text>}
-      {stats.silver > 0 && <Text style={{ fontSize: 13 }}>🥈{stats.silver}</Text>}
-      {stats.bronze > 0 && <Text style={{ fontSize: 13 }}>🥉{stats.bronze}</Text>}
+      {stats.gold > 0 && <Text style={{ fontSize: 12, color: '#FAC775', fontWeight: '700' }}>{stats.gold}×</Text>}
+      {stats.silver > 0 && <Text style={{ fontSize: 12, color: '#C0C0C0', fontWeight: '700' }}>{stats.silver}×</Text>}
+      {stats.bronze > 0 && <Text style={{ fontSize: 12, color: '#CD7F32', fontWeight: '700' }}>{stats.bronze}×</Text>}
     </View>
   )
 }

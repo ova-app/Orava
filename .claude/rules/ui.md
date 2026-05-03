@@ -20,7 +20,7 @@ ThemeContext dark/light — persistance AsyncStorage. Source : `constants/theme.
 |---|---|---|
 | pr_charge | Zap | #FAC775 |
 | pr_serie | Flame | #D85A30 |
-| pr_exercice | Flame | #9B59B6 |
+| pr_exercice | Dumbbell | #9B59B6 |
 | pr_seance | Trophy | #FAC775 |
 
 Podium : déclinaison de couleurs uniquement — pas d'addition d'icônes.

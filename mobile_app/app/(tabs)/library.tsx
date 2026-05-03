@@ -53,10 +53,20 @@ const EQUIPMENT_FILTERS = [
   { key: 'kettlebell', label: 'Kettlebell' },
 ]
 
-const TYPE_FILTERS = [
+
+const MUSCLE_FILTERS = [
   { key: 'all', label: 'Tout' },
-  { key: 'compound', label: 'Polyarticulaire' },
-  { key: 'isolation', label: 'Isolation' },
+  { key: 'pectoraux', label: 'Pectoraux' },
+  { key: 'dos', label: 'Dos' },
+  { key: 'epaules', label: 'Épaules' },
+  { key: 'biceps', label: 'Biceps' },
+  { key: 'triceps', label: 'Triceps' },
+  { key: 'quadriceps', label: 'Quadriceps' },
+  { key: 'ischio_jambiers', label: 'Ischio' },
+  { key: 'fessiers', label: 'Fessiers' },
+  { key: 'mollets', label: 'Mollets' },
+  { key: 'abdominaux', label: 'Abdos' },
+  { key: 'avant_bras', label: 'Avant-bras' },
 ]
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -73,7 +83,8 @@ export default function LibraryScreen() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [equipFilter, setEquipFilter] = useState('all')
-  const [typeFilter, setTypeFilter] = useState('all')
+
+  const [muscleFilter, setMuscleFilter] = useState('all')
 
   useEffect(() => { fetchExercises() }, [])
 
@@ -98,10 +109,8 @@ export default function LibraryScreen() {
     let filtered = allExercises.filter(ex => {
       const matchSearch = normalize(ex.name_fr).includes(normalize(search))
       const matchEquip = equipFilter === 'all' || ex.equipment_type === equipFilter
-      const matchType =
-        typeFilter === 'all' ||
-        (typeFilter === 'compound' ? ex.is_compound : !ex.is_compound)
-      return matchSearch && matchEquip && matchType
+      const matchMuscle = muscleFilter === 'all' || ex.muscle_group === muscleFilter
+      return matchSearch && matchEquip && matchMuscle
     })
 
     const grouped: Record<string, Exercise[]> = {}
@@ -126,7 +135,7 @@ export default function LibraryScreen() {
         title: SECTION_LABELS[k] ?? k,
         data: grouped[k],
       }))
-  }, [allExercises, search, equipFilter, typeFilter])()
+  }, [allExercises, search, equipFilter, muscleFilter])()
 
   const totalCount = allExercises.length
 
@@ -158,21 +167,21 @@ export default function LibraryScreen() {
         ))}
       </View>
 
-      {/* Filtres type */}
+      {/* Filtres groupe musculaire */}
       <View style={styles.chipsRow}>
-        {TYPE_FILTERS.map(f => (
+        {MUSCLE_FILTERS.map(f => (
           <TouchableOpacity
             key={f.key}
             style={[
               styles.chip,
               { backgroundColor: colors.card, borderColor: colors.separator },
-              typeFilter === f.key && { backgroundColor: colors.accent, borderColor: colors.accent },
+              muscleFilter === f.key && { backgroundColor: colors.accent, borderColor: colors.accent },
             ]}
-            onPress={() => setTypeFilter(f.key)}
+            onPress={() => setMuscleFilter(f.key)}
           >
             <Text style={[
               styles.chipText, { color: colors.textSecondary },
-              typeFilter === f.key && { color: '#fff' },
+              muscleFilter === f.key && { color: '#fff' },
             ]}>{f.label}</Text>
           </TouchableOpacity>
         ))}

@@ -5,7 +5,7 @@ import {
   KeyboardAvoidingView, Platform, Image,
 } from 'react-native'
 import { router, useFocusEffect } from 'expo-router'
-import { Zap, Flame, Trophy, MapPin } from 'lucide-react-native'
+import { Zap, Flame, Trophy, MapPin, Timer } from 'lucide-react-native'
 type PrLevel = 'gold' | 'silver' | 'bronze' | null
 import { supabase } from '../../lib/supabase'
 import { useTheme } from '../../context/ThemeContext'
@@ -24,8 +24,8 @@ interface FeedPost {
   total_sets: number
   total_volume: number
   pr_count: number
-  has_pr_charge: boolean
-  has_pr_serie: boolean
+  pr_charge_best: PrLevel
+  pr_serie_best: PrLevel
   pr_seance: PrLevel
   like_count: number
   comment_count: number
@@ -33,6 +33,7 @@ interface FeedPost {
   is_own: boolean
   location_city: string | null
   photo_url: string | null
+  avg_rest_sec: number | null
 }
 
 interface Comment {
@@ -45,12 +46,37 @@ interface Comment {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
+const PR_LEVEL_COLORS: Record<NonNullable<PrLevel>, string> = {
+  gold: '#FAC775', silver: '#C0C0C0', bronze: '#CD7F32',
+}
+const LEVEL_RANK: Record<string, number> = { gold: 3, silver: 2, bronze: 1 }
+function bestPrLevel(sets: any[], field: string): PrLevel {
+  let best: PrLevel = null
+  for (const s of sets) {
+    if (s[field] && (!best || LEVEL_RANK[s[field]] > LEVEL_RANK[best])) best = s[field]
+  }
+  return best
+}
+
 function formatDuration(s: number): string {
   const h = Math.floor(s / 3600)
   const m = Math.floor((s % 3600) / 60)
   if (h > 0) return `${h}h ${m}min`
   if (m > 0) return `${m}min`
   return `${s}s`
+}
+
+function formatRest(sec: number): string {
+  if (sec < 60) return `${sec}s`
+  const m = Math.floor(sec / 60)
+  const s = sec % 60
+  return s > 0 ? `${m}min ${s}s` : `${m}min`
+}
+
+function computeAvgRest(sets: { rest_seconds?: number | null }[]): number | null {
+  const vals = sets.map(s => s.rest_seconds ?? 0).filter(r => r > 0 && r < 3600)
+  if (vals.length === 0) return null
+  return Math.round(vals.reduce((a, b) => a + b, 0) / vals.length)
 }
 
 function formatRelative(iso: string): string {
@@ -102,7 +128,8 @@ export default function FeedScreen() {
       .select(`
         id, title, started_at, duration_sec, user_id, location_city, photo_url, pr_seance,
         workout_exercises (
-          workout_sets ( weight_kg, reps, is_pr, pr_charge, pr_serie )
+          exercise_id,
+          workout_sets ( weight_kg, reps, is_pr, pr_charge, pr_serie, rest_seconds )
         ),
         likes ( user_id ),
         comments ( id )
@@ -125,9 +152,12 @@ export default function FeedScreen() {
     }
 
     const feedPosts: FeedPost[] = workoutsData.map((w: any) => {
-      const allSets = (w.workout_exercises ?? []).flatMap((we: any) => we.workout_sets ?? [])
+      const weRows: any[] = w.workout_exercises ?? []
+      const allSets = weRows.flatMap((we: any) => we.workout_sets ?? [])
       const profile = profileMap[w.user_id]
       const username = profile?.username ?? 'anonyme'
+
+      const sessionAvg = computeAvgRest(allSets)
 
       return {
         id: w.id,
@@ -137,12 +167,12 @@ export default function FeedScreen() {
         user_id: w.user_id,
         username,
         display_name: profile?.full_name ?? username,
-        exercise_count: (w.workout_exercises ?? []).length,
+        exercise_count: weRows.length,
         total_sets: allSets.length,
         total_volume: allSets.reduce((sum: number, s: any) => sum + (s.weight_kg ?? 0) * (s.reps ?? 0), 0),
         pr_count: allSets.filter((s: any) => s.is_pr).length,
-        has_pr_charge: allSets.some((s: any) => s.pr_charge !== null && s.pr_charge !== undefined),
-        has_pr_serie: allSets.some((s: any) => s.pr_serie !== null && s.pr_serie !== undefined),
+        pr_charge_best: bestPrLevel(allSets, 'pr_charge'),
+        pr_serie_best: bestPrLevel(allSets, 'pr_serie'),
         pr_seance: (w.pr_seance ?? null) as PrLevel,
         like_count: (w.likes ?? []).length,
         comment_count: (w.comments ?? []).length,
@@ -150,6 +180,7 @@ export default function FeedScreen() {
         is_own: w.user_id === user.id,
         location_city: w.location_city ?? null,
         photo_url: w.photo_url ?? null,
+        avg_rest_sec: sessionAvg,
       }
     })
 
@@ -259,7 +290,7 @@ function PostCard({ post, colors, onLike, onComment, onLikers, onPress }: {
   onLikers: () => void
   onPress: () => void
 }) {
-  const hasPrIcons = post.has_pr_charge || post.has_pr_serie || post.pr_seance !== null
+  const hasPrIcons = post.pr_charge_best !== null || post.pr_serie_best !== null || post.pr_seance !== null
 
   return (
     <TouchableOpacity
@@ -309,14 +340,18 @@ function PostCard({ post, colors, onLike, onComment, onLikers, onPress }: {
             : `${post.total_volume.toLocaleString('fr')} kg`}
           colors={colors}
         />
+        {post.avg_rest_sec !== null && (
+          <MiniStat icon={<Timer size={12} color={colors.textSecondary} />} label={formatRest(post.avg_rest_sec)} colors={colors} />
+        )}
         {hasPrIcons && (
           <View style={[styles.prChip, { backgroundColor: colors.prAmber + '18' }]}>
-            {post.has_pr_charge && <Zap size={12} color="#FAC775" fill="#FAC775" />}
-            {post.has_pr_serie && <Flame size={12} color={colors.accent} fill={colors.accent} />}
-            {post.pr_seance !== null && <Trophy size={12} color={colors.prAmber} fill={colors.prAmber} />}
+            {post.pr_charge_best && <Zap size={12} color={PR_LEVEL_COLORS[post.pr_charge_best]} fill={PR_LEVEL_COLORS[post.pr_charge_best]} />}
+            {post.pr_serie_best && <Flame size={12} color={PR_LEVEL_COLORS[post.pr_serie_best]} fill={PR_LEVEL_COLORS[post.pr_serie_best]} />}
+            {post.pr_seance && <Trophy size={12} color={PR_LEVEL_COLORS[post.pr_seance]} fill={PR_LEVEL_COLORS[post.pr_seance]} />}
           </View>
         )}
       </View>
+
 
       {/* Actions */}
       <View style={styles.actions}>
@@ -566,12 +601,14 @@ function LikersModal({ workoutId, visible, onClose, colors }: {
 // ─── MiniStat ─────────────────────────────────────────────────────────────────
 
 function MiniStat({ icon, label, colors }: {
-  icon: string; label: string
+  icon: string | React.ReactNode; label: string
   colors: ReturnType<typeof useTheme>['colors']
 }) {
   return (
     <View style={styles.miniStat}>
-      <Text style={[styles.miniStatIcon, { color: colors.textSecondary }]}>{icon}</Text>
+      {typeof icon === 'string'
+        ? <Text style={[styles.miniStatIcon, { color: colors.textSecondary }]}>{icon}</Text>
+        : icon}
       <Text style={[styles.miniStatLabel, { color: colors.textSecondary }]}>{label}</Text>
     </View>
   )

@@ -1,8 +1,9 @@
 # Orava — Priorités
 
 
-- Swipe modifier/supprimer série (code buggué)
+- Swipe supprimer série : le swipe n'est pas fluide et bug 
 - Photo de profil (bucket `profiles` + avatar_url)
-- Library — filtre groupe musculaire
-- Photos séances invisibles dans le feed
 - Mapping musculaire séances
+- Historique des exos dans la bibliothèque
+- Bosser les analytics
+- Charger l'armurerie

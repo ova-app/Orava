@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, Image,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, Image, Alert,
 } from 'react-native'
 import { router, useLocalSearchParams } from 'expo-router'
-import { Zap, Flame, Trophy } from 'lucide-react-native'
+import { Zap, Flame, Trophy, Timer, Dumbbell, Trash2 } from 'lucide-react-native'
 type PrLevel = 'gold' | 'silver' | 'bronze' | null
 import { supabase } from '../../lib/supabase'
 import { useTheme } from '../../context/ThemeContext'
@@ -17,6 +17,8 @@ interface SetDetail {
   is_pr: boolean
   pr_charge: PrLevel
   pr_serie: PrLevel
+  logged_at: string | null
+  rest_seconds: number | null
 }
 
 interface ExerciseDetail {
@@ -24,11 +26,19 @@ interface ExerciseDetail {
   equipment: string | null
   order_index: number
   sets: SetDetail[]
+  pr_exercice: PrLevel
+  avg_rest_sec: number | null
 }
 
 interface MuscleShare {
   group: string
   pct: number
+}
+
+interface PrEntry {
+  exerciseName: string
+  type: 'charge' | 'serie' | 'exercice' | 'seance'
+  level: NonNullable<PrLevel>
 }
 
 interface WorkoutDetail {
@@ -42,6 +52,9 @@ interface WorkoutDetail {
   pr_count: number
   photo_url: string | null
   muscle_breakdown: MuscleShare[]
+  pr_seance: PrLevel
+  avg_rest_sec: number | null
+  pr_entries: PrEntry[]
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -70,6 +83,32 @@ function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
 }
 
+function formatRest(sec: number): string {
+  if (sec < 60) return `${sec}s`
+  const m = Math.floor(sec / 60)
+  const s = sec % 60
+  return s > 0 ? `${m}min ${s}s` : `${m}min`
+}
+
+function computeAvgRest(sets: SetDetail[]): number | null {
+  const vals = sets.map(s => s.rest_seconds ?? 0).filter(r => r > 0 && r < 3600)
+  if (vals.length === 0) return null
+  return Math.round(vals.reduce((a, b) => a + b, 0) / vals.length)
+}
+
+const PR_LEVEL_COLORS: Record<NonNullable<PrLevel>, string> = {
+  gold: '#FAC775', silver: '#C0C0C0', bronze: '#CD7F32',
+}
+
+const LEVEL_RANK: Record<string, number> = { gold: 3, silver: 2, bronze: 1 }
+function bestLevel(sets: SetDetail[], field: 'pr_charge' | 'pr_serie'): PrLevel {
+  let best: PrLevel = null
+  for (const s of sets) {
+    if (s[field] && (!best || LEVEL_RANK[s[field]!] > LEVEL_RANK[best])) best = s[field]
+  }
+  return best
+}
+
 // ─── Composant ───────────────────────────────────────────────────────────────
 
 export default function WorkoutDetailScreen() {
@@ -77,18 +116,52 @@ export default function WorkoutDetailScreen() {
   const { colors } = useTheme()
   const [workout, setWorkout] = useState<WorkoutDetail | null>(null)
   const [loading, setLoading] = useState(true)
+  const [deleting, setDeleting] = useState(false)
 
   useEffect(() => { if (id) fetchWorkout(id) }, [id])
 
+  function handleDelete() {
+    Alert.alert(
+      'Supprimer la séance',
+      'Cette action est irréversible.',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Supprimer', style: 'destructive',
+          onPress: async () => {
+            setDeleting(true)
+            try {
+              const { data: weData } = await supabase
+                .from('workout_exercises')
+                .select('id')
+                .eq('workout_id', id!)
+              if (weData && weData.length > 0) {
+                const weIds = (weData as any[]).map(we => we.id)
+                await supabase.from('workout_sets').delete().in('workout_exercise_id', weIds)
+              }
+              await supabase.from('workout_exercises').delete().eq('workout_id', id!)
+              await supabase.from('likes').delete().eq('workout_id', id!)
+              await supabase.from('comments').delete().eq('workout_id', id!)
+              await supabase.from('workouts').delete().eq('id', id!)
+              router.back()
+            } catch {
+              setDeleting(false)
+              Alert.alert('Erreur', 'Impossible de supprimer la séance.')
+            }
+          },
+        },
+      ]
+    )
+  }
+
   async function fetchWorkout(workoutId: string) {
-    // Step 1: workout + structure (no exercises join — avoids cross-table RLS issues)
     const { data, error } = await supabase
       .from('workouts')
       .select(`
-        id, title, started_at, duration_sec, photo_url,
+        id, title, started_at, duration_sec, photo_url, pr_seance,
         workout_exercises (
           id, order_index, exercise_id, pr_exercice,
-          workout_sets ( set_number, weight_kg, reps, is_pr, pr_charge, pr_serie )
+          workout_sets ( set_number, weight_kg, reps, is_pr, pr_charge, pr_serie, logged_at, rest_seconds )
         )
       `)
       .eq('id', workoutId)
@@ -97,7 +170,6 @@ export default function WorkoutDetailScreen() {
     setLoading(false)
     if (error || !data) return
 
-    // Step 2: fetch exercise names separately (same pattern as library.tsx — known to work)
     const weRows = (data.workout_exercises ?? []) as any[]
     const exerciseIds = [...new Set(weRows.map(we => we.exercise_id).filter(Boolean))]
     let exMap: Record<string, { name_fr: string; equipment_type: string | null }> = {}
@@ -114,11 +186,8 @@ export default function WorkoutDetailScreen() {
 
     const exercises: ExerciseDetail[] = weRows
       .sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0))
-      .map(we => ({
-        name: exMap[we.exercise_id]?.name_fr ?? 'Exercice',
-        equipment: exMap[we.exercise_id]?.equipment_type ?? null,
-        order_index: we.order_index,
-        sets: ((we.workout_sets ?? []) as any[])
+      .map(we => {
+        const sets: SetDetail[] = ((we.workout_sets ?? []) as any[])
           .sort((a: any, b: any) => a.set_number - b.set_number)
           .map((s: any) => ({
             set_number: s.set_number,
@@ -127,12 +196,36 @@ export default function WorkoutDetailScreen() {
             is_pr: s.is_pr ?? false,
             pr_charge: (s.pr_charge ?? null) as PrLevel,
             pr_serie: (s.pr_serie ?? null) as PrLevel,
-          })),
-      }))
+            logged_at: s.logged_at ?? null,
+            rest_seconds: s.rest_seconds ?? null,
+          }))
+        return {
+          name: exMap[we.exercise_id]?.name_fr ?? 'Exercice',
+          equipment: exMap[we.exercise_id]?.equipment_type ?? null,
+          order_index: we.order_index,
+          sets,
+          pr_exercice: (we.pr_exercice ?? null) as PrLevel,
+          avg_rest_sec: computeAvgRest(sets),
+        }
+      })
 
     const allSets = exercises.flatMap(e => e.sets)
 
-    // Step 3: muscle breakdown (primary counts double)
+    const sessionAvgRest = computeAvgRest(allSets)
+
+    // Build PR entries list
+    const pr_entries: PrEntry[] = []
+    const prSeance = (data.pr_seance ?? null) as PrLevel
+    if (prSeance) pr_entries.push({ exerciseName: 'Séance', type: 'seance', level: prSeance })
+    for (const ex of exercises) {
+      if (ex.pr_exercice) pr_entries.push({ exerciseName: ex.name, type: 'exercice', level: ex.pr_exercice })
+      const chargeBest = bestLevel(ex.sets, 'pr_charge')
+      if (chargeBest) pr_entries.push({ exerciseName: ex.name, type: 'charge', level: chargeBest })
+      const serieBest = bestLevel(ex.sets, 'pr_serie')
+      if (serieBest) pr_entries.push({ exerciseName: ex.name, type: 'serie', level: serieBest })
+    }
+
+    // Step 3: muscle breakdown
     let muscle_breakdown: MuscleShare[] = []
     if (exerciseIds.length > 0) {
       const { data: muscleData } = await supabase
@@ -167,6 +260,9 @@ export default function WorkoutDetailScreen() {
       pr_count: allSets.filter(s => s.is_pr).length,
       photo_url: (data as any).photo_url ?? null,
       muscle_breakdown,
+      pr_seance: prSeance,
+      avg_rest_sec: sessionAvgRest,
+      pr_entries,
     })
   }
 
@@ -200,6 +296,11 @@ export default function WorkoutDetailScreen() {
             {formatDate(workout.started_at)} · {formatTime(workout.started_at)}
           </Text>
         </View>
+        <TouchableOpacity onPress={handleDelete} disabled={deleting} style={styles.trashBtn}>
+          {deleting
+            ? <ActivityIndicator size="small" color={colors.textSecondary} />
+            : <Trash2 size={20} color={colors.textSecondary} />}
+        </TouchableOpacity>
       </View>
 
       <ScrollView
@@ -227,10 +328,25 @@ export default function WorkoutDetailScreen() {
               : `${workout.total_volume.toLocaleString('fr')} kg`}
             colors={colors}
           />
-          {workout.pr_count > 0 && (
-            <StatBox label="PRs" value={String(workout.pr_count)} colors={colors} highlight />
+          {workout.avg_rest_sec !== null && (
+            <StatBox label="Repos moy." value={formatRest(workout.avg_rest_sec)} colors={colors} />
           )}
         </View>
+        {workout.pr_count > 0 && (
+          <View style={styles.prCountRow}>
+            <StatBox label="PRs" value={String(workout.pr_count)} colors={colors} highlight />
+          </View>
+        )}
+
+        {/* PRs de la séance */}
+        {workout.pr_entries.length > 0 && (
+          <View style={[prStyles.card, { backgroundColor: colors.card, borderColor: colors.separator }]}>
+            <Text style={[styles.sectionTitle, { color: colors.textPrimary, marginBottom: 8 }]}>PRs de la séance</Text>
+            {workout.pr_entries.map((entry, i) => (
+              <PrEntryRow key={i} entry={entry} colors={colors} />
+            ))}
+          </View>
+        )}
 
         {/* Muscles travaillés */}
         {workout.muscle_breakdown.length > 0 && (
@@ -254,11 +370,19 @@ export default function WorkoutDetailScreen() {
           <View key={idx} style={[styles.exerciseCard, { backgroundColor: colors.card, borderColor: colors.separator }]}>
             <View style={styles.exerciseHeader}>
               <Text style={[styles.exerciseName, { color: colors.textPrimary }]}>{ex.name}</Text>
-              {ex.equipment && (
-                <Text style={[styles.exerciseEquip, { color: colors.textSecondary }]}>
-                  {EQUIPMENT_LABELS[ex.equipment] ?? ex.equipment}
-                </Text>
-              )}
+              <View style={styles.exerciseMeta}>
+                {ex.equipment && (
+                  <Text style={[styles.exerciseEquip, { color: colors.textSecondary }]}>
+                    {EQUIPMENT_LABELS[ex.equipment] ?? ex.equipment}
+                  </Text>
+                )}
+                {ex.avg_rest_sec !== null && (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                    <Timer size={11} color={colors.textSecondary} />
+                    <Text style={{ fontSize: 11, color: colors.textSecondary }}>{formatRest(ex.avg_rest_sec)}</Text>
+                  </View>
+                )}
+              </View>
             </View>
 
             <View style={[styles.setHeaderRow, { borderBottomColor: colors.separator }]}>
@@ -285,33 +409,53 @@ export default function WorkoutDetailScreen() {
   )
 }
 
+// ─── PrEntryRow ───────────────────────────────────────────────────────────────
+
+const PR_TYPE_CONFIG = {
+  charge:   { Icon: Zap,    color: (l: NonNullable<PrLevel>) => PR_LEVEL_COLORS[l], label: 'Charge' },
+  serie:    { Icon: Flame,  color: (_l: NonNullable<PrLevel>) => '#D85A30',          label: 'Série' },
+  exercice: { Icon: Dumbbell, color: (_l: NonNullable<PrLevel>) => '#9B59B6',        label: 'Exercice' },
+  seance:   { Icon: Trophy, color: (l: NonNullable<PrLevel>) => PR_LEVEL_COLORS[l], label: 'Séance' },
+} as const
+
+function PrEntryRow({ entry, colors }: {
+  entry: PrEntry
+  colors: ReturnType<typeof useTheme>['colors']
+}) {
+  const cfg = PR_TYPE_CONFIG[entry.type]
+  const iconColor = cfg.color(entry.level)
+  const levelLabel = entry.level === 'gold' ? 'Or' : entry.level === 'silver' ? 'Argent' : 'Bronze'
+
+  return (
+    <View style={[prStyles.row, { borderBottomColor: colors.separator }]}>
+      <View style={[prStyles.iconWrap, { backgroundColor: iconColor + '20' }]}>
+        <cfg.Icon size={14} color={iconColor} fill={iconColor} />
+      </View>
+      <View style={prStyles.rowText}>
+        <Text style={[prStyles.exName, { color: colors.textPrimary }]}>{entry.exerciseName}</Text>
+        <Text style={[prStyles.typLabel, { color: colors.textSecondary }]}>{cfg.label}</Text>
+      </View>
+      <View style={[prStyles.levelBadge, { backgroundColor: iconColor + '20', borderColor: iconColor + '50' }]}>
+        <Text style={[prStyles.levelText, { color: iconColor }]}>{levelLabel}</Text>
+      </View>
+    </View>
+  )
+}
+
 // ─── PRBadges ────────────────────────────────────────────────────────────────
 
-const PR_LEVEL_COLORS: Record<NonNullable<PrLevel>, string> = {
-  gold: '#FAC775', silver: '#C0C0C0', bronze: '#CD7F32',
-}
-const PR_LEVEL_EMOJI: Record<NonNullable<PrLevel>, string> = {
-  gold: '🥇', silver: '🥈', bronze: '🥉',
-}
-
-function PRBadges({ set, colors }: { set: SetDetail; colors: ReturnType<typeof useTheme>['colors'] }) {
+function PRBadges({ set }: { set: SetDetail; colors?: ReturnType<typeof useTheme>['colors'] }) {
   if (!set.pr_charge && !set.pr_serie) return <View style={{ width: 60 }} />
   return (
     <View style={styles.prIcons}>
       {set.pr_charge && (
         <View style={[styles.prBadge, { backgroundColor: PR_LEVEL_COLORS[set.pr_charge] + '25', borderColor: PR_LEVEL_COLORS[set.pr_charge] + '60' }]}>
           <Zap size={10} color={PR_LEVEL_COLORS[set.pr_charge]} fill={PR_LEVEL_COLORS[set.pr_charge]} />
-          <Text style={[styles.prBadgeText, { color: PR_LEVEL_COLORS[set.pr_charge] }]}>
-            {PR_LEVEL_EMOJI[set.pr_charge]}
-          </Text>
         </View>
       )}
       {set.pr_serie && (
         <View style={[styles.prBadge, { backgroundColor: PR_LEVEL_COLORS[set.pr_serie] + '25', borderColor: PR_LEVEL_COLORS[set.pr_serie] + '60' }]}>
           <Flame size={10} color={PR_LEVEL_COLORS[set.pr_serie]} fill={PR_LEVEL_COLORS[set.pr_serie]} />
-          <Text style={[styles.prBadgeText, { color: PR_LEVEL_COLORS[set.pr_serie] }]}>
-            {PR_LEVEL_EMOJI[set.pr_serie]}
-          </Text>
         </View>
       )}
     </View>
@@ -338,6 +482,22 @@ function StatBox({ label, value, colors, highlight = false }: {
   )
 }
 
+// ─── Styles ──────────────────────────────────────────────────────────────────
+
+const prStyles = StyleSheet.create({
+  card: { borderRadius: 14, padding: 14, marginBottom: 10, borderWidth: 1 },
+  row: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    paddingVertical: 8, borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  iconWrap: { width: 28, height: 28, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  rowText: { flex: 1, gap: 1 },
+  exName: { fontSize: 13, fontWeight: '600' },
+  typLabel: { fontSize: 11 },
+  levelBadge: { borderRadius: 6, borderWidth: 1, paddingHorizontal: 8, paddingVertical: 2 },
+  levelText: { fontSize: 11, fontWeight: '700' },
+})
+
 const mbStyles = StyleSheet.create({
   card: { borderRadius: 14, padding: 14, marginBottom: 10, borderWidth: 1, gap: 10 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10 },
@@ -353,8 +513,6 @@ const statStyles = StyleSheet.create({
   label: { fontSize: 10 },
 })
 
-// ─── Styles ──────────────────────────────────────────────────────────────────
-
 const styles = StyleSheet.create({
   container: { flex: 1 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
@@ -367,6 +525,7 @@ const styles = StyleSheet.create({
   },
   backBtn: { paddingTop: 2 },
   backText: { fontSize: 28, fontWeight: '300', lineHeight: 28 },
+  trashBtn: { padding: 4, marginTop: 2 },
   headerMeta: { flex: 1, gap: 4 },
   headerTitle: { fontSize: 18, fontWeight: '700' },
   headerDate: { fontSize: 12 },
@@ -375,14 +534,17 @@ const styles = StyleSheet.create({
   scrollContent: { padding: 16, paddingBottom: 60, gap: 4 },
   workoutPhoto: { width: '100%', height: 220, borderRadius: 14, marginBottom: 8 },
 
-  statsRow: { flexDirection: 'row', gap: 8, marginBottom: 20 },
+  statsRow: { flexDirection: 'row', gap: 8, marginBottom: 6 },
+  prCountRow: { flexDirection: 'row', marginBottom: 14 },
 
   sectionTitle: { fontSize: 17, fontWeight: '700', marginBottom: 12 },
 
   exerciseCard: { borderRadius: 14, padding: 14, marginBottom: 10, borderWidth: 1, gap: 8 },
-  exerciseHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
+  exerciseHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: 4 },
   exerciseName: { fontSize: 15, fontWeight: '700', flex: 1 },
+  exerciseMeta: { alignItems: 'flex-end', gap: 2 },
   exerciseEquip: { fontSize: 12 },
+  exerciseRest: { fontSize: 11 },
 
   setHeaderRow: {
     flexDirection: 'row', alignItems: 'center',
@@ -393,6 +555,6 @@ const styles = StyleSheet.create({
   setColLabel: { fontSize: 11, fontWeight: '500' },
 
   prIcons: { width: 60, flexDirection: 'row', gap: 3, justifyContent: 'flex-end' },
-  prBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
+  prBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, borderWidth: 1 },
   prBadgeText: { fontSize: 10, fontWeight: '700' },
 })

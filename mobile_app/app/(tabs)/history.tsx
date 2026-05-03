@@ -20,12 +20,24 @@ interface WorkoutSummary {
   total_sets: number
   total_volume: number
   pr_count: number
-  has_pr_charge: boolean
-  has_pr_serie: boolean
+  pr_charge_best: PrLevel
+  pr_serie_best: PrLevel
   pr_seance: PrLevel
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
+
+const PR_LEVEL_COLORS: Record<NonNullable<PrLevel>, string> = {
+  gold: '#FAC775', silver: '#C0C0C0', bronze: '#CD7F32',
+}
+const LEVEL_RANK: Record<string, number> = { gold: 3, silver: 2, bronze: 1 }
+function bestPrLevel(sets: any[], field: string): PrLevel {
+  let best: PrLevel = null
+  for (const s of sets) {
+    if (s[field] && (!best || LEVEL_RANK[s[field]] > LEVEL_RANK[best])) best = s[field]
+  }
+  return best
+}
 
 function formatDuration(s: number): string {
   const h = Math.floor(s / 3600)
@@ -58,8 +70,8 @@ function computeStats(raw: any): WorkoutSummary {
     total_sets: allSets.length,
     total_volume: allSets.reduce((sum: number, s: any) => sum + (s.weight_kg ?? 0) * (s.reps ?? 0), 0),
     pr_count: allSets.filter((s: any) => s.is_pr).length,
-    has_pr_charge: allSets.some((s: any) => s.pr_charge !== null && s.pr_charge !== undefined),
-    has_pr_serie: allSets.some((s: any) => s.pr_serie !== null && s.pr_serie !== undefined),
+    pr_charge_best: bestPrLevel(allSets, 'pr_charge'),
+    pr_serie_best: bestPrLevel(allSets, 'pr_serie'),
     pr_seance: (raw.pr_seance ?? null) as PrLevel,
   }
 }
@@ -150,7 +162,7 @@ function WorkoutCard({ workout, colors }: {
   workout: WorkoutSummary
   colors: ReturnType<typeof useTheme>['colors']
 }) {
-  const hasPrIcons = workout.has_pr_charge || workout.has_pr_serie || workout.pr_seance !== null
+  const hasPrIcons = workout.pr_charge_best !== null || workout.pr_serie_best !== null || workout.pr_seance !== null
 
   return (
     <TouchableOpacity
@@ -173,9 +185,9 @@ function WorkoutCard({ workout, colors }: {
           </Text>
           {hasPrIcons && (
             <View style={styles.prRow}>
-              {workout.has_pr_charge && <Zap size={13} color="#FAC775" fill="#FAC775" />}
-              {workout.has_pr_serie && <Flame size={13} color={colors.accent} fill={colors.accent} />}
-              {workout.pr_seance !== null && <Trophy size={13} color={colors.prAmber} fill={colors.prAmber} />}
+              {workout.pr_charge_best && <Zap size={13} color={PR_LEVEL_COLORS[workout.pr_charge_best]} fill={PR_LEVEL_COLORS[workout.pr_charge_best]} />}
+              {workout.pr_serie_best && <Flame size={13} color={PR_LEVEL_COLORS[workout.pr_serie_best]} fill={PR_LEVEL_COLORS[workout.pr_serie_best]} />}
+              {workout.pr_seance && <Trophy size={13} color={PR_LEVEL_COLORS[workout.pr_seance]} fill={PR_LEVEL_COLORS[workout.pr_seance]} />}
             </View>
           )}
         </View>

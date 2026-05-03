@@ -2,13 +2,13 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   View, Text, TouchableOpacity, StyleSheet, FlatList,
   TextInput, Modal, ActivityIndicator, Alert, ScrollView,
-  KeyboardAvoidingView, Platform,
+  KeyboardAvoidingView, Platform, Animated, PanResponder,
 } from 'react-native'
 import { router } from 'expo-router'
 import { supabase } from '../../lib/supabase'
 import { useWorkout, WorkoutExercise, WorkoutSet, PrLevel } from '../../context/WorkoutContext'
 import { useTheme } from '../../context/ThemeContext'
-import { Zap, Flame } from 'lucide-react-native'
+import { Zap, Flame, Timer } from 'lucide-react-native'
 
 const PR_LEVEL_COLORS: Record<NonNullable<PrLevel>, { badge: string; bg: string }> = {
   gold:   { badge: '#FAC775', bg: '#FAC77520' },
@@ -17,15 +17,15 @@ const PR_LEVEL_COLORS: Record<NonNullable<PrLevel>, { badge: string; bg: string 
 }
 
 const PR_CHARGE_LABELS: Record<NonNullable<PrLevel>, string> = {
-  gold:   '🥇 PR Charge — record absolu !',
-  silver: '🥈 PR Charge — 2e meilleur poids !',
-  bronze: '🥉 PR Charge — 3e meilleur poids !',
+  gold:   'PR Charge — record absolu !',
+  silver: 'PR Charge — 2e meilleur poids !',
+  bronze: 'PR Charge — 3e meilleur poids !',
 }
 
 const PR_SERIE_LABELS: Record<NonNullable<PrLevel>, string> = {
-  gold:   '🥇 PR Série — record absolu !',
-  silver: '🥈 PR Série — 2e meilleure perf !',
-  bronze: '🥉 PR Série — 3e meilleure perf !',
+  gold:   'PR Série — record absolu !',
+  silver: 'PR Série — 2e meilleure perf !',
+  bronze: 'PR Série — 3e meilleure perf !',
 }
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -349,7 +349,7 @@ export default function WorkoutSessionScreen() {
           style={[styles.timerBtn, { backgroundColor: colors.backgroundSecondary }]}
           onPress={() => router.push('/workout/timer')}
         >
-          <Text style={styles.timerBtnText}>⏱</Text>
+          <Timer size={20} color={colors.textPrimary} />
         </TouchableOpacity>
         <TouchableOpacity style={[styles.finishBtn, { backgroundColor: colors.accent }]} onPress={handleFinish}>
           <Text style={styles.finishBtnText}>Terminer</Text>
@@ -388,7 +388,7 @@ export default function WorkoutSessionScreen() {
           <Text style={[styles.noSetsText, { color: colors.textSecondary }]}>Première série — c'est parti !</Text>
         ) : (
           validatedSets.map((set, idx) => (
-            <SetRow
+            <SwipeableSetRow
               key={idx}
               set={set}
               onRemove={() => workout.removeSet(workout.currentIndex, idx)}
@@ -467,10 +467,8 @@ export default function WorkoutSessionScreen() {
 
       <ExercisePicker
         visible={showPicker}
-        query={searchQuery}
-        results={searchResults}
-        searching={searching}
-        onChangeQuery={setSearchQuery}
+        allExercises={allExercises}
+        loading={exercisesLoading}
         onSelect={handleSelectExercise}
         onClose={() => setShowPicker(false)}
         colors={colors}
@@ -479,57 +477,112 @@ export default function WorkoutSessionScreen() {
   )
 }
 
-// ─── SetRow ──────────────────────────────────────────────────────────────────
+// ─── SwipeableSetRow ──────────────────────────────────────────────────────────
 
-function SetRow({ set, onRemove, colors }: { set: WorkoutSet; onRemove: () => void; colors: ReturnType<typeof useTheme>['colors'] }) {
+const DELETE_WIDTH = 80
+const DELETE_THRESHOLD = 55
+
+function SwipeableSetRow({ set, onRemove, colors }: {
+  set: WorkoutSet
+  onRemove: () => void
+  colors: ReturnType<typeof useTheme>['colors']
+}) {
+  // useNativeDriver: false — JS driver respects overflow:hidden on all platforms
+  const swipeX = useRef(new Animated.Value(0)).current
+
+  const deleteOpacity = swipeX.interpolate({
+    inputRange: [-DELETE_WIDTH, -DELETE_WIDTH * 0.3],
+    outputRange: [1, 0],
+    extrapolate: 'clamp',
+  })
+
+  const pan = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onStartShouldSetPanResponderCapture: () => false,
+      onMoveShouldSetPanResponder: (_, g) => g.dx < -8 && Math.abs(g.dx) > Math.abs(g.dy),
+      onMoveShouldSetPanResponderCapture: (_, g) => g.dx < -8 && Math.abs(g.dx) > Math.abs(g.dy),
+      onPanResponderMove: (_, g) => {
+        swipeX.setValue(Math.max(-DELETE_WIDTH, Math.min(0, g.dx)))
+      },
+      onPanResponderRelease: (_, g) => {
+        if (g.dx <= -DELETE_THRESHOLD) {
+          onRemove()
+          swipeX.setValue(0)
+        } else {
+          Animated.spring(swipeX, { toValue: 0, useNativeDriver: false }).start()
+        }
+      },
+      onPanResponderTerminationRequest: () => true,
+      onPanResponderTerminate: () => {
+        Animated.spring(swipeX, { toValue: 0, useNativeDriver: false }).start()
+      },
+    })
+  ).current
+
   const chargeCfg = set.pr_charge ? PR_LEVEL_COLORS[set.pr_charge] : null
   const serieCfg  = set.pr_serie  ? PR_LEVEL_COLORS[set.pr_serie]  : null
+
   return (
-    <View style={[setStyles.row, { borderBottomColor: colors.separator }]}>
-      <Text style={[setStyles.number, { color: colors.textSecondary }]}>Série {set.set_number}</Text>
-      <Text style={[setStyles.data, { color: colors.textPrimary }]}>
-        {set.weight_kg > 0
-          ? `${formatWeight(set.weight_kg)} kg × ${set.reps} reps`
-          : `${set.reps} reps`}
-      </Text>
-      {chargeCfg && (
-        <View style={[setStyles.prBadge, { backgroundColor: chargeCfg.bg, borderColor: chargeCfg.badge + '60' }]}>
-          <Zap color={chargeCfg.badge} size={11} fill={chargeCfg.badge} />
-          <Text style={[setStyles.prBadgeText, { color: chargeCfg.badge }]}>
-            {set.pr_charge === 'gold' ? '🥇' : set.pr_charge === 'silver' ? '🥈' : '🥉'}
-          </Text>
-        </View>
-      )}
-      {serieCfg && (
-        <View style={[setStyles.prBadge, { backgroundColor: serieCfg.bg, borderColor: serieCfg.badge + '60' }]}>
-          <Flame color={serieCfg.badge} size={11} fill={serieCfg.badge} />
-          <Text style={[setStyles.prBadgeText, { color: serieCfg.badge }]}>
-            {set.pr_serie === 'gold' ? '🥇' : set.pr_serie === 'silver' ? '🥈' : '🥉'}
-          </Text>
-        </View>
-      )}
-      <TouchableOpacity style={setStyles.deleteBtn} onPress={onRemove} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-        <Text style={[setStyles.deleteText, { color: colors.textSecondary }]}>×</Text>
-      </TouchableOpacity>
+    <View style={[setStyles.container, { backgroundColor: colors.background, borderBottomColor: colors.separator }]}>
+      {/* Red zone revealed on swipe */}
+      <View style={setStyles.deleteZone}>
+        <Animated.Text style={[setStyles.deleteLabel, { opacity: deleteOpacity }]}>
+          Supprimer
+        </Animated.Text>
+      </View>
+      {/* Row — JS-driven translateX so overflow:hidden clips correctly */}
+      <Animated.View
+        {...pan.panHandlers}
+        style={[setStyles.row, { backgroundColor: colors.background, transform: [{ translateX: swipeX }] }]}
+      >
+        <Text style={[setStyles.number, { color: colors.textSecondary }]}>Série {set.set_number}</Text>
+        <Text style={[setStyles.data, { color: colors.textPrimary }]}>
+          {set.weight_kg > 0
+            ? `${formatWeight(set.weight_kg)} kg × ${set.reps} reps`
+            : `${set.reps} reps`}
+        </Text>
+        {chargeCfg && (
+          <View style={[setStyles.prBadge, { backgroundColor: chargeCfg.bg, borderColor: chargeCfg.badge + '60' }]}>
+            <Zap color={chargeCfg.badge} size={11} fill={chargeCfg.badge} />
+          </View>
+        )}
+        {serieCfg && (
+          <View style={[setStyles.prBadge, { backgroundColor: serieCfg.bg, borderColor: serieCfg.badge + '60' }]}>
+            <Flame color={serieCfg.badge} size={11} fill={serieCfg.badge} />
+          </View>
+        )}
+      </Animated.View>
     </View>
   )
 }
 
 const setStyles = StyleSheet.create({
+  container: {
+    overflow: 'hidden',
+    borderBottomWidth: 1,
+  },
+  deleteZone: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    bottom: 0,
+    width: DELETE_WIDTH,
+    backgroundColor: '#FF3B30',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deleteLabel: { color: '#fff', fontSize: 12, fontWeight: '700' },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 10,
     paddingHorizontal: 16,
-    borderBottomWidth: 1,
     gap: 8,
   },
   number: { fontSize: 13, width: 54 },
   data: { fontSize: 15, fontWeight: '500', flex: 1 },
   prBadge: { borderWidth: 1, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 },
-  prBadgeText: { fontSize: 13, fontWeight: '700' },
-  deleteBtn: { paddingHorizontal: 4 },
-  deleteText: { fontSize: 20, lineHeight: 22 },
 })
 
 // ─── ExercisePicker ──────────────────────────────────────────────────────────

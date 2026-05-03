@@ -4,6 +4,7 @@ import {
   ActivityIndicator,
 } from 'react-native'
 import { useFocusEffect, router } from 'expo-router'
+import { Zap } from 'lucide-react-native'
 import { supabase } from '../lib/supabase'
 import { useTheme } from '../context/ThemeContext'
 
@@ -21,10 +22,10 @@ interface ExercisePodium {
 
 // ─── Constantes ──────────────────────────────────────────────────────────────
 
-const LEVEL_META: Record<PrLevel, { emoji: string; color: string; label: string }> = {
-  gold:   { emoji: '🥇', color: '#FAC775', label: 'Record absolu' },
-  silver: { emoji: '🥈', color: '#C0C0C0', label: '2e meilleure' },
-  bronze: { emoji: '🥉', color: '#CD7F32', label: '3e meilleure' },
+const LEVEL_META: Record<PrLevel, { color: string; label: string }> = {
+  gold:   { color: '#FAC775', label: 'Record absolu' },
+  silver: { color: '#C0C0C0', label: '2e meilleure' },
+  bronze: { color: '#CD7F32', label: '3e meilleure' },
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -140,7 +141,7 @@ export default function PRVaultScreen() {
                       styles.medalBox,
                       { backgroundColor: entry ? meta.color + '15' : colors.backgroundSecondary, borderColor: entry ? meta.color + '40' : colors.separator },
                     ]}>
-                      <Text style={styles.medalEmoji}>{meta.emoji}</Text>
+                      <Zap size={20} color={meta.color} fill={meta.color} />
                       {entry ? (
                         <>
                           <Text style={[styles.medalWeight, { color: entry ? meta.color : colors.textSecondary }]}>
@@ -201,7 +202,6 @@ const styles = StyleSheet.create({
     flex: 1, borderRadius: 12, borderWidth: 1,
     alignItems: 'center', paddingVertical: 12, paddingHorizontal: 4, gap: 4,
   },
-  medalEmoji: { fontSize: 22 },
   medalWeight: { fontSize: 14, fontWeight: '700', textAlign: 'center' },
   medalReps: { fontSize: 11, textAlign: 'center' },
   medalDate: { fontSize: 10, textAlign: 'center' },

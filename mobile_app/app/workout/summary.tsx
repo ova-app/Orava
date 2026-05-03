@@ -6,7 +6,7 @@ import {
 import { router } from 'expo-router'
 import * as ImagePicker from 'expo-image-picker'
 import * as Location from 'expo-location'
-import { Zap, Flame, Trophy, Camera, X, MapPin } from 'lucide-react-native'
+import { Zap, Flame, Dumbbell, Trophy, Camera, X, MapPin } from 'lucide-react-native'
 import { supabase } from '../../lib/supabase'
 import { useWorkout, WorkoutExercise, PrLevel, computePodium } from '../../context/WorkoutContext'
 import { useTheme } from '../../context/ThemeContext'
@@ -296,19 +296,23 @@ export default function SummaryScreen() {
       let photoUrl: string | null = null
       if (photoUri) {
         try {
-          const ext = photoUri.split('.').pop() ?? 'jpg'
+          const rawExt = (photoUri.split('.').pop() ?? 'jpg').toLowerCase().split('?')[0]
+          const ext = rawExt === 'jpg' ? 'jpeg' : rawExt
+          const mimeType = `image/${ext}`
           const path = `${user.id}/${Date.now()}.${ext}`
           const response = await fetch(photoUri)
-          const blob = await response.blob()
+          const arrayBuffer = await response.arrayBuffer()
           const { error: uploadError } = await supabase.storage
             .from('workout-photos')
-            .upload(path, blob, { contentType: `image/${ext}`, upsert: false })
+            .upload(path, arrayBuffer, { contentType: mimeType, upsert: false })
           if (!uploadError) {
             const { data: urlData } = supabase.storage.from('workout-photos').getPublicUrl(path)
             photoUrl = urlData.publicUrl
+          } else {
+            Alert.alert('Erreur photo', `Upload échoué : ${uploadError.message}`)
           }
-        } catch {
-          // Photo upload failure is non-blocking
+        } catch (photoErr: any) {
+          Alert.alert('Erreur photo', `Exception : ${photoErr?.message ?? photoErr}`)
         }
       }
 
@@ -368,7 +372,7 @@ export default function SummaryScreen() {
             pr_charge: s.pr_charge,
             pr_serie: s.pr_serie,
             rest_seconds: s.rest_seconds,
-            logged_at: new Date().toISOString(),
+            logged_at: s.validated_at ? new Date(s.validated_at).toISOString() : new Date().toISOString(),
           }))
         )
         if (setsError) throw setsError
@@ -494,8 +498,8 @@ export default function SummaryScreen() {
                       ? `${formatWeight(set.weight_kg)} kg × ${set.reps} reps`
                       : `${set.reps} reps`}
                   </Text>
-                  {chargeCfg && <Text style={{ fontSize: 13 }}>{chargeCfg.chargeEmoji}</Text>}
-                  {serieCfg  && <Text style={{ fontSize: 13 }}>{serieCfg.serieEmoji}</Text>}
+                  {chargeCfg && <Zap size={13} color={chargeCfg.color} fill={chargeCfg.color} />}
+                  {serieCfg  && <Flame size={13} color={serieCfg.color} fill={serieCfg.color} />}
                 </View>
               )
             })}
@@ -602,16 +606,16 @@ export default function SummaryScreen() {
 
 // ─── PRRow ────────────────────────────────────────────────────────────────────
 
-const PR_LEVEL_META: Record<NonNullable<PrLevel>, { color: string; emoji: string; chargeEmoji: string; serieEmoji: string }> = {
-  gold:   { color: '#FAC775', emoji: '🥇', chargeEmoji: '⚡🥇', serieEmoji: '🔥🥇' },
-  silver: { color: '#C0C0C0', emoji: '🥈', chargeEmoji: '⚡🥈', serieEmoji: '🔥🥈' },
-  bronze: { color: '#CD7F32', emoji: '🥉', chargeEmoji: '⚡🥉', serieEmoji: '🔥🥉' },
+const PR_LEVEL_META: Record<NonNullable<PrLevel>, { color: string }> = {
+  gold:   { color: '#FAC775' },
+  silver: { color: '#C0C0C0' },
+  bronze: { color: '#CD7F32' },
 }
 
 const PR_TYPE_CONFIG: Record<PREntry['type'], { Icon: any; color: string; label: string; fill: boolean }> = {
   charge:   { Icon: Zap,    color: '#FAC775', label: 'PR Charge',    fill: true },
   serie:    { Icon: Flame,  color: '#D85A30', label: 'PR Série',     fill: true },
-  exercice: { Icon: Flame,  color: '#9B59B6', label: 'PR Exercice',  fill: true },
+  exercice: { Icon: Dumbbell, color: '#9B59B6', label: 'PR Exercice', fill: true },
   seance:   { Icon: Trophy, color: '#FAC775', label: 'PR Séance',    fill: false },
 }
 
@@ -625,11 +629,9 @@ function PRRow({ pr, colors }: { pr: PREntry; colors: ReturnType<typeof useTheme
   const cfg  = PR_TYPE_CONFIG[pr.type]
   const Icon = cfg.Icon
   const levelColor = PR_LEVEL_META[pr.prLevel].color
-  const emoji = PR_LEVEL_META[pr.prLevel].emoji
   return (
     <View style={prStyles.row}>
-      <Text style={{ fontSize: 14 }}>{emoji}</Text>
-      <Icon color={cfg.color} size={14} fill={cfg.fill ? cfg.color : 'none'} />
+      <Icon color={levelColor} size={14} fill={cfg.fill ? levelColor : 'none'} />
       <Text style={[prStyles.label, { color: cfg.color }]}>{cfg.label}</Text>
       <Text style={[prStyles.exName, { color: colors.textPrimary }]} numberOfLines={1}>{pr.exerciseName}</Text>
       <Text style={[prStyles.value, { color: levelColor }]}>{LEVEL_LABEL[pr.prLevel]}</Text>
