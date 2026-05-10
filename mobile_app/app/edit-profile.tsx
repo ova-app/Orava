@@ -11,6 +11,9 @@ export default function EditProfileScreen() {
   const { colors } = useTheme()
   const [username, setUsername] = useState('')
   const [fullName, setFullName] = useState('')
+  const [dataNaissance, setDateNaissance] = useState('')
+  const [poids, setPoids] = useState('')
+  const [originalPoids, setOriginalPoids] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
@@ -19,15 +22,19 @@ export default function EditProfileScreen() {
   async function loadProfile() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setLoading(false); return }
-    const { data } = await supabase
-      .from('users')
-      .select('username, full_name')
-      .eq('id', user.id)
-      .single()
-    if (data) {
-      setUsername(data.username ?? '')
-      setFullName(data.full_name ?? '')
+    const [profileRes, bodyRes] = await Promise.all([
+      supabase.from('users').select('username, full_name, date_naissance').eq('id', user.id).single(),
+      supabase.from('body_metrics').select('weight_kg').eq('user_id', user.id)
+        .order('measured_at', { ascending: false }).limit(1),
+    ])
+    if (profileRes.data) {
+      setUsername((profileRes.data as any).username ?? '')
+      setFullName((profileRes.data as any).full_name ?? '')
+      setDateNaissance((profileRes.data as any).date_naissance ?? '')
     }
+    const p = String((bodyRes.data as any)?.[0]?.weight_kg ?? '')
+    setPoids(p)
+    setOriginalPoids(p)
     setLoading(false)
   }
 
@@ -37,19 +44,25 @@ export default function EditProfileScreen() {
       return
     }
     setSaving(true)
-    const { data: { user } } = await supabase.auth.getUser()
-    if (user) {
-      const { error } = await supabase
-        .from('users')
-        .update({ username: username.trim(), full_name: fullName.trim() || null })
-        .eq('id', user.id)
-      if (error) {
-        Alert.alert('Erreur', error.message)
-      } else {
-        router.back()
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      const updates: Record<string, any> = {
+        username: username.trim(),
+        full_name: fullName.trim() || null,
       }
+      if (dataNaissance.trim()) updates.date_naissance = dataNaissance.trim()
+      const { error } = await supabase.from('users').update(updates).eq('id', user.id)
+      if (error) { Alert.alert('Erreur', error.message); return }
+      const poidsNum = parseFloat(poids)
+      if (!isNaN(poidsNum) && poids !== originalPoids) {
+        await supabase.from('body_metrics').insert({ user_id: user.id, weight_kg: poidsNum })
+        setOriginalPoids(poids)
+      }
+      router.back()
+    } finally {
+      setSaving(false)
     }
-    setSaving(false)
   }
 
   const c = colors
@@ -98,6 +111,30 @@ export default function EditProfileScreen() {
             placeholderTextColor={c.textSecondary}
             autoCapitalize="none"
             autoCorrect={false}
+          />
+        </View>
+
+        <View style={styles.field}>
+          <Text style={[styles.label, { color: c.textSecondary }]}>Date de naissance</Text>
+          <TextInput
+            style={[styles.input, { backgroundColor: c.card, borderColor: c.separator, color: c.textPrimary }]}
+            value={dataNaissance}
+            onChangeText={setDateNaissance}
+            placeholder="AAAA-MM-JJ"
+            placeholderTextColor={c.textSecondary}
+            keyboardType="numbers-and-punctuation"
+          />
+        </View>
+
+        <View style={styles.field}>
+          <Text style={[styles.label, { color: c.textSecondary }]}>Poids (kg)</Text>
+          <TextInput
+            style={[styles.input, { backgroundColor: c.card, borderColor: c.separator, color: c.textPrimary }]}
+            value={poids}
+            onChangeText={setPoids}
+            placeholder="75"
+            placeholderTextColor={c.textSecondary}
+            keyboardType="decimal-pad"
           />
         </View>
 

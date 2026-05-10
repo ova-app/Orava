@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   View, Text, FlatList, TouchableOpacity, StyleSheet,
   ActivityIndicator, RefreshControl, Modal, TextInput,
@@ -7,10 +7,22 @@ import {
 import { router, useFocusEffect } from 'expo-router'
 import { Zap, Flame, Trophy, MapPin, Timer } from 'lucide-react-native'
 type PrLevel = 'gold' | 'silver' | 'bronze' | null
+import Svg, { Path, Circle, Polygon, Line } from 'react-native-svg'
 import { supabase } from '../../lib/supabase'
 import { useTheme } from '../../context/ThemeContext'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
+
+interface MyoSig {
+  z_volume: number
+  z_intensite: number
+  z_structure: number
+  z_recovery: number
+  z_performance: number
+  z_regularite: number
+  score: number
+  anomaly_detected: boolean
+}
 
 interface FeedPost {
   id: string
@@ -34,6 +46,7 @@ interface FeedPost {
   location_city: string | null
   photo_url: string | null
   avg_rest_sec: number | null
+  myoSig: MyoSig | null
 }
 
 interface Comment {
@@ -181,10 +194,28 @@ export default function FeedScreen() {
         location_city: w.location_city ?? null,
         photo_url: w.photo_url ?? null,
         avg_rest_sec: sessionAvg,
+        myoSig: null,
       }
     })
 
-    setPosts(feedPosts)
+    const wids = feedPosts.map(p => p.id)
+    const { data: myoData } = wids.length > 0
+      ? await supabase
+          .from('myo_signatures')
+          .select('workout_id,z_volume,z_intensite,z_structure,z_recovery,z_performance,z_regularite,score,anomaly_detected')
+          .in('workout_id', wids)
+      : { data: null }
+
+    const myoMap: Record<string, MyoSig> = {}
+    for (const m of (myoData ?? []) as any[]) {
+      myoMap[m.workout_id] = {
+        z_volume: m.z_volume, z_intensite: m.z_intensite, z_structure: m.z_structure,
+        z_recovery: m.z_recovery, z_performance: m.z_performance, z_regularite: m.z_regularite,
+        score: m.score, anomaly_detected: m.anomaly_detected,
+      }
+    }
+
+    setPosts(feedPosts.map(p => ({ ...p, myoSig: myoMap[p.id] ?? null })))
     setLoading(false)
     setRefreshing(false)
   }
@@ -352,6 +383,9 @@ function PostCard({ post, colors, onLike, onComment, onLikers, onPress }: {
         )}
       </View>
 
+
+      {/* Myo */}
+      {post.myoSig && <MyoCard sig={post.myoSig} colors={colors} />}
 
       {/* Actions */}
       <View style={styles.actions}>
@@ -614,6 +648,112 @@ function MiniStat({ icon, label, colors }: {
   )
 }
 
+// ─── Myo Math ─────────────────────────────────────────────────────────────────
+
+const BS = 200          // bloom SVG size
+const BC = BS / 2       // center
+const B_MIN = 8         // radius at Z = -3
+const B_MAX = 80        // radius at Z = +3
+const B_REF = 44        // radius at Z = 0 (user average)
+
+function bloomAngle(i: number): number {
+  return -Math.PI / 2 + (i / 6) * 2 * Math.PI
+}
+
+function bloomTip(z: number, i: number): { x: number; y: number } {
+  const r = B_MIN + ((z + 3) / 6) * (B_MAX - B_MIN)
+  const a = bloomAngle(i)
+  return { x: BC + r * Math.cos(a), y: BC + r * Math.sin(a) }
+}
+
+function hexRing(r: number): { x: number; y: number }[] {
+  return Array.from({ length: 6 }, (_, i) => ({
+    x: BC + r * Math.cos(bloomAngle(i)),
+    y: BC + r * Math.sin(bloomAngle(i)),
+  }))
+}
+
+function crPath(pts: { x: number; y: number }[], t = 0.32): string {
+  const n = pts.length
+  const d: string[] = []
+  for (let i = 0; i < n; i++) {
+    const p0 = pts[(i - 1 + n) % n]
+    const p1 = pts[i]
+    const p2 = pts[(i + 1) % n]
+    const p3 = pts[(i + 2) % n]
+    const c1x = p1.x + (p2.x - p0.x) * t
+    const c1y = p1.y + (p2.y - p0.y) * t
+    const c2x = p2.x - (p3.x - p1.x) * t
+    const c2y = p2.y - (p3.y - p1.y) * t
+    if (i === 0) d.push(`M ${p1.x.toFixed(1)},${p1.y.toFixed(1)}`)
+    d.push(`C ${c1x.toFixed(1)},${c1y.toFixed(1)} ${c2x.toFixed(1)},${c2y.toFixed(1)} ${p2.x.toFixed(1)},${p2.y.toFixed(1)}`)
+  }
+  return d.join(' ') + ' Z'
+}
+
+function polyStr(pts: { x: number; y: number }[]): string {
+  return pts.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')
+}
+
+// Pré-calculé une seule fois — ne dépend pas du sig
+const REF_HEX_STR = polyStr(hexRing(B_REF))
+const AXIS_ENDS = hexRing(B_MAX)
+
+// ─── MyoBloom ─────────────────────────────────────────────────────────────────
+
+function MyoBloom({ sig, accent, sep }: { sig: MyoSig; accent: string; sep: string }) {
+  const tips = useMemo(() => [
+    bloomTip(sig.z_volume, 0),
+    bloomTip(sig.z_intensite, 1),
+    bloomTip(sig.z_structure, 2),
+    bloomTip(sig.z_recovery, 3),
+    bloomTip(sig.z_performance, 4),
+    bloomTip(sig.z_regularite, 5),
+  ], [sig.z_volume, sig.z_intensite, sig.z_structure, sig.z_recovery, sig.z_performance, sig.z_regularite])
+
+  const fillPath = useMemo(() => crPath(tips), [tips])
+
+  return (
+    <Svg width={BS} height={BS}>
+      {AXIS_ENDS.map((p, i) => (
+        <Line key={i} x1={BC} y1={BC} x2={p.x} y2={p.y} stroke={sep} strokeWidth={0.5} />
+      ))}
+      <Polygon points={REF_HEX_STR} fill="none" stroke={sep} strokeWidth={1} strokeDasharray="3 3" />
+      <Path d={fillPath} fill={`${accent}55`} stroke={accent} strokeWidth={1.5} strokeLinejoin="round" />
+      <Circle cx={BC} cy={BC} r={5} fill={accent} />
+    </Svg>
+  )
+}
+
+// ─── MyoScoreBar ──────────────────────────────────────────────────────────────
+
+function MyoScoreBar({ score, textColor, sepColor }: { score: number; textColor: string; sepColor: string }) {
+  const pct = Math.max(0, Math.min(100, Math.round(score)))
+  const barColor = pct >= 66 ? '#FAC775' : pct >= 33 ? '#D85A30' : '#8E8E93'
+  const fillFlex = pct / 100
+  const emptyFlex = 1 - fillFlex
+  return (
+    <View style={myoSt.scoreBar}>
+      <View style={[myoSt.scoreTrack, { backgroundColor: sepColor }]}>
+        {emptyFlex > 0 ? <View style={{ flex: emptyFlex }} /> : null}
+        <View style={{ flex: fillFlex > 0 ? fillFlex : 0.001, backgroundColor: barColor, borderRadius: 4 }} />
+      </View>
+      <Text style={[myoSt.scoreNum, { color: textColor }]}>{pct}</Text>
+    </View>
+  )
+}
+
+// ─── MyoCard ──────────────────────────────────────────────────────────────────
+
+function MyoCard({ sig, colors }: { sig: MyoSig; colors: ReturnType<typeof useTheme>['colors'] }) {
+  return (
+    <View style={myoSt.card}>
+      <MyoBloom sig={sig} accent={colors.accent} sep={colors.separator} />
+      <MyoScoreBar score={sig.score} textColor={colors.textPrimary} sepColor={colors.separator} />
+    </View>
+  )
+}
+
 // ─── Styles ──────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
@@ -694,4 +834,14 @@ const cm = StyleSheet.create({
   sendBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   sendBtnDisabled: { opacity: 0.4 },
   sendBtnText: { color: '#fff', fontSize: 18, fontWeight: '700' },
+})
+
+const myoSt = StyleSheet.create({
+  card: { flexDirection: 'row', alignItems: 'stretch', gap: 8 },
+  scoreBar: { width: 44, alignItems: 'center', justifyContent: 'space-between', paddingVertical: 4, gap: 6 },
+  scoreTrack: {
+    flex: 1, width: 10, borderRadius: 5, overflow: 'hidden',
+    flexDirection: 'column',
+  },
+  scoreNum: { fontSize: 12, fontWeight: '700' },
 })

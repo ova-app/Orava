@@ -8,6 +8,7 @@ import * as ImagePicker from 'expo-image-picker'
 import * as Location from 'expo-location'
 import { Zap, Flame, Dumbbell, Trophy, Camera, X, MapPin } from 'lucide-react-native'
 import { supabase } from '../../lib/supabase'
+import { saveMyoSignature } from '../../lib/myo'
 import { useWorkout, WorkoutExercise, PrLevel, computePodium } from '../../context/WorkoutContext'
 import { useTheme } from '../../context/ThemeContext'
 
@@ -20,6 +21,52 @@ interface PREntry {
   type: 'charge' | 'serie' | 'exercice' | 'seance'
   prLevel: NonNullable<PrLevel>
   value: number
+}
+
+type SlotHoraire = 'matin' | 'apres_midi' | 'soir' | 'nuit'
+
+interface WorkoutMetricsData {
+  volume_total_kg: number
+  volume_par_exercice_kg: Record<string, number>
+  volume_max_serie_kg: number
+  volume_max_serie_par_exercice_kg: Record<string, number>
+  poids_max_seance_kg: number
+  poids_max_par_exercice_kg: Record<string, number>
+  charge_relative_seance: number | null
+  charge_relative_par_exercice: Record<string, number | null>
+  nb_exercices: number
+  nb_series_total: number
+  nb_series_par_exercice: Record<string, number>
+  nb_series_par_exercise_moy: number
+  duree_totale_seance: number
+  temps_repos_total_sec: number
+  temps_repos_moyen_seance_sec: number | null
+  temps_repos_moyen_par_exercice_sec: Record<string, number | null>
+  temps_actif_sec: number
+  ratio_actif_repos: number | null
+  heure_debut: string
+  slot_horaire: SlotHoraire
+  densite_kg_par_min: number
+  estimated_1rm_par_exercice_kg: Record<string, number>
+  nb_pr_seance: number
+  pr_par_exercice: Record<string, boolean>
+  muscles_sollicites: Array<{ muscle_id: string; muscle_group: string; volume_kg: number }>
+  volume_par_muscle_kg: Record<string, number>
+  muscle_primaire_dominant: string | null
+  poids_corps_kg: number | null
+  age_ans: number | null
+  temps_depuis_derniere_seance_sec: number | null
+  evolution_volume_par_exercice: Record<string, number | null>
+  evolution_1rm_par_exercice: Record<string, number | null>
+  volume_7_derniers_jours_kg: number
+  volume_par_muscle_30j_kg: Record<string, number>
+  volume_par_muscle_90j_kg: Record<string, number>
+  evolution_repos_moyen_seance_sec: number | null
+  nb_seances_30_derniers_jours: number
+  frequence_hebdo_moyenne: number
+  streak_semaines_actives: number
+  frequence_sollicitation_par_muscle_7j: Record<string, number>
+  score_recuperation_estime: number | null
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -157,6 +204,255 @@ function computeMuscleStats(exercises: WorkoutExercise[]): Array<{ group: string
     .sort((a, b) => b.pct - a.pct)
 }
 
+// ─── Métriques ───────────────────────────────────────────────────────────────
+
+function getSlotHoraire(d: Date): SlotHoraire {
+  const h = d.getHours()
+  if (h >= 5 && h < 12) return 'matin'
+  if (h >= 12 && h < 18) return 'apres_midi'
+  if (h >= 18) return 'soir'
+  return 'nuit'
+}
+
+function getWeekStart(d: Date): string {
+  const copy = new Date(d)
+  const day = copy.getDay()
+  copy.setDate(copy.getDate() + (day === 0 ? -6 : 1 - day))
+  copy.setHours(0, 0, 0, 0)
+  return copy.toISOString().slice(0, 10)
+}
+
+async function computeAndSaveMetrics(p: {
+  userId: string
+  workoutId: string
+  exercises: WorkoutExercise[]
+  startedAt: Date
+  durationSec: number
+  totalVolume: number
+  avgRestSeconds: number | null
+}): Promise<WorkoutMetricsData> {
+  const { userId, workoutId, exercises, startedAt, durationSec, totalVolume, avgRestSeconds } = p
+  const exerciseIds = exercises.map(ex => ex.exercise_id)
+
+  const allSets = exercises.flatMap(ex =>
+    ex.sets.filter(s => s.validated).map(s => ({ ...s, exercise_id: ex.exercise_id }))
+  )
+
+  const volume_par_exercice_kg: Record<string, number> = {}
+  const poids_max_par_exercice_kg: Record<string, number> = {}
+  const volume_max_serie_par_exercice_kg: Record<string, number> = {}
+  const nb_series_par_exercice: Record<string, number> = {}
+  const temps_repos_moyen_par_exercice_sec: Record<string, number | null> = {}
+  const estimated_1rm_par_exercice_kg: Record<string, number> = {}
+  const pr_par_exercice: Record<string, boolean> = {}
+
+  for (const ex of exercises) {
+    const v = ex.sets.filter(s => s.validated)
+    const vol = v.reduce((sum, s) => sum + s.weight_kg * s.reps, 0)
+    volume_par_exercice_kg[ex.exercise_id] = vol
+    poids_max_par_exercice_kg[ex.exercise_id] = v.length ? Math.max(...v.map(s => s.weight_kg)) : 0
+    volume_max_serie_par_exercice_kg[ex.exercise_id] = v.length ? Math.max(...v.map(s => s.weight_kg * s.reps)) : 0
+    nb_series_par_exercice[ex.exercise_id] = v.length
+    const rests = v.filter(s => s.rest_seconds != null && s.rest_seconds < 600).map(s => s.rest_seconds as number)
+    temps_repos_moyen_par_exercice_sec[ex.exercise_id] = rests.length
+      ? Math.round(rests.reduce((a, b) => a + b, 0) / rests.length) : null
+    const best1rm = v.reduce((best, s) => Math.max(best, s.weight_kg * (1 + s.reps / 30)), 0)
+    estimated_1rm_par_exercice_kg[ex.exercise_id] = Math.round(best1rm * 10) / 10
+    pr_par_exercice[ex.exercise_id] = v.some(s => s.pr_charge !== null || s.pr_serie !== null)
+  }
+
+  const poids_max_seance_kg = allSets.length ? Math.max(...allSets.map(s => s.weight_kg)) : 0
+  const volume_max_serie_kg = allSets.length ? Math.max(...allSets.map(s => s.weight_kg * s.reps)) : 0
+  const nb_series_total = allSets.length
+  const nb_exercices = exercises.length
+  const nb_series_par_exercise_moy = nb_exercices > 0 ? nb_series_total / nb_exercices : 0
+
+  const validRests = allSets
+    .filter(s => s.rest_seconds != null && s.rest_seconds < 600)
+    .map(s => s.rest_seconds as number)
+  const temps_repos_total_sec = validRests.reduce((a, b) => a + b, 0)
+  const temps_repos_moyen_seance_sec = validRests.length
+    ? Math.round(temps_repos_total_sec / validRests.length) : null
+  const temps_actif_sec = Math.max(0, durationSec - temps_repos_total_sec)
+  const ratio_actif_repos = temps_repos_total_sec > 0 ? temps_actif_sec / temps_repos_total_sec : null
+  const densite_kg_par_min = durationSec > 0 ? totalVolume / (durationSec / 60) : 0
+  const nb_pr_seance = allSets.filter(s => s.pr_charge !== null || s.pr_serie !== null).length
+  const slot_horaire = getSlotHoraire(startedAt)
+
+  const [userRes, bodyRes] = await Promise.all([
+    supabase.from('users').select('date_naissance').eq('id', userId).maybeSingle(),
+    supabase.from('body_metrics').select('weight_kg').eq('user_id', userId)
+      .order('measured_at', { ascending: false }).limit(1),
+  ])
+  const poids_corps_kg: number | null = (bodyRes.data as any)?.[0]?.weight_kg ?? null
+  const dataNaissanceStr: string | null = (userRes.data as any)?.date_naissance ?? null
+  const age_ans = dataNaissanceStr
+    ? Math.floor((Date.now() - new Date(dataNaissanceStr).getTime()) / (365.25 * 24 * 3600 * 1000))
+    : null
+  const charge_relative_seance = poids_corps_kg ? poids_max_seance_kg / poids_corps_kg : null
+  const charge_relative_par_exercice: Record<string, number | null> = {}
+  for (const ex of exercises) {
+    charge_relative_par_exercice[ex.exercise_id] = poids_corps_kg
+      ? poids_max_par_exercice_kg[ex.exercise_id] / poids_corps_kg : null
+  }
+
+  const { data: emData } = await supabase
+    .from('exercise_muscles')
+    .select('exercise_id, muscle_id, activation_pct, muscles(muscle_group)')
+    .in('exercise_id', exerciseIds)
+
+  const volume_par_muscle_kg: Record<string, number> = {}
+  const muscleGroupById: Record<string, string> = {}
+  for (const em of (emData ?? []) as any[]) {
+    if (!em.muscle_id || em.activation_pct == null) continue
+    const contrib = (volume_par_exercice_kg[em.exercise_id] ?? 0) * (em.activation_pct / 100)
+    volume_par_muscle_kg[em.muscle_id] = (volume_par_muscle_kg[em.muscle_id] ?? 0) + contrib
+    if (!muscleGroupById[em.muscle_id]) muscleGroupById[em.muscle_id] = em.muscles?.muscle_group ?? ''
+  }
+  const muscles_sollicites = Object.entries(volume_par_muscle_kg)
+    .map(([muscle_id, volume_kg]) => ({ muscle_id, muscle_group: muscleGroupById[muscle_id] ?? '', volume_kg }))
+    .sort((a, b) => b.volume_kg - a.volume_kg)
+  const muscle_primaire_dominant = muscles_sollicites[0]?.muscle_id ?? null
+
+  const sevenDaysAgo  = new Date(startedAt.getTime() -  7 * 86400 * 1000).toISOString()
+  const thirtyDaysAgo = new Date(startedAt.getTime() - 30 * 86400 * 1000).toISOString()
+  const ninetyDaysAgo = new Date(startedAt.getTime() - 90 * 86400 * 1000).toISOString()
+
+  const [prevWRes, recentRes, allDatesRes, prevExRes, mv30Res, mv90Res, mf7Res] =
+    await Promise.all([
+      supabase.from('workouts').select('ended_at, avg_rest_seconds')
+        .eq('user_id', userId).lt('started_at', startedAt.toISOString())
+        .order('started_at', { ascending: false }).limit(1),
+      supabase.from('workouts').select('started_at, total_volume_kg')
+        .eq('user_id', userId).gte('started_at', ninetyDaysAgo),
+      supabase.from('workouts').select('started_at').eq('user_id', userId)
+        .order('started_at', { ascending: false }),
+      supabase.rpc('get_prev_exercise_volumes', {
+        p_user_id: userId, p_exercise_ids: exerciseIds, p_before: startedAt.toISOString(),
+      }),
+      supabase.rpc('get_muscle_volume_rolling', { p_user_id: userId, p_since: thirtyDaysAgo }),
+      supabase.rpc('get_muscle_volume_rolling', { p_user_id: userId, p_since: ninetyDaysAgo }),
+      supabase.rpc('get_muscle_frequency_7j', { p_user_id: userId, p_since: sevenDaysAgo }),
+    ])
+
+  const prevW = (prevWRes.data as any)?.[0]
+  const temps_depuis_derniere_seance_sec = prevW?.ended_at
+    ? Math.floor((startedAt.getTime() - new Date(prevW.ended_at).getTime()) / 1000) : null
+  const evolution_repos_moyen_seance_sec =
+    prevW?.avg_rest_seconds != null && avgRestSeconds != null
+      ? avgRestSeconds - prevW.avg_rest_seconds : null
+
+  const recent = [
+    { started_at: startedAt.toISOString(), total_volume_kg: totalVolume },
+    ...((recentRes.data ?? []) as any[]).filter(w => w.started_at !== startedAt.toISOString()),
+  ]
+  const volume_7_derniers_jours_kg = recent
+    .filter(w => w.started_at >= sevenDaysAgo)
+    .reduce((s, w) => s + (w.total_volume_kg ?? 0), 0)
+  const seances30 = recent.filter(w => w.started_at >= thirtyDaysAgo)
+  const nb_seances_30_derniers_jours = seances30.length
+  const frequence_hebdo_moyenne = Math.round((nb_seances_30_derniers_jours / 4) * 10) / 10
+
+  const weeksSet = new Set([
+    startedAt.toISOString(),
+    ...((allDatesRes.data ?? []) as any[]).map((w: any) => w.started_at),
+  ].map(d => getWeekStart(new Date(d))))
+  let streak = 0
+  const cur = new Date(startedAt)
+  for (let i = 0; i < 200; i++) {
+    if (weeksSet.has(getWeekStart(cur))) { streak++; cur.setDate(cur.getDate() - 7) }
+    else break
+  }
+
+  const prevExMap: Record<string, { volume_kg: number; estimated_1rm_kg: number }> = {}
+  for (const r of (prevExRes.data ?? []) as any[]) {
+    prevExMap[r.exercise_id] = { volume_kg: r.volume_kg, estimated_1rm_kg: r.estimated_1rm_kg }
+  }
+  const evolution_volume_par_exercice: Record<string, number | null> = {}
+  const evolution_1rm_par_exercice: Record<string, number | null> = {}
+  for (const ex of exercises) {
+    const prev = prevExMap[ex.exercise_id]
+    evolution_volume_par_exercice[ex.exercise_id] = prev != null
+      ? volume_par_exercice_kg[ex.exercise_id] - prev.volume_kg : null
+    evolution_1rm_par_exercice[ex.exercise_id] = prev != null
+      ? estimated_1rm_par_exercice_kg[ex.exercise_id] - prev.estimated_1rm_kg : null
+  }
+
+  const toRecord = (rows: any[] | null): Record<string, number> => {
+    const out: Record<string, number> = {}
+    for (const r of rows ?? []) out[r.muscle_id] = r.volume_kg
+    return out
+  }
+  const volume_par_muscle_30j_kg = toRecord(mv30Res.data as any)
+  const volume_par_muscle_90j_kg = toRecord(mv90Res.data as any)
+  const frequence_sollicitation_par_muscle_7j: Record<string, number> = {}
+  for (const r of (mf7Res.data ?? []) as any[]) {
+    frequence_sollicitation_par_muscle_7j[r.muscle_id] = Number(r.nb_seances)
+  }
+
+  let score_recuperation_estime: number | null = null
+  if (temps_depuis_derniere_seance_sec !== null) {
+    const maxVol = Math.max(totalVolume, ...recent.map(w => w.total_volume_kg ?? 0))
+    const prevVol = recent.find((_, i) => i > 0)?.total_volume_kg ?? 0
+    const s1 = Math.min(temps_depuis_derniere_seance_sec / 172800, 1) * 40
+    const s2 = maxVol > 0 ? (1 - prevVol / maxVol) * 40 : 40
+    const freq7 = recent.filter(w => w.started_at >= sevenDaysAgo).length
+    const s3 = Math.max(0, 1 - freq7 / 7) * 20
+    score_recuperation_estime = Math.round(Math.max(0, Math.min(100, s1 + s2 + s3)))
+  }
+
+  const metricsData: WorkoutMetricsData = {
+    volume_total_kg: totalVolume,
+    volume_par_exercice_kg,
+    volume_max_serie_kg,
+    volume_max_serie_par_exercice_kg,
+    poids_max_seance_kg,
+    poids_max_par_exercice_kg,
+    charge_relative_seance,
+    charge_relative_par_exercice,
+    nb_exercices,
+    nb_series_total,
+    nb_series_par_exercice,
+    nb_series_par_exercise_moy,
+    duree_totale_seance: durationSec,
+    temps_repos_total_sec,
+    temps_repos_moyen_seance_sec,
+    temps_repos_moyen_par_exercice_sec,
+    temps_actif_sec,
+    ratio_actif_repos,
+    heure_debut: startedAt.toISOString(),
+    slot_horaire,
+    densite_kg_par_min,
+    estimated_1rm_par_exercice_kg,
+    nb_pr_seance,
+    pr_par_exercice,
+    muscles_sollicites,
+    volume_par_muscle_kg,
+    muscle_primaire_dominant,
+    poids_corps_kg,
+    age_ans,
+    temps_depuis_derniere_seance_sec,
+    evolution_volume_par_exercice,
+    evolution_1rm_par_exercice,
+    volume_7_derniers_jours_kg,
+    volume_par_muscle_30j_kg,
+    volume_par_muscle_90j_kg,
+    evolution_repos_moyen_seance_sec,
+    nb_seances_30_derniers_jours,
+    frequence_hebdo_moyenne,
+    streak_semaines_actives: streak,
+    frequence_sollicitation_par_muscle_7j,
+    score_recuperation_estime,
+  }
+
+  await supabase.from('workout_metrics').insert({
+    workout_id: workoutId,
+    data: metricsData,
+  })
+
+  return metricsData
+}
+
 // ─── Composant ───────────────────────────────────────────────────────────────
 
 export default function SummaryScreen() {
@@ -292,6 +588,11 @@ export default function SummaryScreen() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('Non authentifié')
 
+      const { data: bodySnap } = await supabase
+        .from('body_metrics').select('weight_kg').eq('user_id', user.id)
+        .order('measured_at', { ascending: false }).limit(1)
+      const snapshotPoids: number | null = (bodySnap as any)?.[0]?.weight_kg ?? null
+
       // Upload photo if selected
       let photoUrl: string | null = null
       if (photoUri) {
@@ -329,10 +630,12 @@ export default function SummaryScreen() {
           duration_sec: workout.elapsedSeconds,
           gym_id: selectedGymId,
           is_public: isPublic,
+          total_volume_kg: totalVolume,
           avg_rest_seconds: avgRestSeconds,
           photo_url: photoUrl,
           location_city: locationCity,
           pr_seance: finalPrSeance,
+          poids_corps_kg: snapshotPoids,
         })
         .select('id')
         .single()
@@ -377,6 +680,38 @@ export default function SummaryScreen() {
         )
         if (setsError) throw setsError
       }
+
+      let savedMetrics: WorkoutMetricsData | null = null
+      try {
+        savedMetrics = await computeAndSaveMetrics({
+          userId: user.id,
+          workoutId: workoutData.id,
+          exercises: doneExercises,
+          startedAt: workout.startedAt!,
+          durationSec: workout.elapsedSeconds,
+          totalVolume,
+          avgRestSeconds,
+        })
+        console.log('[MYO] metrics ok, densite=', savedMetrics?.densite_kg_par_min)
+      } catch (e: any) { console.error('[MYO] computeMetrics threw:', e?.message ?? e) }
+      try {
+        if (savedMetrics) {
+          await saveMyoSignature({
+            userId: user.id,
+            workoutId: workoutData.id,
+            startedAtIso: workout.startedAt!.toISOString(),
+            volume_total_kg: savedMetrics.volume_total_kg,
+            densite_kg_par_min: savedMetrics.densite_kg_par_min,
+            nb_series_total: savedMetrics.nb_series_total,
+            score_recuperation_estime: savedMetrics.score_recuperation_estime,
+            nb_pr_seance: savedMetrics.nb_pr_seance,
+            streak_semaines_actives: savedMetrics.streak_semaines_actives,
+          })
+          console.log('[MYO] saveMyoSignature done')
+        } else {
+          console.warn('[MYO] savedMetrics est null — saveMyoSignature non appelé')
+        }
+      } catch (e: any) { console.error('[MYO] saveMyoSignature threw:', e?.message ?? e) }
 
       workout.resetWorkout()
       router.replace('/(tabs)/feed')

@@ -17,11 +17,12 @@ app/
 │   ├── session.tsx          — log séance, WheelPicker, flash PR 🥇🥈🥉
 │   ├── timer.tsx            — TimerWheelColumn custom, auto-start, presets, fix AppState
 │   └── summary.tsx          — résumé + nom auto + PRs + is_public + photo + géoloc + save Supabase
+│                              + computeAndSaveMetrics() → workout_metrics (best-effort, après save)
 ├── history/[id].tsx         — détail séance + photo_url + barres muscles + badges PR
 ├── exercise/[id].tsx        — fiche exercice + barres musculaires (primary/secondary/stabilizer)
 ├── analytics.tsx            — stats complètes, charts View RN (PAS Victory Native)
 ├── prs.tsx                  — Armurerie PRs : podium Or/Argent/Bronze par exercice
-├── edit-profile.tsx         — modifier username + full_name
+├── edit-profile.tsx         — modifier username + full_name + date_naissance + poids → body_metrics
 └── settings.tsx             — kg/lbs, dark/light, vibration, timer défaut, visibilité séances
 
 context/

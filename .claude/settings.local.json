@@ -7,7 +7,14 @@
       "Bash(npm install *)",
       "Bash(python -c \"import json,sys; d=json.load\\(sys.stdin\\); [print\\(k,v\\) for k,v in d.get\\('dependencies',{}\\).items\\(\\)]\")",
       "Bash(node -e \"const s = 'café'; const n = s.normalize\\('NFD'\\).replace\\(/[̀-ͯ]/g, ''\\).toLowerCase\\(\\); console.log\\(n\\);\")",
-      "Bash(npx tsc *)"
+      "Bash(npx tsc *)",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\sofia\\\\OneDrive\\\\Documents\\\\GitHub\\\\Orava\" -Recurse -Force)",
+      "Bash(Select-Object -Property FullName)",
+      "Bash(Sort-Object FullName)",
+      "PowerShell(head -150)",
+      "PowerShell(Get-ChildItem -Path \"c:\\\\Users\\\\sofia\\\\OneDrive\\\\Documents\\\\GitHub\\\\Orava\" -Recurse | ForEach-Object { $_.FullName })",
+      "PowerShell(Get-ChildItem -Path \"c:\\\\Users\\\\sofia\\\\OneDrive\\\\Documents\\\\GitHub\\\\Orava\\\\mobile_app\" -Force | ForEach-Object { $_.Name })",
+      "PowerShell(Get-ChildItem -Path \"c:\\\\Users\\\\sofia\\\\OneDrive\\\\Documents\\\\GitHub\\\\Orava\\\\mobile_app\\\\components\" -Force -Recurse | ForEach-Object { $_.FullName -replace [regex]::Escape\\(\"c:\\\\Users\\\\sofia\\\\OneDrive\\\\Documents\\\\GitHub\\\\Orava\\\\mobile_app\\\\\"\\), \"\" })"
     ]
   }
 }
