@@ -1,6 +1,6 @@
 # rules/database.md
 
-## 13 tables
+## 14 tables
 
 ```
 users             : id, email, username, full_name, avatar_url, weight_unit(kg|lbs), plan(free|premium),
@@ -29,6 +29,13 @@ workout_metrics   : workout_id(PK) → workouts.id, data(JSONB), computed_at(TIM
                     — toutes les métriques analytiques, calculées et stockées au save de chaque séance
 likes             : user_id, workout_id, created_at
 comments          : id, workout_id, user_id, content, created_at
+myo_signatures    : id, user_id → users.id, workout_id → workouts.id, started_at(TIMESTAMPTZ),
+                    z_volume, z_intensite, z_structure, z_recovery, z_performance, z_regularite (FLOAT),
+                    z_extended(JSONB — muscles + temps + autres familles),
+                    score(FLOAT 0-100), hash(TEXT), anomaly(BOOL),
+                    raw_* colonnes (valeurs brutes 41 dims), baseline_* colonnes (mean/std utilisés),
+                    created_at
+                    — Table déjà existante. Peuplée par lib/myo.ts::saveMyoSignature() best-effort après save séance.
 ```
 
 ## RPCs Postgres

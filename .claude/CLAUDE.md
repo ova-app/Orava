@@ -10,7 +10,7 @@ Orava : app React Native de logging d'entraînement avec séances, exercices, PR
 Style caveman. Phrases courtes. Pas de politesse. Pas de récapitulatif après le code. Explore uniquement les fichiers nécessaires à la tâche.
 
 ## Stack (résumé)
-React Native + Expo Router (`app/`) · Supabase PostgreSQL Frankfurt · TypeScript strict · Lucide React Native · Git : `main` stable / `dev` / `feat/xxx`
+React Native + Expo Router (`app/`) · Supabase PostgreSQL Frankfurt · TypeScript strict · Lucide React Native · Three.js + expo-gl (Myo 3D) · Git : `main` stable / `dev` / `feat/xxx`
 
 ## Règles impératives (toujours actives)
 - `is_public` DEFAULT false
@@ -28,5 +28,6 @@ React Native + Expo Router (`app/`) · Supabase PostgreSQL Frankfurt · TypeScri
 | Session, timer, PRs, pickers poids | `rules/workout.md` |
 | Bug sur fichier existant | `rules/files.md` + rule du domaine |
 | Config Expo, Supabase, dépendances | `rules/stack.md` |
+| Three.js / expo-gl / Myo 3D | `rules/stack.md` + `rules/workout.md` |
 
 Demander confirmation avant de lire une rule si la tâche est ambiguë.

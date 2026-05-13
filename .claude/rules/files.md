@@ -18,7 +18,9 @@ app/
 │   ├── timer.tsx            — TimerWheelColumn custom, auto-start, presets, fix AppState
 │   ├── summary.tsx          — résumé + nom auto + PRs + is_public + photo + géoloc + save Supabase
 │   │                          + computeAndSaveMetrics() → workout_metrics (best-effort, après save)
-│   └── myo-orb.tsx          — visualisation 3D signature Myo (arborescence + îlots + halos)
+│   └── myo-orb.tsx          — visualisation 3D Myo : Three.js + expo-gl, blob IcosahedronGeometry
+│   │                          déformé par metaball field (8 familles z-score), MeshPhongMaterial
+│   │                          matte white ceramic, studio lights, labels React Native overlay
 ├── history/[id].tsx         — détail séance + photo_url + barres muscles + badges PR
 ├── exercise/[id].tsx        — fiche exercice + barres musculaires (primary/secondary/stabilizer)
 ├── analytics.tsx            — stats complètes, charts View RN (PAS Victory Native)
@@ -31,6 +33,7 @@ context/
 └── ThemeContext.tsx
 
 lib/supabase.ts
+lib/myo.ts                   — calcul signature Myo 41 dims, saveMyoSignature() → myo_signatures
 constants/theme.ts           — source couleurs
 constants/Colors.ts          — VIDE
 types/index.ts               — VIDE (types inline dans chaque fichier)
