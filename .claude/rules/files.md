@@ -16,8 +16,9 @@ app/
 ├── workout/
 │   ├── session.tsx          — log séance, WheelPicker, flash PR 🥇🥈🥉
 │   ├── timer.tsx            — TimerWheelColumn custom, auto-start, presets, fix AppState
-│   └── summary.tsx          — résumé + nom auto + PRs + is_public + photo + géoloc + save Supabase
-│                              + computeAndSaveMetrics() → workout_metrics (best-effort, après save)
+│   ├── summary.tsx          — résumé + nom auto + PRs + is_public + photo + géoloc + save Supabase
+│   │                          + computeAndSaveMetrics() → workout_metrics (best-effort, après save)
+│   └── myo-orb.tsx          — visualisation 3D signature Myo (arborescence + îlots + halos)
 ├── history/[id].tsx         — détail séance + photo_url + barres muscles + badges PR
 ├── exercise/[id].tsx        — fiche exercice + barres musculaires (primary/secondary/stabilizer)
 ├── analytics.tsx            — stats complètes, charts View RN (PAS Victory Native)
