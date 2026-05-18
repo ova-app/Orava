@@ -19,7 +19,11 @@
       "Bash(node -e \"const p = require\\('./node_modules/@react-three/fiber/package.json'\\); console.log\\(JSON.stringify\\(p.exports, null, 2\\)\\)\")",
       "Bash(node -e \"const p = require\\('./node_modules/@react-three/fiber/package.json'\\); console.log\\('main:', p.main, 'module:', p.module, 'react-native:', p['react-native']\\)\")",
       "Bash(grep -v \"^\\\\s*//\")",
-      "PowerShell(Get-ChildItem -Path \"c:\\\\Users\\\\SofianeBESSILA\\\\orava\" -Recurse -Force | Where-Object { !$_.PSIsContainer } | Select-Object -ExpandProperty FullName | Sort-Object)"
+      "PowerShell(Get-ChildItem -Path \"c:\\\\Users\\\\SofianeBESSILA\\\\orava\" -Recurse -Force | Where-Object { !$_.PSIsContainer } | Select-Object -ExpandProperty FullName | Sort-Object)",
+      "Bash(mkdir -p \"c:/Users/SofianeBESSILA/orava/mobile_app/app/workout\")"
+    ],
+    "additionalDirectories": [
+      "c:\\Users\\SofianeBESSILA\\orava\\mobile_app\\app\\workout"
     ]
   }
 }
