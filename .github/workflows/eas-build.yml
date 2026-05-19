@@ -1,0 +1,60 @@
+name: EAS Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-ios:
+    name: iOS (preview)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: mobile_app/package-lock.json
+
+      - name: Install dependencies
+        working-directory: mobile_app
+        run: npm ci
+
+      - name: Lint
+        working-directory: mobile_app
+        run: npm run lint
+
+      - name: EAS Build iOS
+        working-directory: mobile_app
+        run: npx eas-cli build --platform ios --profile preview --non-interactive
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+  build-android:
+    name: Android (preview)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: mobile_app/package-lock.json
+
+      - name: Install dependencies
+        working-directory: mobile_app
+        run: npm ci
+
+      - name: Lint
+        working-directory: mobile_app
+        run: npm run lint
+
+      - name: EAS Build Android
+        working-directory: mobile_app
+        run: npx eas-cli build --platform android --profile preview --non-interactive
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}

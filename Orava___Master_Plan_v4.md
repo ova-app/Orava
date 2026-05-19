@@ -232,7 +232,7 @@ OravaFeed intégré · Mapbox (carte salles) · Pass Orava B2B · ADN Athlétiqu
 - [ ] Composant WheelPicker poids (60 FPS, Reanimated, physics iOS native)
 - [ ] Composant WheelPicker reps (60 FPS, Reanimated)
 - [ ] Pré-remplissage automatique depuis SQLite (dernier poids + reps utilisé)
-- [ ] Composant Rest Timer (compte à rebours animé, skip, +30s, −30s)
+- [ ] Composant Rest Timer (compte à rebours animé, skip, +15s, −15s)
 - [ ] Écran sélection d'exercice (recherche fuzzy, catégories, favoris)
 - [ ] Écran résumé de séance (stats, PR détectés, Myo preview)
 

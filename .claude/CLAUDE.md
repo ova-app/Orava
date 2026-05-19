@@ -6,7 +6,7 @@ CTO virtuel Orava. Code TypeScript complet prêt à coller. Signale migration SQ
 ## Contexte
 Source de vérité : `Orava___Master_Plan_v4.md` (racine du repo).
 Code dans `mobile_app/`. **Reconstruction complète** sur les fondations v1.
-**Aucune migration Supabase effectuée** — schéma DB = `rules/database.md` tel quel.
+**Migration `exercise_muscles` appliquée** (19/05/2026) — 113 exercices × mappings muscles/fascicules. Toutes autres migrations = `rules/database.md`.
 
 ### Ce qu'on garde du v1 (logique uniquement)
 - `lib/supabase.ts` — client Supabase (ne pas modifier)
@@ -40,13 +40,14 @@ Voir `rules/files.md` pour le détail de `design/` et les règles de transfert v
 ## Stack installée (`mobile_app/package.json`)
 React Native 0.81.5 + Expo 54 + Expo Router 6 · Supabase JS 2.x · Three.js 0.184 + expo-gl 16 · lucide-react-native · react-native-svg · expo-secure-store · expo-image-picker · expo-location · AsyncStorage
 
-## Stack v4 à installer (pas encore en place)
+**Phase 0 installée (19/05/2026) :**
+`react-native-mmkv` · `expo-sqlite` · `react-native-reanimated` · `react-native-worklets` · `posthog-react-native` · `babel-preset-expo`
+
+**Tooling installé :** ESLint 8 + Prettier + Husky (pre-commit lint-staged) · EAS Build configuré · CI/CD `.github/workflows/eas-build.yml`
+
+## Stack v4 à installer (phases suivantes)
 | Package | Rôle | Phase |
 |---|---|---|
-| `react-native-mmkv` | Persistance WorkoutContext crash-safe | Phase 0 |
-| `expo-sqlite` | SQLite local — Fantôme + Prédictif | Phase 0 |
-| `react-native-reanimated` | Animations 60 FPS, WheelPicker | Phase 0 |
-| `posthog-react-native` | Analytics + feature flags | Phase 0 |
 | `expo-haptics` | Taptic Engine iOS + vibration Android | Phase 1 |
 | `@shopify/react-native-skia` | Charts 2D + ADN Athlétique | Phase 2 |
 | `react-native-purchases` | RevenueCat abonnements Pro/Coach | Phase 2 |

@@ -21,11 +21,6 @@
     }
   },
   "submit": {
-    "production": {
-      "ios": {
-        "language": "fr-FR",
-        "appleTeamType": "INDIVIDUAL"
-      }
-    }
+    "production": {}
   }
 }

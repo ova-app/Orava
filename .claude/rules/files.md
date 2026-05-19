@@ -60,8 +60,9 @@ context/
 lib/
 ├── supabase.ts              — client Supabase (SecureStore chunks 1800b)
 ├── myo.ts                   — calcul signature Myo 41 dims, saveMyoSignature()
-├── db.ts                    — [À CRÉER Phase 0] SQLite local (Fantôme + Prédictif)
-└── storage.ts               — [À CRÉER Phase 0] MMKV instance
+├── db.ts                    — SQLite local : initDB(), insertLocalSet(), insertLocalSession()
+├── storage.ts               — MMKV instance unique (id: 'orava-workout')
+└── analytics.ts             — PostHog EU + Events const (22 événements taxonomie)
 
 constants/theme.ts           — source couleurs dark/light
 constants/Colors.ts          — VIDE — ne pas utiliser
@@ -73,9 +74,6 @@ components/                  — VIDE — ne pas peupler
 
 | Fichier | Phase | Description |
 |---|---|---|
-| `lib/db.ts` | Phase 0 | Init SQLite, helpers `insertLocalSet()`, `insertLocalSession()` |
-| `lib/storage.ts` | Phase 0 | Instance MMKV unique exportée |
-| `lib/analytics.ts` | Phase 0 | Instance PostHog exportée |
 | `app/workout/ghost.ts` | Phase 1 | `getGhostReference(exerciseId, limitDays)` → SQLite |
 | `lib/predictor.ts` | Phase 2 | Régression linéaire pondérée on-device → SQLite |
 | `app/onboarding/` | Phase 1 | 2 écrans max, < 60s à la 1re série |

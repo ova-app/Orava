@@ -37,12 +37,15 @@
     },
     "plugins": [
       "expo-router",
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-sqlite"
     ],
     "extra": {
       "eas": {
-        "projectId": ""
-      }
-    }
+        "projectId": "4cf32b43-b1eb-46e6-8728-4e39584ceb75"
+      },
+      "router": {}
+    },
+    "owner": "sofianebessila"
   }
 }
