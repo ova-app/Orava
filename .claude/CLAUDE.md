@@ -83,5 +83,6 @@ React Native 0.81.5 + Expo 54 + Expo Router 6 · Supabase JS 2.x · Three.js 0.1
 | Bug logique existante (WorkoutContext, myo.ts) | `rules/files.md` + rule du domaine |
 | Config Expo, MMKV, SQLite, deps | `rules/stack.md` |
 | Three.js / expo-gl / Myo 3D | `rules/stack.md` + `rules/workout.md` |
+| Myo 41 dims, familles, sources données | `rules/myo.md` |
 | RevenueCat, PostHog, paywall | `rules/stack.md` |
 | Tokens Design System, Skia, Rive, haptics, sons | `rules/ui.md` |

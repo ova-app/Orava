@@ -105,6 +105,35 @@ const DIM_LABELS: Record<keyof MyoRaw, string> = {
 const SLOT_MAP: Record<SlotHoraire, number> = { matin: 0, apres_midi: 1, soir: 2, nuit: 3 }
 const CORE_KEYS = new Set<keyof MyoRaw>(['volume_kg', 'densite', 'nb_series', 'recuperation', 'nb_pr', 'streak'])
 
+// ─── Famille 6 — 17 dims musculaires ─────────────────────────────────────────
+
+export const MUSCLE_17_LABELS: string[] = [
+  'Pec claviculaire', 'Pec sternal',
+  'Deltoïde ant.', 'Deltoïde médial', 'Deltoïde post.',
+  'Grand dorsal', 'Trapèze', 'Grand rond', 'Rhomboïdes', 'Érecteurs rachis',
+  'Biceps', 'Triceps',
+  'Quadriceps', 'Ischio-jambiers', 'Fessiers', 'Mollets', 'Core',
+]
+
+// Pec + delt : dim résolu par fascicle exact (NULL fascicle → set ignoré)
+const FASCICLE_DIM: Record<string, Record<string, number>> = {
+  grand_pectoral: { faisceau_claviculaire: 0, faisceau_sternal: 1, faisceau_abdominal: 1 },
+  deltoide:       { faisceau_anterieur: 2, faisceau_median: 3, faisceau_posterieur: 4 },
+}
+
+// Autres muscles : toutes fascicules groupées dans le même dim
+const MUSCLE_DIM: Record<string, number> = {
+  grand_dorsal: 5, trapeze: 6, grand_rond: 7, rhomboide: 8, erecteurs_rachis: 9,
+  biceps: 10, triceps: 11,
+  quadriceps: 12, ischio_jambiers: 13,
+  fessier_maximus: 14, fessier_median: 14, fessier_minimus: 14,
+  mollets: 15, abdominaux: 16,
+}
+
+// Population baselines Phase 0 — remplacés par rolling personal en Phase 1
+const MUSCLE_POP_MEAN = [1000, 2000, 800, 600, 400, 2000, 1000, 500, 600, 800, 1000, 1200, 3000, 1500, 2000, 1500, 500]
+const MUSCLE_POP_STD  = [800,  1500, 600, 500, 350, 1500, 800,  400, 500, 600, 800,  1000, 2000, 1200, 1500, 1200, 400]
+
 // ─── Hash déterministe ────────────────────────────────────────────────────────
 
 function djb2(s: string): number {
@@ -147,6 +176,35 @@ function hhiScore(obj: Record<string, number> | null | undefined, total: number)
 function parseHour(isoStr: string): number {
   const d = new Date(isoStr)
   return d.getHours() + d.getMinutes() / 60
+}
+
+// ─── Muscle dim helpers ───────────────────────────────────────────────────────
+
+interface EmRow {
+  exercise_id: string
+  muscle: string
+  fascicle: string | null
+  activation_pct: number
+}
+
+function resolveDim(muscle: string, fascicle: string | null): number {
+  const map = FASCICLE_DIM[muscle]
+  if (map) return fascicle ? (map[fascicle] ?? -1) : -1
+  return MUSCLE_DIM[muscle] ?? -1
+}
+
+function computeMuscleDims(
+  setsByExercise: Record<string, Array<{ weight_kg: number; reps: number }>>,
+  emRows: EmRow[],
+): number[] {
+  const dims = new Array<number>(17).fill(0)
+  for (const row of emRows) {
+    const dim = resolveDim(row.muscle, row.fascicle)
+    if (dim === -1) continue
+    const sets = setsByExercise[row.exercise_id] ?? []
+    dims[dim] += sets.reduce((s, set) => s + set.weight_kg * set.reps * (row.activation_pct / 100), 0)
+  }
+  return dims
 }
 
 // ─── Extraction MyoRaw depuis workout_metrics.data ───────────────────────────
@@ -290,6 +348,8 @@ export interface SaveMyoParams {
   frequence_sollicitation_par_muscle_7j: Record<string, number>
   // tableau
   muscles_sollicites: Array<{ muscle_id: string; muscle_group: string; volume_kg: number }>
+  // famille 6 — 17 dims musculaires
+  setsByExercise: Record<string, Array<{ weight_kg: number; reps: number }>>
 }
 
 export async function saveMyoSignature(p: SaveMyoParams): Promise<void> {
@@ -362,13 +422,30 @@ export async function saveMyoSignature(p: SaveMyoParams): Promise<void> {
   const z_performance = zAll.nb_pr
   const z_regularite  = zAll.streak
 
-  const z_extended: Record<string, number> = {}
+  const z_extended: Record<string, number | number[]> = {}
   const raw_extended: Record<string, number> = {}
   for (const k of keys) {
     if (!CORE_KEYS.has(k)) {
       z_extended[k] = zAll[k]
       raw_extended[k] = raw[k]
     }
+  }
+
+  // ─ Famille 6 : 17 dims musculaires ──────────────────────────────────────────
+  const exerciseIds = Object.keys(p.setsByExercise)
+  if (exerciseIds.length > 0) {
+    const { data: emData } = await supabase
+      .from('exercise_muscles')
+      .select('exercise_id, muscle, fascicle, activation_pct')
+      .in('exercise_id', exerciseIds)
+      .in('role', ['primary', 'secondary'])
+
+    const emRows = (emData ?? []) as EmRow[]
+    const muscleDimsRaw = computeMuscleDims(p.setsByExercise, emRows)
+    z_extended['muscles_raw'] = muscleDimsRaw
+    z_extended['muscles'] = muscleDimsRaw.map((v, i) =>
+      clampZ((v - MUSCLE_POP_MEAN[i]) / MUSCLE_POP_STD[i])
+    )
   }
 
   const allZ = Object.values(zAll)

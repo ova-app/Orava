@@ -13,11 +13,16 @@ users             : id, email, username, full_name, avatar_url, weight_unit(kg|l
                     locale, date_naissance(DATE NULL), created_at
 follows           : follower_id → users.id, following_id → users.id, created_at
 gyms              : id, name, address, lat, lng, is_home, created_by → users.id, created_at
-muscles           : id, name, group, body_side
-exercises         : id, name_fr, slug, equipment_type, muscle_group, mechanics, force_type,
-                    laterality, source, external_id, is_verified, created_by, created_at
-exercise_muscles  : exercise_id, muscle_id → muscles.id, muscle(text), fascicle(text),
-                    role(primary|secondary|stabilizer), activation_pct(0-100), source, confidence
+muscles           : id, name, muscle_group, body_side, myo_dim(SMALLINT NULL)
+                    ⚠️ colonne = muscle_group (pas group) · myo_dim NULL pour pec/delt (résolu par fascicle)
+exercises         : id, name_fr, name_en, equipment_type, muscle_group, is_compound(BOOL),
+                    description_fr(TEXT NULL), created_at
+                    ⚠️ colonnes absentes de la DB : slug, mechanics, force_type, laterality, source, external_id, is_verified, created_by
+exercise_muscles  : id, exercise_id, muscle(text), fascicle(text),
+                    role(primary|secondary|stabilizer), activation_pct(integer 0-100)
+                    ⚠️ pas de muscle_id FK · muscle = snake_case français · fascicle = snake_case français
+myo_muscle_dims   : id(SERIAL PK), muscle_text, fascicle_text(NULL=tous faisceaux), myo_dim(0-16), dim_label
+                    table de mapping authoritative exercise_muscles → dim Myo famille 6
 workouts          : id, user_id, gym_id, title, started_at, ended_at, duration_sec, total_volume_kg,
                     poids_corps_kg(FLOAT NULL — snapshot au save),
                     is_public(DEFAULT false), note, lat, lng, avg_rest_seconds, photo_url, location_city,
@@ -53,6 +58,74 @@ get_muscle_volume_rolling(p_user_id, p_since TIMESTAMPTZ)
 get_muscle_frequency_7j(p_user_id, p_since TIMESTAMPTZ)
   → TABLE(muscle_id UUID, nb_seances BIGINT)
 ```
+
+## Référentiel muscles (état réel DB)
+
+### Table `muscles` — 10 entrées
+| name | muscle_group | myo_dim |
+|---|---|---|
+| Chest | chest | NULL (pec — résolu par fascicle) |
+| Shoulders | shoulders | NULL (delt — résolu par fascicle) |
+| Lats | back | 5 |
+| Biceps | arms | 10 |
+| Triceps | arms | 11 |
+| Quads | legs | 12 |
+| Hamstrings | legs | 13 |
+| Glutes | legs | 14 |
+| Calves | legs | 15 |
+| Abs | core | 16 |
+
+### Table `exercises` — valeurs réelles `muscle_group`
+⚠️ Valeurs en français dans la DB — différent de `muscles.muscle_group` (anglais).
+| muscle_group DB | correspond à |
+|---|---|
+| `pectoraux` | chest |
+| `dos` | back |
+| `epaules` | shoulders |
+| `biceps` | arms |
+| `triceps` | arms |
+| `quadriceps` | legs |
+| `ischio_jambiers` | legs |
+| `fessiers` | legs |
+| `mollets` | legs |
+| `abdominaux` | core |
+| `avant_bras` | — (absent de `muscles`) |
+
+### Table `exercise_muscles` — valeurs réelles `muscle` + `fascicle`
+Vocabulaire contrôlé snake_case français. Tout nouvel exercice doit respecter ces valeurs exactes.
+
+| muscle | fascicles existants |
+|---|---|
+| `grand_pectoral` | `faisceau_claviculaire` · `faisceau_sternal` · `faisceau_abdominal` |
+| `deltoide` | `faisceau_anterieur` · `faisceau_median` · `faisceau_posterieur` |
+| `grand_dorsal` | `faisceau_inferieur` · `faisceau_superieur` · NULL |
+| `trapeze` | `faisceau_inferieur` · `faisceau_moyen` · `faisceau_superieur` |
+| `biceps` | `chef_long` · `chef_court` · `brachial` · NULL |
+| `triceps` | `chef_long` · `chef_lateral` · `chef_medial` · NULL |
+| `quadriceps` | `rectus_femoris` · `vastus_lateralis` · `vastus_medialis` |
+| `ischio_jambiers` | `biceps_femoral` · `semi_membraneux` · `semi_tendineux` · NULL |
+| `mollets` | `gastrocnemien` · `gastrocnemien_lateral` · `gastrocnemien_medial` · `soleus` |
+| `abdominaux` | `obliques_externes` · `obliques_internes` · `rectus_abdominis` · `transverse` |
+| `fessier_maximus` | NULL |
+| `fessier_median` | NULL |
+| `fessier_minimus` | NULL |
+| `rhomboide` | NULL |
+| `grand_rond` | NULL |
+| `erecteurs_rachis` | NULL |
+| `serratus_anterieur` | NULL |
+| `avant_bras` | `extenseurs_poignet` · `flechisseurs_doigts` · `flechisseurs_poignet` · `palmaire_long` |
+| `brachial` | NULL |
+| `brachioradial` | NULL |
+| `adducteurs` | NULL |
+| `iliopsoas` | NULL |
+| `infra_epineux` | NULL |
+| `elevateur_scapula` | NULL |
+| `tenseur_fascia_lata` | NULL |
+| `quadratus_lumborum` | NULL |
+
+Muscles non mappés en Myo (pas de dim) : `serratus_anterieur`, `avant_bras`, `brachial`, `brachioradial`, `adducteurs`, `iliopsoas`, `infra_epineux`, `elevateur_scapula`, `tenseur_fascia_lata`, `quadratus_lumborum`.
+
+---
 
 ## workout_metrics.data — type WorkoutMetricsData (summary.tsx)
 Volume, poids max, séries, temps (repos/actif/densité), slot horaire, 1RM Epley,
@@ -95,6 +168,69 @@ Alimenté en même temps que le save Supabase dans summary.tsx. Utilisé exclusi
 ---
 
 ## Migrations Supabase planifiées (à appliquer quand nécessaire)
+
+### [Phase 0] Myo Famille 6 — 17 dims musculaires
+```sql
+-- 1. Corriger muscle_group incorrects
+UPDATE muscles SET muscle_group = 'legs'  WHERE name = 'Hamstrings';
+UPDATE muscles SET muscle_group = 'legs'  WHERE name = 'Quads';
+UPDATE muscles SET muscle_group = 'core'  WHERE name = 'Abs';
+UPDATE muscles SET muscle_group = 'legs'  WHERE name = 'Calves';
+UPDATE muscles SET muscle_group = 'back'  WHERE name = 'Lats';
+UPDATE muscles SET muscle_group = 'arms'  WHERE name = 'Biceps';
+
+-- 2. Ajouter myo_dim à muscles (NULL = résolution par fascicle dans myo_muscle_dims)
+ALTER TABLE muscles ADD COLUMN IF NOT EXISTS myo_dim SMALLINT NULL;
+UPDATE muscles SET myo_dim = NULL WHERE name IN ('Chest', 'Shoulders');
+UPDATE muscles SET myo_dim = 5  WHERE name = 'Lats';
+UPDATE muscles SET myo_dim = 10 WHERE name = 'Biceps';
+UPDATE muscles SET myo_dim = 11 WHERE name = 'Triceps';
+UPDATE muscles SET myo_dim = 12 WHERE name = 'Quads';
+UPDATE muscles SET myo_dim = 13 WHERE name = 'Hamstrings';
+UPDATE muscles SET myo_dim = 14 WHERE name = 'Glutes';
+UPDATE muscles SET myo_dim = 15 WHERE name = 'Calves';
+UPDATE muscles SET myo_dim = 16 WHERE name = 'Abs';
+
+-- 3. Table de mapping authoritative
+CREATE TABLE IF NOT EXISTS myo_muscle_dims (
+  id            SERIAL PRIMARY KEY,
+  muscle_text   TEXT     NOT NULL,
+  fascicle_text TEXT,
+  myo_dim       SMALLINT NOT NULL,
+  dim_label     TEXT     NOT NULL,
+  UNIQUE (muscle_text, fascicle_text)
+);
+
+-- 4. Peupler le mapping (17 dims, index 0-16)
+INSERT INTO myo_muscle_dims (muscle_text, fascicle_text, myo_dim, dim_label) VALUES
+  -- Pectoraux (fascicle requis)
+  ('grand_pectoral', 'faisceau_claviculaire', 0,  'Pec claviculaire'),
+  ('grand_pectoral', 'faisceau_sternal',      1,  'Pec sternal'),
+  ('grand_pectoral', 'faisceau_abdominal',    1,  'Pec sternal'),
+  -- Deltoïdes (fascicle requis)
+  ('deltoide', 'faisceau_anterieur',          2,  'Deltoïde ant.'),
+  ('deltoide', 'faisceau_median',             3,  'Deltoïde médial'),
+  ('deltoide', 'faisceau_posterieur',         4,  'Deltoïde post.'),
+  -- Dos (toutes fascicules)
+  ('grand_dorsal',     NULL, 5,  'Grand dorsal'),
+  ('trapeze',          NULL, 6,  'Trapèze'),
+  ('grand_rond',       NULL, 7,  'Grand rond'),
+  ('rhomboide',        NULL, 8,  'Rhomboïdes'),
+  ('erecteurs_rachis', NULL, 9,  'Érecteurs rachis'),
+  -- Bras
+  ('biceps',           NULL, 10, 'Biceps'),
+  ('triceps',          NULL, 11, 'Triceps'),
+  -- Jambes
+  ('quadriceps',       NULL, 12, 'Quadriceps'),
+  ('ischio_jambiers',  NULL, 13, 'Ischio-jambiers'),
+  ('fessier_maximus',  NULL, 14, 'Fessiers'),
+  ('fessier_median',   NULL, 14, 'Fessiers'),
+  ('fessier_minimus',  NULL, 14, 'Fessiers'),
+  ('mollets',          NULL, 15, 'Mollets'),
+  -- Core
+  ('abdominaux',       NULL, 16, 'Core')
+ON CONFLICT DO NOTHING;
+```
 
 ### [Phase 3] ADN Athlétique
 ```sql

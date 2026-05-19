@@ -26,6 +26,28 @@ Podium : `gold` = nouveau record absolu · `silver` = 2e · `bronze` = 3e · `nu
 - `pr_seance` : `computePodium(volume total séance, seanceTop3)` — top-3 depuis `workouts.total_volume_kg` → `workouts`
 - Après save Supabase : insérer dans SQLite local (`local_sets`, `local_sessions`)
 
+## saveMyoSignature — champ setsByExercise (obligatoire)
+`summary.tsx` doit construire et passer `setsByExercise` à `saveMyoSignature`. Sans ce champ, les 17 dims musculaires (famille 6) ne sont pas calculés.
+
+```typescript
+const setsByExercise: Record<string, Array<{ weight_kg: number; reps: number }>> =
+  Object.fromEntries(
+    exercises.map(ex => [
+      ex.exerciseId,
+      ex.sets
+        .filter(s => s.set_type !== 'warmup')
+        .map(s => ({ weight_kg: s.weight_kg ?? 0, reps: s.reps ?? 0 }))
+    ])
+  )
+
+await saveMyoSignature({
+  // ... tous les autres champs ...
+  setsByExercise,
+})
+```
+
+Règle : filtrer `warmup` — `activation_pct` est calibré pour les working sets uniquement.
+
 ## Chargement dans addExercise
 - `pr_top3_charge` : top-3 poids distincts
 - `pr_top3_serie` : top-3 valeurs (poids × reps) distinctes
