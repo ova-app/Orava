@@ -111,8 +111,9 @@ Topographie polaire data-driven. 41 dims → 8 familles × sous-variables → re
 ### Architecture
 - **GLView** (expo-gl) → Three.js WebGLRenderer avec canvas proxy (voir rules/stack.md)
 - **Géométrie** : `LineSegments` — grille polaire N_RINGS(42) × N_SEGS(140) + N_SPOKES(26) rayons
-- **Matériau** : `LineBasicMaterial` — `vertexColors: true` (séance) / couleur unie bleu (historique)
-- **2 terrains** : séance (dessus, coloré par secteur) + historique (dessous, bleu uni atténué H_BOT)
+- **Matériaux** : 8 `LineBasicMaterial` indépendants (un par secteur, séance) + 1 couleur unie bleu (historique)
+- **2 terrains** : séance (dessus, 8 `LineSegments` séparés pour highlighting) + historique (un seul bloc, H_BOT)
+- **8 hitboxes** : `Mesh` pie-slice Y=0 (`MeshBasicMaterial visible:false`) ajoutés à la scène — tournent avec elle
 - **Socle** : 3 anneaux concentriques + ticks radiaux
 
 ### getH — formule hauteur en (r, theta)
@@ -143,18 +144,29 @@ DimConfig précalculé une fois (IIFE module) — zéro coût runtime.
 
 **Ordre des couches (z-index)**
 1. `GLView` — canvas WebGL
-2. `View pointerEvents="none"` — étiquettes flottantes + panneau détail
-3. `View` vide avec `{...panResponder.panHandlers}` — capture tous les taps
+2. `View pointerEvents="none"` — étiquettes flottantes
+3. `View` avec `{...panResponder.panHandlers}` — capture les taps sur l'orb
+4. Panneau détail (`onStartShouldSetResponder={() => true}`) — par-dessus, absorbe ses propres taps
 
-**Touch → secteur (raycasting JS pur, pas de raycasting sur LineSegments)**
+**Touch → secteur (raycasting sur hitboxes, pas de calcul d'angle manuel)**
 ```
+scene.updateMatrixWorld(true)                        // matrices à jour (hitboxes tournent avec scène)
 raycaster.setFromCamera(new Vector2(ndcX, ndcY), camera)
-ray.intersectPlane(Y=0, hit)                         // intersection plan de base
-worldAngle = atan2(hit.z, hit.x)
-localAngle = (worldAngle + sceneRotY + N×2π) % 2π   // inverse rotation scène
-fi         = floor(localAngle / SECTOR_ANG) % 8
-dist > MAX_R × 1.15 → désélection + reprise auto-rotation
+intersects = raycaster.intersectObjects(hitboxMeshes, false)
+intersects.length === 0 → désélection + reprise auto-rotation
+fi = intersects[0].object.userData.sectorIndex      // secteur 0-7
 ```
+Les hitboxes étant enfants de la scène, leur world transform intègre automatiquement `scene.rotation.y` — pas besoin d'inverser la rotation manuellement.
+
+**Highlighting matériaux (RAF tick)**
+```
+si sel !== prevSel :
+  mats[fi].opacity = fi === sel ? 1.0 : 0.13   // 8 matériaux secteur
+  mats[fi].transparent = fi !== sel
+  mats[fi].needsUpdate = true                   // recompile shader une seule fois
+  avgMat.opacity = sel !== null ? 0.20 : 1.0    // historique uniformément atténué
+```
+`prevSel` dans la closure du RAF — zéro `needsUpdate` intempestif par frame.
 
 **Étiquettes 3D→2D**
 - `useMemo([sessionValues])` : positions 3D = pic de chaque secteur (scan 20×8 = 160 points)
