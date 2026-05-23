@@ -76,7 +76,7 @@ export default function OnboardingFirstSetScreen(): React.JSX.Element {
   const styles = buildStyles(colors)
 
   function allerVersSession(): void {
-    router.replace('/(tabs)')
+    router.replace('/(tabs)/feed')
   }
 
   return (

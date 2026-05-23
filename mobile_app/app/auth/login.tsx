@@ -92,7 +92,7 @@ export default function LoginScreen(): React.JSX.Element {
       return
     }
 
-    router.replace('/(tabs)')
+    router.replace('/(tabs)/feed')
   }
 
   const styles = buildStyles(colors)

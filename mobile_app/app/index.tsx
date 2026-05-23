@@ -120,7 +120,7 @@ export default function SplashScreen(): React.JSX.Element {
       const { data: { session } } = await supabase.auth.getSession()
 
       if (session) {
-        router.replace('/(tabs)')
+        router.replace('/(tabs)/feed')
       } else {
         router.replace('/auth/login')
       }
