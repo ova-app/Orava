@@ -28,7 +28,13 @@
       "Read(//c/Users/SofianeBESSILA/**)",
       "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\SofianeBESSILA\\\\Downloads\" -Filter \"*Orava*\" -Recurse)",
       "Bash(Select-Object FullName)",
-      "PowerShell(Get-ChildItem -Path \"C:\\\\Users\\\\SofianeBESSILA\\\\Downloads\" -Directory | Where-Object { $_.Name -match \"Orava|Design\" } | Select-Object Name, FullName)"
+      "PowerShell(Get-ChildItem -Path \"C:\\\\Users\\\\SofianeBESSILA\\\\Downloads\" -Directory | Where-Object { $_.Name -match \"Orava|Design\" } | Select-Object Name, FullName)",
+      "PowerShell(New-Item -ItemType Directory -Force \"c:\\\\Users\\\\SofianeBESSILA\\\\orava\\\\design\\\\system\\\\logo\")",
+      "PowerShell(Copy-Item \"c:\\\\Users\\\\SofianeBESSILA\\\\orava\\\\design\\\\figma-export\\\\Orava_design_figma\\\\orava_logo.png\" -Destination \"c:\\\\Users\\\\SofianeBESSILA\\\\orava\\\\mobile_app\\\\assets\\\\icon.png\" -Force)",
+      "PowerShell(Copy-Item \"c:\\\\Users\\\\SofianeBESSILA\\\\orava\\\\design\\\\figma-export\\\\Orava_design_figma\\\\orava_logo.png\" -Destination \"c:\\\\Users\\\\SofianeBESSILA\\\\orava\\\\mobile_app\\\\assets\\\\adaptive-icon.png\" -Force)",
+      "Bash(node -e ' *)",
+      "Bash(git add *)",
+      "Bash(git commit -m '@ *)"
     ],
     "additionalDirectories": [
       "c:\\Users\\SofianeBESSILA\\orava\\mobile_app\\app\\workout"
