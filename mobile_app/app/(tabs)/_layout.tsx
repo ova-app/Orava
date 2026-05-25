@@ -1,7 +1,7 @@
 import React from 'react'
-import { View, StyleSheet } from 'react-native'
+import { View, StyleSheet, Image } from 'react-native'
 import { Tabs } from 'expo-router'
-import { Home, Plus, BookOpen, User } from 'lucide-react-native'
+import { Plus, BookOpen } from 'lucide-react-native'
 import { dark, spacing, radius } from '@/constants/theme'
 
 export default function TabLayout() {
@@ -10,11 +10,6 @@ export default function TabLayout() {
       screenOptions={{
         headerShown: false,
         tabBarStyle: styles.tabBar,
-        tabBarLabelStyle: {
-          fontSize: 11,
-          fontWeight: '500',
-          marginTop: 4,
-        },
         tabBarActiveTintColor: dark.accent,
         tabBarInactiveTintColor: dark.textSecondary,
       }}
@@ -22,11 +17,27 @@ export default function TabLayout() {
       <Tabs.Screen
         name="feed"
         options={{
-          title: 'Feed',
+          title: '',
           tabBarIcon: ({ color }) => (
-            <Home size={24} color={color} strokeWidth={1.5} />
+            <View style={styles.logoContainer}>
+              <View
+                style={[
+                  styles.logoBg,
+                  { borderColor: color === dark.accent ? dark.accent : dark.textSecondary },
+                ]}
+              >
+                <View style={styles.logoDiamond} />
+              </View>
+            </View>
           ),
+          tabBarLabel: () => null,
         }}
+        listeners={({ navigation }) => ({
+          tabPress: (e) => {
+            e.preventDefault()
+            navigation.navigate('/(tabs)/feed')
+          },
+        })}
       />
 
       <Tabs.Screen
@@ -51,20 +62,11 @@ export default function TabLayout() {
       <Tabs.Screen
         name="library"
         options={{
-          title: 'Library',
+          title: '',
           tabBarIcon: ({ color }) => (
             <BookOpen size={24} color={color} strokeWidth={1.5} />
           ),
-        }}
-      />
-
-      <Tabs.Screen
-        name="profile"
-        options={{
-          title: 'Profile',
-          tabBarIcon: ({ color }) => (
-            <User size={24} color={color} strokeWidth={1.5} />
-          ),
+          tabBarLabel: () => null,
         }}
       />
     </Tabs>
@@ -78,10 +80,32 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     height: 64,
     paddingBottom: spacing.s2,
+    paddingTop: spacing.s2,
+    justifyContent: 'space-around',
+    alignItems: 'center',
+  },
+  logoContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  logoBg: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: dark.accent,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+  },
+  logoDiamond: {
+    width: 16,
+    height: 16,
+    backgroundColor: dark.background,
+    transform: [{ rotate: '45deg' }],
   },
   fabContainer: {
-    width: 60,
-    height: 60,
+    width: 64,
+    height: 64,
     borderRadius: radius.full,
     backgroundColor: dark.accent,
     justifyContent: 'center',

@@ -57,7 +57,8 @@
       "Bash(chmod +x /tmp/fix-eslint.sh)",
       "Bash(bash /tmp/fix-eslint.sh)",
       "Bash(cd \"c:\\\\Users\\\\SofianeBESSILA\\\\orava\\\\mobile_app\" && npm run lint 2>&1 > /tmp/lint-output.txt && grep -A5 \"error\" /tmp/lint-output.txt | head -40)",
-      "Read(//tmp/**)"
+      "Read(//tmp/**)",
+      "Bash(npx eslint *)"
     ],
     "additionalDirectories": [
       "c:\\Users\\SofianeBESSILA\\orava\\mobile_app\\app\\workout"

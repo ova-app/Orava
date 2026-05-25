@@ -13,7 +13,11 @@ import Animated, {
   useSharedValue,
   withSpring,
   withDelay,
+  withTiming,
   useAnimatedStyle,
+  useAnimatedReaction,
+  runOnJS,
+  Easing,
 } from 'react-native-reanimated'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
@@ -127,6 +131,7 @@ export default function SummaryScreen() {
   const anim2 = useSharedValue(0)
   const anim3 = useSharedValue(0)
   const anim4 = useSharedValue(0)
+  const volumeAnimValue = useSharedValue(0)
 
   const style0 = useAnimatedStyle(() => ({
     opacity: anim0.value,
@@ -149,6 +154,15 @@ export default function SummaryScreen() {
     transform: [{ translateY: (1 - anim4.value) * 12 }],
   }))
 
+  const [displayVolume, setDisplayVolume] = useState(0)
+
+  useAnimatedReaction(
+    () => volumeAnimValue.value,
+    (value) => {
+      runOnJS(setDisplayVolume)(Math.round(value))
+    }
+  )
+
   useEffect(() => {
     if (status !== 'done') {
       router.replace('/workout/session')
@@ -160,6 +174,14 @@ export default function SummaryScreen() {
     anim2.value = withDelay(160, withSpring(1, spring.standard))
     anim3.value = withDelay(240, withSpring(1, spring.standard))
     anim4.value = withDelay(320, withSpring(1, spring.standard))
+    // Animation du volume : 800ms après Myo reveal + 500ms défilement
+    volumeAnimValue.value = withDelay(
+      800,
+      withTiming(totalVolume, {
+        duration: 500,
+        easing: Easing.bezier(0.16, 1, 0.3, 1), // easeOutExpo
+      })
+    )
   }, [])
 
   // ─── Métriques ───────────────────────────────────────────────────────────
@@ -635,8 +657,8 @@ export default function SummaryScreen() {
         <Animated.View style={[styles.section, style1]}>
           <Text style={[styles.sectionLabel, { color: colors.textTertiary }]}>VOLUME TOTAL</Text>
           <View style={styles.heroRow}>
-            <Text style={[styles.heroValue, { color: colors.accent }]} allowFontScaling={false}>
-              {Math.round(totalVolume).toLocaleString('fr-FR')}
+            <Text style={[styles.heroValue, { color: colors.accent, fontVariant: ['tabular-nums'] }]} allowFontScaling={false}>
+              {displayVolume.toLocaleString('fr-FR')}
             </Text>
             <Text style={[styles.heroUnit, { color: colors.accent }]}> kg</Text>
           </View>
