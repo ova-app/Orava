@@ -341,7 +341,7 @@ export default function HistoryDetailScreen(): React.JSX.Element {
 
           {gymName != null && (
             <View style={s.bannerGymRow}>
-              <MapPin size={12} color={colors.textSecondary} />
+              <MapPin size={12} color={colors.error} />
               <Text style={s.bannerGymText} numberOfLines={1}>{gymName}</Text>
             </View>
           )}
@@ -353,20 +353,23 @@ export default function HistoryDetailScreen(): React.JSX.Element {
             <Text style={[s.statValue, { color: colors.accent }]} accessibilityLabel={`${formatVolume(workout.total_volume_kg)} volume`}>
               {formatVolume(workout.total_volume_kg)}
             </Text>
+            <Text style={s.statLabel}>VOLUME</Text>
           </View>
 
           <View style={s.statSeparator} />
 
           <View style={s.statItem}>
             <Text style={s.statValue}>{formatDuration(workout.duration_sec)}</Text>
+            <Text style={s.statLabel}>DURÉE</Text>
           </View>
 
           <View style={s.statSeparator} />
 
           <View style={s.statItem}>
             <Text style={s.statValue} accessibilityLabel={`${nSets} séries`}>
-              {nSets} séries
+              {nSets}
             </Text>
+            <Text style={s.statLabel}>SETS</Text>
           </View>
         </View>
 
@@ -562,7 +565,6 @@ function buildStyles(colors: ReturnType<typeof useTheme>['colors']) {
       flex: 1,
       alignItems: 'center',
       justifyContent: 'center',
-      paddingBottom: spacing.s6,
     },
     bannerGymRow: {
       position: 'absolute',
@@ -593,11 +595,16 @@ function buildStyles(colors: ReturnType<typeof useTheme>['colors']) {
       paddingVertical: spacing.s1,
     },
     statValue: {
-      fontSize: 17,
+      ...typography.subtitle,
       fontFamily: font.bold,
       color: colors.textPrimary,
       fontVariant: ['tabular-nums'],
-      letterSpacing: -0.3,
+    },
+    statLabel: {
+      ...typography.caption,
+      color: colors.textSecondary,
+      textTransform: 'uppercase',
+      marginTop: spacing.s1,
     },
     statSeparator: {
       width: 1,
@@ -619,10 +626,11 @@ function buildStyles(colors: ReturnType<typeof useTheme>['colors']) {
       marginBottom: spacing.s6,
     },
     sectionTitle: {
-      fontSize: 18,
+      ...typography.caption,
       fontFamily: font.bold,
       color: colors.textPrimary,
-      letterSpacing: -0.2,
+      textTransform: 'uppercase',
+      letterSpacing: 1,
       marginBottom: spacing.s4,
     },
 
@@ -648,13 +656,13 @@ function buildStyles(colors: ReturnType<typeof useTheme>['colors']) {
     muscleBarFill: {
       height: '100%',
       backgroundColor: colors.accent,
-      borderRadius: radius.sm,
+      borderRadius: radius.full,
     },
     musclePct: {
       fontFamily: font.mono,
       fontVariant: ['tabular-nums'],
       fontSize: 12,
-      color: colors.textSecondary,
+      color: colors.accent,
       width: 36,
       textAlign: 'right',
     },

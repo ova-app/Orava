@@ -46,6 +46,10 @@ interface RecentSession {
   delta: number | null // kg vs session précédente
 }
 
+// ─── Colors ──────────────────────────────────────────────────────────────────
+
+const DOT_SECONDARY = '#f97316'  // orange — famille VOLUME Myo, encodage rôle secondaire
+
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const MUSCLE_LABEL_MAP: Record<string, string> = {
@@ -317,16 +321,16 @@ export default function ExerciseDetailScreen(): React.JSX.Element {
             )}
 
             {secondaryMuscles.length > 0 && (
-              <View style={s.muscleGroup}>
+              <View style={[s.muscleGroup, s.muscleGroupGap]}>
                 <Text style={s.muscleGroupLabel}>SECONDARY</Text>
                 {secondaryMuscles.map((m, idx) => (
                   <View key={idx} style={s.muscleRow}>
-                    <View style={[s.muscleDot, { backgroundColor: colors.prGold }]} />
-                    <Text style={[s.muscleName, { color: colors.textSecondary }]} numberOfLines={1}>
+                    <View style={[s.muscleDot, { backgroundColor: DOT_SECONDARY }]} />
+                    <Text style={[s.muscleName, { color: colors.textPrimary }]} numberOfLines={1}>
                       {muscleName(m)}
                     </Text>
                     <Text
-                      style={[s.musclePct, { color: colors.prGold }]}
+                      style={[s.musclePct, { color: colors.accent }]}
                       accessibilityLabel={`${m.activation_pct} pourcent`}
                     >
                       {m.activation_pct}%
@@ -337,12 +341,12 @@ export default function ExerciseDetailScreen(): React.JSX.Element {
             )}
 
             {stabilizerMuscles.length > 0 && (
-              <View style={s.muscleGroup}>
+              <View style={[s.muscleGroup, s.muscleGroupGap]}>
                 <Text style={s.muscleGroupLabel}>STABILIZER</Text>
                 {stabilizerMuscles.map((m, idx) => (
                   <View key={idx} style={s.muscleRow}>
                     <View style={[s.muscleDot, { backgroundColor: colors.textTertiary }]} />
-                    <Text style={[s.muscleName, { color: colors.textTertiary }]} numberOfLines={1}>
+                    <Text style={[s.muscleName, { color: colors.textSecondary }]} numberOfLines={1}>
                       {muscleName(m)}
                     </Text>
                     <Text
@@ -365,7 +369,7 @@ export default function ExerciseDetailScreen(): React.JSX.Element {
           <View style={s.recordsRow}>
             {/* Charge max */}
             <View style={s.recordCard}>
-              <Zap size={20} color={colors.accent} style={s.recordIcon} />
+              <Zap size={20} color={colors.prGold} style={s.recordIcon} />
               <Text style={s.recordCardLabel}>CHARGE MAX</Text>
               <Text style={s.recordValue} accessibilityLabel={records.maxCharge != null ? `${records.maxCharge} kilogrammes` : 'Aucun record'}>
                 {records.maxCharge != null ? `${records.maxCharge} kg` : '—'}
@@ -374,7 +378,7 @@ export default function ExerciseDetailScreen(): React.JSX.Element {
 
             {/* Meilleure série */}
             <View style={s.recordCard}>
-              <Flame size={20} color={colors.accent} style={s.recordIcon} />
+              <Flame size={20} color={colors.prGold} style={s.recordIcon} />
               <Text style={s.recordCardLabel}>MEILLEURE SÉRIE</Text>
               <Text style={s.recordValue} accessibilityLabel={
                 records.maxSerie != null
@@ -394,10 +398,12 @@ export default function ExerciseDetailScreen(): React.JSX.Element {
 
             <View style={s.historyCard}>
               {recentSessions.map((session, idx) => {
-                const dateStr = new Date(session.startedAt).toLocaleDateString('fr-FR', {
+                const rawDate = new Date(session.startedAt).toLocaleDateString('fr-FR', {
                   day: 'numeric',
                   month: 'short',
                 })
+                // "25 mai" → "25 Mai"
+                const dateStr = rawDate.replace(/(\s)([a-z])/, (_, sp, c) => sp + c.toUpperCase())
                 const isLast = idx === recentSessions.length - 1
                 const hasDelta = session.delta != null
                 const deltaPositive = (session.delta ?? 0) > 0
@@ -499,10 +505,10 @@ function buildStyles(colors: ReturnType<typeof useTheme>['colors']) {
       marginBottom: spacing.s6,
     },
     sectionTitle: {
-      fontSize: 18,
+      ...typography.subtitle,
       fontFamily: font.bold,
       color: colors.textPrimary,
-      letterSpacing: -0.2,
+      textTransform: 'uppercase',
       marginBottom: spacing.s4,
     },
 
@@ -510,18 +516,22 @@ function buildStyles(colors: ReturnType<typeof useTheme>['colors']) {
     muscleGroup: {
       marginBottom: spacing.s4,
     },
+    muscleGroupGap: {
+      paddingTop: spacing.s3,
+    },
     muscleGroupLabel: {
-      fontSize: 11,
+      ...typography.caption,
       fontFamily: font.bold,
       color: colors.textTertiary,
-      letterSpacing: 1.5,
+      letterSpacing: 1,
       textTransform: 'uppercase',
       marginBottom: spacing.s2,
     },
     muscleRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      paddingVertical: spacing.s2,
+      height: 44,
+      paddingHorizontal: spacing.s4,
       gap: spacing.s3,
     },
     muscleDot: {
@@ -555,7 +565,7 @@ function buildStyles(colors: ReturnType<typeof useTheme>['colors']) {
       marginBottom: spacing.s2,
     },
     recordCardLabel: {
-      fontSize: 10,
+      ...typography.caption,
       fontFamily: font.bold,
       color: colors.textTertiary,
       letterSpacing: 1,
@@ -594,7 +604,7 @@ function buildStyles(colors: ReturnType<typeof useTheme>['colors']) {
     },
     historyStats: {
       ...typography.body,
-      color: colors.textSecondary,
+      color: colors.textPrimary,
       flex: 1,
     },
     historyDelta: {

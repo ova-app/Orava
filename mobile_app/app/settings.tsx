@@ -6,6 +6,7 @@ import {
   ScrollView,
   StyleSheet,
   StatusBar,
+  ViewStyle,
 } from 'react-native'
 import Animated, {
   useSharedValue,
@@ -16,8 +17,9 @@ import { useRouter } from 'expo-router'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { ChevronLeft, ChevronRight } from 'lucide-react-native'
 import { useTheme } from '@/context/ThemeContext'
-import { spacing, radius, typography, spring } from '@/constants/theme'
+import { spacing, radius, typography, spring, font } from '@/constants/theme'
 import { toggleRecipe } from '@/constants/recipes'
+import { supabase } from '@/lib/supabase'
 
 // ─── ToggleRow (inline) ──────────────────────────────────────────────────────
 // Custom toggle wired via toggleRecipe + Reanimated spring (snappy).
@@ -29,6 +31,7 @@ interface ToggleRowProps {
   value: boolean
   onChange: (v: boolean) => void
   accessibilityLabel?: string
+  rowStyle?: ViewStyle
 }
 
 const THUMB_TRANSLATE = 20
@@ -39,6 +42,7 @@ function ToggleRow({
   value,
   onChange,
   accessibilityLabel,
+  rowStyle,
 }: ToggleRowProps): React.JSX.Element {
   const { colors } = useTheme()
   const styles = toggleRecipe(value, colors)
@@ -59,7 +63,7 @@ function ToggleRow({
   return (
     <Pressable
       onPress={() => onChange(!value)}
-      style={styles.row}
+      style={rowStyle ? [styles.row, rowStyle] : styles.row}
       accessibilityRole="switch"
       accessibilityState={{ checked: value }}
       accessibilityLabel={accessibilityLabel ?? label}
@@ -108,6 +112,7 @@ export default function SettingsScreen(): React.JSX.Element {
     publicWorkoutsByDefault: false,
     ghostEnabled: true,
   })
+  const [userPlan, setUserPlan] = useState<'free' | 'premium'>('free')
 
   // ─── Persistance load ─────────────────────────────────────────────────────
 
@@ -135,7 +140,23 @@ export default function SettingsScreen(): React.JSX.Element {
       }
     }
 
+    async function loadPlan(): Promise<void> {
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) return
+        const { data } = await supabase
+          .from('users')
+          .select('plan')
+          .eq('id', user.id)
+          .single()
+        if (data?.plan === 'premium') setUserPlan('premium')
+      } catch {
+        // Silent fail — plan reste 'free'
+      }
+    }
+
     void loadSettings()
+    void loadPlan()
   }, [])
 
   // ─── Persistance save ─────────────────────────────────────────────────────
@@ -245,6 +266,7 @@ export default function SettingsScreen(): React.JSX.Element {
             value={settings.vibrationEnabled}
             onChange={setVibration}
             accessibilityLabel="Activer les vibrations"
+            rowStyle={s.rowInGroup}
           />
 
           <View style={s.separator} />
@@ -256,6 +278,7 @@ export default function SettingsScreen(): React.JSX.Element {
             value={settings.ghostEnabled}
             onChange={setGhostEnabled}
             accessibilityLabel="Activer le Mode Fantôme"
+            rowStyle={s.rowInGroup}
           />
         </View>
 
@@ -268,6 +291,7 @@ export default function SettingsScreen(): React.JSX.Element {
             value={settings.publicWorkoutsByDefault}
             onChange={setPublicWorkouts}
             accessibilityLabel="Séances publiques par défaut"
+            rowStyle={s.rowInGroup}
           />
         </View>
 
@@ -290,8 +314,10 @@ export default function SettingsScreen(): React.JSX.Element {
           {/* Plan Pro */}
           <View style={s.row}>
             <Text style={s.rowLabel}>Plan Pro</Text>
-            <View style={s.badge}>
-              <Text style={s.badgeLabel}>ACTIF</Text>
+            <View style={userPlan === 'premium' ? s.badgePro : s.badgeFree}>
+              <Text style={userPlan === 'premium' ? s.badgeLabelPro : s.badgeLabelFree}>
+                {userPlan === 'premium' ? 'ACTIF' : 'FREE'}
+              </Text>
             </View>
           </View>
         </View>
@@ -326,6 +352,7 @@ function buildStyles(colors: ReturnType<typeof useTheme>['colors']) {
     headerTitle: {
       flex: 1,
       ...typography.subtitle,
+      fontFamily: font.bold,
       color: colors.textPrimary,
       textAlign: 'center',
     },
@@ -341,9 +368,9 @@ function buildStyles(colors: ReturnType<typeof useTheme>['colors']) {
     },
     groupLabel: {
       ...typography.caption,
-      color: colors.textTertiary,
+      color: colors.textSecondary,
       textTransform: 'uppercase',
-      letterSpacing: 1.2,
+      letterSpacing: 1,
       marginBottom: spacing.s2,
       marginTop: spacing.s6,
       paddingHorizontal: spacing.s1,
@@ -357,8 +384,13 @@ function buildStyles(colors: ReturnType<typeof useTheme>['colors']) {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      height: 52,
+      height: 56,
       paddingHorizontal: spacing.s4,
+    },
+    rowInGroup: {
+      backgroundColor: 'transparent',
+      borderRadius: 0,
+      minHeight: 56,
     },
     rowPressable: {
       // Pressable styles inherited via Pressable wrapper
@@ -385,19 +417,21 @@ function buildStyles(colors: ReturnType<typeof useTheme>['colors']) {
     segmented: {
       flexDirection: 'row',
       backgroundColor: colors.backgroundTertiary,
-      borderRadius: radius.sm,
+      borderRadius: radius.full,
       height: 32,
-      width: 100,
-      overflow: 'hidden',
+      padding: 2,
+      gap: 2,
     },
     segBtn: {
-      flex: 1,
+      height: 28,
+      paddingHorizontal: spacing.s3,
       alignItems: 'center',
       justifyContent: 'center',
+      borderRadius: radius.full,
     },
     segBtnActive: {
       backgroundColor: colors.accent,
-      borderRadius: radius.sm,
+      borderRadius: radius.full,
     },
     segLabel: {
       ...typography.caption,
@@ -406,19 +440,31 @@ function buildStyles(colors: ReturnType<typeof useTheme>['colors']) {
     },
     segLabelActive: {
       color: colors.background,
-      fontFamily: 'Barlow_700Bold',
+      fontFamily: font.bold,
     },
-    // Badge
-    badge: {
+    // Badge plan
+    badgePro: {
       backgroundColor: colors.accent,
       borderRadius: radius.full,
       paddingHorizontal: spacing.s3,
       paddingVertical: 4,
     },
-    badgeLabel: {
+    badgeLabelPro: {
       ...typography.caption,
       color: colors.background,
-      fontFamily: 'Barlow_700Bold',
+      fontFamily: font.bold,
+      letterSpacing: 0.8,
+    },
+    badgeFree: {
+      backgroundColor: colors.backgroundTertiary,
+      borderRadius: radius.full,
+      paddingHorizontal: spacing.s3,
+      paddingVertical: 4,
+    },
+    badgeLabelFree: {
+      ...typography.caption,
+      color: colors.textSecondary,
+      fontFamily: font.bold,
       letterSpacing: 0.8,
     },
     bottomPad: {

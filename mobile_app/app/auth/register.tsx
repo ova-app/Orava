@@ -50,8 +50,8 @@ function LogoOrava({ accent, bg }: { accent: string; bg: string }): React.JSX.El
         style={{
           width: 16,
           height: 16,
-          borderRadius: 8,
           backgroundColor: bg,
+          transform: [{ rotate: '45deg' }],
         }}
       />
     </View>

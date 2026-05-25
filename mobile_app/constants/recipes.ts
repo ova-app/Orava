@@ -13,7 +13,7 @@ export type EmptyVariant = 'feed' | 'history' | 'library'
 
 const PR_ICON_COLORS = {
   charge:   (c: ThemeColors) => c.prGold,
-  serie:    (c: ThemeColors) => c.accent,
+  serie:    (c: ThemeColors) => c.prGold,
   exercice: (c: ThemeColors) => c.prExercice,
   seance:   (c: ThemeColors) => c.prGold,
 } as const
@@ -32,7 +32,7 @@ const hexToRgba = (hex: string, alpha: number): string => {
 // Glassmorphism token (rules/ui.md — glassCard v2)
 const GLASS_BG = 'rgba(18,18,26,0.75)'
 const GLASS_BORDER = 'rgba(255,255,255,0.08)'
-const BACKDROP = 'rgba(0,0,0,0.6)'
+const BACKDROP_BASE = 'rgba(0,0,0,0.72)'
 
 // ─── INPUT ───────────────────────────────────────────────────────────────────
 
@@ -262,10 +262,10 @@ export function emptyStateRecipe(
       width: 64,
       height: 64,
       borderRadius: radius.full,
-      backgroundColor: colors.backgroundTertiary,
+      backgroundColor: colors.backgroundSecondary,
       alignItems: 'center',
       justifyContent: 'center',
-      marginBottom: spacing.s2,
+      marginBottom: spacing.s3,
     },
     title: {
       ...typography.subtitle,
@@ -274,12 +274,12 @@ export function emptyStateRecipe(
       textAlign: 'center',
     },
     subtitle: {
-      ...typography.body,
+      ...typography.caption,
       color: colors.textSecondary,
       textAlign: 'center',
     },
     cta: {
-      marginTop: spacing.s5,
+      marginTop: spacing.s4,
       minHeight: touchTarget.comfort,
       paddingHorizontal: spacing.s8,
       borderRadius: radius.md,
@@ -345,23 +345,24 @@ export function prOverlayRecipe(level: PrLevel, colors: ThemeColors): PrOverlayR
   return {
     backdrop: {
       ...StyleSheet.absoluteFillObject,
-      backgroundColor: BACKDROP,
+      // Dark base + subtle level tint (screen 12 spec: semi-transparent sombre + légère tinte dorée)
+      backgroundColor: BACKDROP_BASE,
       alignItems: 'center',
       justifyContent: 'center',
       paddingHorizontal: spacing.s6,
     },
     cardStack: {
       width: '100%',
-      gap: spacing.s4,
+      flexDirection: 'column',
+      gap: spacing.s3,
       alignItems: 'stretch',
     },
     card: {
-      backgroundColor: GLASS_BG,
+      backgroundColor: hexToRgba(tint, 0.06),
       borderWidth: 1,
       borderColor: GLASS_BORDER,
-      borderRadius: radius.xl,
-      paddingVertical: spacing.s5,
-      paddingHorizontal: spacing.s5,
+      borderRadius: radius.lg,
+      padding: spacing.s5,
       shadowColor: '#000',
       shadowOffset: { width: 0, height: 8 },
       shadowOpacity: 0.4,
@@ -387,14 +388,17 @@ export function prOverlayRecipe(level: PrLevel, colors: ThemeColors): PrOverlayR
       letterSpacing: 1,
     },
     cardValue: {
-      ...typography.display,
-      color: colors.textPrimary,
+      fontSize: 40,
+      fontFamily: font.bold,
+      letterSpacing: -1.0,
+      lineHeight: 44,
+      color: tint,
       // WHY tabular-nums: prevents digit jitter during reveal animations
       fontVariant: ['tabular-nums'],
       textAlign: 'center',
     },
     cardSubtitle: {
-      ...typography.body,
+      ...typography.caption,
       color: colors.textSecondary,
       textAlign: 'center',
     },

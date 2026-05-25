@@ -3,6 +3,7 @@ import {
   View,
   Text,
   StyleSheet,
+  StatusBar,
 } from 'react-native'
 import { useRouter } from 'expo-router'
 import Svg, { Path } from 'react-native-svg'
@@ -114,6 +115,7 @@ export default function SplashScreen(): React.JSX.Element {
 
   return (
     <View style={s.root}>
+      <StatusBar barStyle="light-content" backgroundColor={colors.background} />
       {/* Groupe logo + wordmark */}
       <View style={s.logoGroup}>
         <LogoOrava accentColor={colors.accent} bgColor={colors.background} />

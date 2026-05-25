@@ -14,41 +14,12 @@ import Animated, {
   Easing,
 } from 'react-native-reanimated'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { ChevronRight, Dumbbell, Flame, Trophy, Zap } from 'lucide-react-native'
+import { ChevronRight, Dumbbell, Trophy } from 'lucide-react-native'
 import { useRouter } from 'expo-router'
 import { useTheme } from '@/context/ThemeContext'
 import { spacing, radius, typography } from '@/constants/theme'
-import { emptyStateRecipe, prBadgeRecipe, type PrType } from '@/constants/recipes'
+import { emptyStateRecipe } from '@/constants/recipes'
 import { supabase } from '@/lib/supabase'
-
-// ─── PR Badge (unified) ──────────────────────────────────────────────────────
-
-const PR_ICON: Record<PrType, React.ComponentType<{ size?: number; color?: string }>> = {
-  charge:   Zap,
-  serie:    Flame,
-  exercice: Dumbbell,
-  seance:   Trophy,
-}
-
-function PrBadge({
-  level,
-  type,
-  label,
-}: {
-  level: 'gold' | 'silver' | 'bronze'
-  type: PrType
-  label: string
-}) {
-  const { colors } = useTheme()
-  const r = prBadgeRecipe(level, type, colors)
-  const Icon = PR_ICON[type]
-  return (
-    <View style={r.container}>
-      <Icon size={12} color={r.iconColor} />
-      <Text style={r.label}>{label}</Text>
-    </View>
-  )
-}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -221,11 +192,17 @@ function HistoryRow({ item, onPress }: HistoryRowProps) {
           </Text>
         </View>
 
-        {/* Right : PR badge + volume + chevron */}
+        {/* Right : icône PR + volume + chevron */}
         <View style={styles.rightCol}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            {item.pr_seance != null && (
-              <PrBadge level={item.pr_seance} type="seance" label="Séance" />
+            {item.pr_seance === 'gold' && (
+              <Trophy size={14} color={colors.prGold} />
+            )}
+            {item.pr_seance === 'silver' && (
+              <Trophy size={14} color={colors.prSilver} />
+            )}
+            {item.pr_seance === 'bronze' && (
+              <Trophy size={14} color={colors.prBronze} />
             )}
             <Text
               style={[
@@ -275,7 +252,7 @@ function HistoryEmptyState() {
         onPress={() => router.push('/workout/session')}
         style={s.cta}
       >
-        <Text style={s.ctaLabel}>Commencer</Text>
+        <Text style={s.ctaLabel}>COMMENCER</Text>
       </TouchableOpacity>
     </View>
   )

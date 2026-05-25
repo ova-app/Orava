@@ -12,6 +12,7 @@ import { Zap, Flame } from 'lucide-react-native'
 import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/context/ThemeContext'
 import { spacing, radius, typography, font } from '@/constants/theme'
+import { formatVolume } from '@/lib/utils'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -216,7 +217,7 @@ export default function ProfileScreen(): React.JSX.Element {
           {/* Séances */}
           <View style={s.statCol}>
             <Text
-              style={s.statValue}
+              style={s.statValueSide}
               accessibilityLabel={`${stats.seances} séances ce mois`}
             >
               {stats.seances}
@@ -226,32 +227,15 @@ export default function ProfileScreen(): React.JSX.Element {
 
           <View style={s.statSep} />
 
-          {/* Volume — affiché en hero sur 2 lignes si >= 1000 */}
-          <View style={s.statCol}>
-            {stats.volumeKg >= 1000 ? (
-              <>
-                <Text
-                  style={[s.statValueHero, { color: colors.accent }]}
-                  accessibilityLabel={`${Math.floor(stats.volumeKg / 1000)} milliers kilogrammes`}
-                >
-                  {Math.floor(stats.volumeKg / 1000)}
-                </Text>
-                <Text
-                  style={[s.statValueHero, { color: colors.accent }]}
-                  accessibilityLabel={`${Math.round(stats.volumeKg % 1000)} kilogrammes`}
-                >
-                  {Math.round(stats.volumeKg % 1000).toString().padStart(3, '0')}
-                </Text>
-              </>
-            ) : (
-              <Text
-                style={[s.statValue, { color: colors.accent }]}
-                accessibilityLabel={`${Math.round(stats.volumeKg)} kilogrammes ce mois`}
-              >
-                {Math.round(stats.volumeKg)}
-              </Text>
-            )}
-            <Text style={[s.statLabel, { color: colors.accent }]}>KG CE MOIS</Text>
+          {/* Volume — hero centré accent, formatVolume pour espace milliers */}
+          <View style={s.statColCenter}>
+            <Text
+              style={s.statValueHero}
+              accessibilityLabel={`${formatVolume(stats.volumeKg)} kilogrammes ce mois`}
+            >
+              {formatVolume(stats.volumeKg)}
+            </Text>
+            <Text style={[s.statLabel, s.statLabelAccent]}>KG CE MOIS</Text>
           </View>
 
           <View style={s.statSep} />
@@ -259,7 +243,7 @@ export default function ProfileScreen(): React.JSX.Element {
           {/* Streak */}
           <View style={s.statCol}>
             <Text
-              style={s.statValue}
+              style={s.statValueSide}
               accessibilityLabel={`${stats.streakSemaines} semaines de streak`}
             >
               {stats.streakSemaines}
@@ -275,7 +259,12 @@ export default function ProfileScreen(): React.JSX.Element {
           {topPRs.length === 0 ? (
             <Text style={s.emptyText}>Aucun record encore. Lance une séance !</Text>
           ) : (
-            <View style={s.prsRow}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={s.prsScrollContent}
+              style={s.prsScroll}
+            >
               {topPRs.map((pr, idx) => {
                 const isPrGold = pr.level === 'gold'
 
@@ -299,7 +288,7 @@ export default function ProfileScreen(): React.JSX.Element {
                   </View>
                 )
               })}
-            </View>
+            </ScrollView>
           )}
 
           {/* Voir l'Armurerie */}
@@ -353,40 +342,43 @@ function buildStyles(colors: ReturnType<typeof useTheme>['colors']) {
     },
     scrollContent: {
       paddingTop: 64,
-      paddingHorizontal: spacing.s6,
       paddingBottom: spacing.s12,
     },
 
     // ── Header avatar ──
     headerSection: {
       alignItems: 'center',
+      marginTop: spacing.s6,
       marginBottom: spacing.s6,
+      paddingHorizontal: spacing.s4,
     },
     avatarCircle: {
-      width: 72,
-      height: 72,
-      borderRadius: 36,
+      width: 64,
+      height: 64,
+      borderRadius: 32,
       backgroundColor: colors.accent,
       alignItems: 'center',
       justifyContent: 'center',
-      marginBottom: spacing.s3,
+      marginBottom: spacing.s2,
     },
     avatarLetter: {
-      fontSize: 32,
+      ...typography.title,
       fontFamily: font.black,
       color: colors.background,
-      lineHeight: 36,
     },
     username: {
-      ...typography.title,
-      color: colors.textPrimary,
+      ...typography.body,
+      color: colors.textSecondary,
       marginBottom: spacing.s2,
     },
     proBadge: {
       backgroundColor: colors.accent,
       borderRadius: radius.full,
-      paddingVertical: 4,
-      paddingHorizontal: 12,
+      height: 24,
+      paddingHorizontal: spacing.s3,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginTop: spacing.s2,
     },
     proBadgeText: {
       ...typography.caption,
@@ -402,10 +394,16 @@ function buildStyles(colors: ReturnType<typeof useTheme>['colors']) {
       borderRadius: radius.lg,
       paddingVertical: spacing.s5,
       paddingHorizontal: spacing.s4,
+      marginTop: spacing.s6,
       marginBottom: spacing.s6,
+      marginHorizontal: spacing.s4,
       alignItems: 'center',
     },
     statCol: {
+      flex: 1,
+      alignItems: 'center',
+    },
+    statColCenter: {
       flex: 1,
       alignItems: 'center',
     },
@@ -414,20 +412,17 @@ function buildStyles(colors: ReturnType<typeof useTheme>['colors']) {
       height: 48,
       backgroundColor: colors.separator,
     },
-    statValue: {
-      fontSize: 40,
-      fontFamily: font.extraBold,
+    // colonnes latérales — typography.display (40px) blanc
+    statValueSide: {
+      ...typography.display,
       color: colors.textPrimary,
-      letterSpacing: -1,
       fontVariant: ['tabular-nums'],
-      lineHeight: 44,
     },
+    // colonne centrale — typography.hero (56px) accent
     statValueHero: {
-      fontSize: 40,
-      fontFamily: font.black,
-      letterSpacing: -1.5,
+      ...typography.hero,
+      color: colors.accent,
       fontVariant: ['tabular-nums'],
-      lineHeight: 42,
     },
     statLabel: {
       ...typography.caption,
@@ -436,13 +431,17 @@ function buildStyles(colors: ReturnType<typeof useTheme>['colors']) {
       marginTop: spacing.s1,
       textAlign: 'center',
     },
+    statLabelAccent: {
+      color: colors.accent,
+    },
 
     // ── Section PRs ──
     section: {
       marginBottom: spacing.s8,
+      paddingHorizontal: spacing.s4,
     },
     sectionTitle: {
-      ...typography.title,
+      ...typography.subtitle,
       color: colors.textPrimary,
       marginBottom: spacing.s4,
     },
@@ -450,13 +449,15 @@ function buildStyles(colors: ReturnType<typeof useTheme>['colors']) {
       ...typography.body,
       color: colors.textSecondary,
     },
-    prsRow: {
-      flexDirection: 'row',
-      gap: spacing.s3,
+    prsScroll: {
       marginBottom: spacing.s3,
     },
+    prsScrollContent: {
+      gap: spacing.s3,
+      paddingRight: spacing.s4,
+    },
     prCard: {
-      flex: 1,
+      minWidth: 140,
       backgroundColor: colors.backgroundSecondary,
       borderRadius: radius.md,
       padding: spacing.s4,
@@ -489,13 +490,14 @@ function buildStyles(colors: ReturnType<typeof useTheme>['colors']) {
 
     // ── Armurerie ──
     armurerieBtn: {
-      alignSelf: 'flex-end',
+      alignSelf: 'center',
       paddingVertical: spacing.s2,
+      marginTop: spacing.s3,
       minHeight: 44,
       justifyContent: 'center',
     },
     armurerieBtnText: {
-      ...typography.caption,
+      ...typography.body,
       color: colors.accent,
     },
 
@@ -508,12 +510,12 @@ function buildStyles(colors: ReturnType<typeof useTheme>['colors']) {
       alignItems: 'center',
       paddingVertical: spacing.s5,
       paddingBottom: spacing.s8,
-      minHeight: 52,
+      minHeight: 44,
       justifyContent: 'center',
     },
     deconnexionText: {
       ...typography.body,
-      color: colors.textTertiary,
+      color: colors.textSecondary,
     },
   })
 }

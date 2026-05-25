@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import {
   View,
   Text,
@@ -89,8 +89,9 @@ export default function EditProfileScreen(): React.JSX.Element {
   const [userId, setUserId] = useState<string | null>(null)
   const [usernameFocused, setUsernameFocused] = useState<boolean>(false)
   const [fullNameFocused, setFullNameFocused] = useState<boolean>(false)
-  const [dateNaissanceFocused, setDateNaissanceFocused] = useState<boolean>(false)
   const [poidsKgFocused, setPoidsKgFocused] = useState<boolean>(false)
+  const [datePickerOpen, setDatePickerOpen] = useState<boolean>(false)
+  const dateInputRef = useRef<TextInput>(null)
 
   // ─── Load profil existant ──────────────────────────────────────────────────
 
@@ -387,33 +388,56 @@ export default function EditProfileScreen(): React.JSX.Element {
           {(() => {
             const state: InputState =
               errors.dateNaissance ? 'error' :
-              dateNaissanceFocused ? 'active' :
+              datePickerOpen ? 'active' :
               form.dateNaissance.length > 0 ? 'filled' : 'default'
             const r = inputRecipe(state, colors)
             return (
               <View style={s.fieldGroup}>
                 <Text style={r.label}>DATE DE NAISSANCE</Text>
-                <View style={r.container}>
-                  <TextInput
-                    style={r.input}
-                    value={form.dateNaissance}
-                    onChangeText={(v) => setForm(f => ({ ...f, dateNaissance: v }))}
-                    onFocus={() => setDateNaissanceFocused(true)}
-                    onBlur={() => setDateNaissanceFocused(false)}
-                    placeholder="jj / mm / aaaa"
-                    placeholderTextColor={colors.textTertiary}
-                    keyboardType="numeric"
-                    maxLength={14}
-                    accessibilityLabel="Date de naissance"
-                  />
-                  <View style={r.icon}>
-                    {errors.dateNaissance ? (
-                      <AlertCircle size={16} color={colors.error} strokeWidth={2} />
-                    ) : (
-                      <Calendar size={16} color={colors.textTertiary} strokeWidth={1.5} />
-                    )}
+                {datePickerOpen ? (
+                  <View style={r.container}>
+                    <TextInput
+                      ref={dateInputRef}
+                      style={r.input}
+                      value={form.dateNaissance}
+                      onChangeText={(v) => setForm(f => ({ ...f, dateNaissance: v }))}
+                      onBlur={() => {
+                        setDatePickerOpen(false)
+                      }}
+                      placeholder="jj / mm / aaaa"
+                      placeholderTextColor={colors.textTertiary}
+                      keyboardType="numeric"
+                      maxLength={14}
+                      autoFocus
+                      accessibilityLabel="Date de naissance"
+                    />
+                    <View style={r.icon}>
+                      {errors.dateNaissance ? (
+                        <AlertCircle size={16} color={colors.error} strokeWidth={2} />
+                      ) : (
+                        <Calendar size={16} color={colors.accent} strokeWidth={1.5} />
+                      )}
+                    </View>
                   </View>
-                </View>
+                ) : (
+                  <Pressable
+                    style={[r.container, s.dateDisplayRow]}
+                    onPress={() => setDatePickerOpen(true)}
+                    accessibilityRole="button"
+                    accessibilityLabel="Date de naissance, appuyez pour modifier"
+                  >
+                    <Text style={[r.input, form.dateNaissance ? s.dateValueText : s.datePlaceholderText]}>
+                      {form.dateNaissance || 'jj / mm / aaaa'}
+                    </Text>
+                    <View style={r.icon}>
+                      {errors.dateNaissance ? (
+                        <AlertCircle size={16} color={colors.error} strokeWidth={2} />
+                      ) : (
+                        <Calendar size={16} color={colors.textTertiary} strokeWidth={1.5} />
+                      )}
+                    </View>
+                  </Pressable>
+                )}
                 {errors.dateNaissance ? (
                   <Text style={r.helper}>{errors.dateNaissance}</Text>
                 ) : null}
@@ -538,34 +562,32 @@ function buildStyles(colors: ReturnType<typeof useTheme>['colors']) {
     avatarSection: {
       alignItems: 'center',
       paddingTop: spacing.s6,
-      paddingBottom: spacing.s6,
+      paddingBottom: spacing.s4,
     },
     avatarWrap: {
       marginBottom: spacing.s2,
     },
     avatar: {
-      width: 72,
-      height: 72,
-      borderRadius: 36,
+      width: 64,
+      height: 64,
+      borderRadius: 32,
     },
     avatarPlaceholder: {
-      width: 72,
-      height: 72,
-      borderRadius: 36,
+      width: 64,
+      height: 64,
+      borderRadius: 32,
       backgroundColor: colors.backgroundSecondary,
       alignItems: 'center',
       justifyContent: 'center',
     },
     avatarInitials: {
-      fontSize: 24,
-      fontFamily: font.bold,
+      ...typography.title,
       color: colors.accent,
-      lineHeight: 28,
     },
     avatarChangeLabel: {
       ...typography.caption,
       color: colors.accent,
-      marginTop: spacing.s1,
+      marginTop: spacing.s2,
     },
 
     // ── Error ──
@@ -583,22 +605,40 @@ function buildStyles(colors: ReturnType<typeof useTheme>['colors']) {
 
     // ── Form ──
     form: {
-      gap: spacing.s5,
+      gap: spacing.s4,
     },
     fieldGroup: {
       gap: spacing.s1,
     },
     inputUnit: {
       ...typography.body,
+      fontFamily: font.bold,
       color: colors.textSecondary,
     },
     fieldNote: {
       ...typography.caption,
       color: colors.textTertiary,
-      marginTop: spacing.s2,
+      marginTop: spacing.s3,
     },
     fieldNoteAccent: {
       color: colors.accent,
+    },
+
+    // ── Date display ──
+    dateDisplayRow: {
+      // Pressable reprend le style container de inputRecipe — juste curseur implicite
+    },
+    dateValueText: {
+      ...typography.body,
+      color: colors.textPrimary,
+      flex: 1,
+      paddingVertical: spacing.s3,
+    },
+    datePlaceholderText: {
+      ...typography.body,
+      color: colors.textTertiary,
+      flex: 1,
+      paddingVertical: spacing.s3,
     },
 
     // ── Déconnexion ──

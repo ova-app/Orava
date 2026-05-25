@@ -2,6 +2,7 @@ import { Stack, useNavigationContainerRef } from 'expo-router'
 import { PostHogProvider } from 'posthog-react-native'
 import * as SplashScreen from 'expo-splash-screen'
 import { useEffect } from 'react'
+import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { hydrateStorage } from '@/lib/storage'
 import { ThemeProvider } from '@/context/ThemeContext'
 import { WorkoutProvider } from '@/context/WorkoutContext'
@@ -49,11 +50,13 @@ export default function RootLayout() {
         navigationRef,
       }}
     >
-      <ThemeProvider>
-        <WorkoutProvider>
-          <Stack screenOptions={{ headerShown: false }} />
-        </WorkoutProvider>
-      </ThemeProvider>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <ThemeProvider>
+          <WorkoutProvider>
+            <Stack screenOptions={{ headerShown: false }} />
+          </WorkoutProvider>
+        </ThemeProvider>
+      </GestureHandlerRootView>
     </PostHogProvider>
   )
 }

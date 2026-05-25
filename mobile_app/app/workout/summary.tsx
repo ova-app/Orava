@@ -37,7 +37,7 @@ const PR_ICON: Record<PrType, React.ComponentType<{ size?: number; color?: strin
   seance:   Trophy,
 }
 
-function PrBadge({
+function PrRow({
   level,
   type,
   label,
@@ -50,9 +50,9 @@ function PrBadge({
   const r = prBadgeRecipe(level, type, colors)
   const Icon = PR_ICON[type]
   return (
-    <View style={r.container}>
-      <Icon size={14} color={r.iconColor} />
-      <Text style={r.label}>{label}</Text>
+    <View style={[styles.prRow, { backgroundColor: colors.backgroundSecondary }]}>
+      <Icon size={16} color={r.iconColor} />
+      <Text style={[styles.prRowLabel, { color: r.label.color }]}>{label}</Text>
     </View>
   )
 }
@@ -623,7 +623,7 @@ export default function SummaryScreen() {
       >
         {/* ── Header: date + titre ── */}
         <Animated.View style={style0}>
-          <Text style={[styles.dateCaption, { color: colors.textTertiary }]}>
+          <Text style={[styles.dateCaption, { color: colors.textSecondary }]}>
             {formatDate(startedAt)}
           </Text>
           <Text style={[styles.workoutTitle, { color: colors.textPrimary }]} numberOfLines={2}>
@@ -664,9 +664,9 @@ export default function SummaryScreen() {
         {hasPrs && (
           <Animated.View style={[styles.section, style2]}>
             <Text style={[styles.sectionLabel, { color: colors.textTertiary }]}>PRs DÉTECTÉS</Text>
-            <View style={styles.prBadgesWrap}>
+            <View style={styles.prRowsWrap}>
               {bestPrCharge !== null && (
-                <PrBadge
+                <PrRow
                   level={bestPrCharge}
                   type="charge"
                   label={
@@ -677,7 +677,7 @@ export default function SummaryScreen() {
                 />
               )}
               {bestPrSerie !== null && prSerieMax > 0 && (
-                <PrBadge
+                <PrRow
                   level={bestPrSerie}
                   type="serie"
                   label={`Série · ${prSerieMax} pts`}
@@ -848,11 +848,23 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
     fontVariant: ['tabular-nums'],
   },
-  // PR badges
-  prBadgesWrap: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+  // PR rows (Figma : backgroundSecondary, height 52, icon + texte)
+  prRowsWrap: {
     gap: spacing.s2,
+  },
+  prRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 52,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.s4,
+    gap: spacing.s3,
+  },
+  prRowLabel: {
+    ...typography.caption,
+    textTransform: 'uppercase',
+    fontFamily: 'Barlow_700Bold',
+    letterSpacing: 0.8,
   },
   // Muscle bars
   legendRow: {

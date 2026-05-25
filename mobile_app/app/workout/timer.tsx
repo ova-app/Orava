@@ -215,8 +215,7 @@ export default function TimerScreen() {
               strokeDasharray={CIRCUMFERENCE}
               strokeDashoffset={strokeDashoffset}
               strokeLinecap="round"
-              rotation={-90}
-              origin={`${ARC_DIAMETER / 2}, ${ARC_DIAMETER / 2}`}
+              transform={`rotate(-90, ${ARC_DIAMETER / 2}, ${ARC_DIAMETER / 2})`}
             />
           </Svg>
 
@@ -264,7 +263,6 @@ export default function TimerScreen() {
         </TouchableOpacity>
       </View>
 
-      <View style={styles.bottomSpacer} />
 
       {finished && (
         <Animated.View

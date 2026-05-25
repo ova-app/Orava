@@ -37,7 +37,7 @@ import {
 import { prOverlayRecipe, prBadgeRecipe, type PrLevel as PrLevelStrict, type PrType } from '@/constants/recipes'
 import { storage } from '@/lib/storage'
 import { supabase } from '@/lib/supabase'
-import { getGhostReference, type GhostSet } from './ghost'
+import { getGhostReference, type GhostSet } from '@/lib/ghost'
 import { getLastLocalSet } from '@/lib/db'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -415,18 +415,15 @@ function ExerciseModal({ visible, onClose, onSelect, addedIds, colors }: Exercis
     return list
   }, [exercises, search, filter])
 
-  // Build section list: [{title, data}]
+  // Build section list grouped by display label (multiple muscle_groups can share the same label)
   const sections = useMemo(() => {
     const map = new Map<string, ExerciseRow[]>()
     for (const ex of filtered) {
-      const group = ex.muscle_group ?? 'autre'
-      if (!map.has(group)) map.set(group, [])
-      map.get(group)!.push(ex)
+      const label = (MUSCLE_LABELS[ex.muscle_group ?? ''] ?? ex.muscle_group ?? 'autre').toUpperCase()
+      if (!map.has(label)) map.set(label, [])
+      map.get(label)!.push(ex)
     }
-    return Array.from(map.entries()).map(([group, data]) => ({
-      title: (MUSCLE_LABELS[group] ?? group).toUpperCase(),
-      data,
-    }))
+    return Array.from(map.entries()).map(([title, data]) => ({ title, data }))
   }, [filtered])
 
   // Flatten for FlatList with section headers

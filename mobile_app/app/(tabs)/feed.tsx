@@ -16,9 +16,9 @@ import Animated, {
 } from 'react-native-reanimated'
 import Svg, { Path, Circle } from 'react-native-svg'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { Heart, MessageCircle, RefreshCw, Users } from 'lucide-react-native'
+import { Heart, MessageCircle, RefreshCw } from 'lucide-react-native'
 import { useTheme } from '@/context/ThemeContext'
-import { spacing, typography } from '@/constants/theme'
+import { spacing, typography, radius } from '@/constants/theme'
 import { emptyStateRecipe } from '@/constants/recipes'
 import { supabase } from '@/lib/supabase'
 
@@ -150,7 +150,7 @@ function SkeletonCard() {
   }))
 
   return (
-    <Animated.View style={[styles.skeletonCard, shimmerStyle]}>
+    <Animated.View style={[styles.skeletonCard, { backgroundColor: colors.backgroundSecondary }, shimmerStyle]}>
       {/* Row avatar + lignes */}
       <View style={styles.skeletonRow}>
         <View style={[styles.skeletonAvatar, { backgroundColor: colors.backgroundTertiary }]} />
@@ -190,7 +190,7 @@ function FeedItem({ item, currentUserId, onLike }: FeedItemProps) {
   const volumeStr = formatVolume(item.total_volume_kg)
 
   return (
-    <View style={[styles.feedItem, { borderBottomColor: colors.separator }]}>
+    <View style={[styles.feedItem, { backgroundColor: colors.backgroundSecondary }]}>
       {/* Row principale */}
       <View style={styles.mainRow}>
         {/* Avatar */}
@@ -273,19 +273,66 @@ function FeedItem({ item, currentUserId, onLike }: FeedItemProps) {
 
 // ─── Empty state ──────────────────────────────────────────────────────────────
 
+function FeedGhostCard({ opacity, colors }: { opacity: number; colors: ReturnType<typeof useTheme>['colors'] }) {
+  return (
+    <View style={[feedEmptyStyles.ghostCard, { backgroundColor: colors.backgroundSecondary, opacity }]}>
+      <View style={[feedEmptyStyles.ghostAvatar, { backgroundColor: colors.backgroundTertiary }]} />
+      <View style={{ flex: 1, gap: 8 }}>
+        <View style={[feedEmptyStyles.ghostLine, { width: '55%', backgroundColor: colors.backgroundTertiary }]} />
+        <View style={[feedEmptyStyles.ghostLine, { width: '35%', height: 10, backgroundColor: colors.backgroundTertiary }]} />
+      </View>
+      <View style={[feedEmptyStyles.ghostMyoDot, { backgroundColor: colors.backgroundTertiary }]} />
+    </View>
+  )
+}
+
 function FeedEmptyState() {
   const { colors } = useTheme()
   const s = emptyStateRecipe('feed', colors)
   return (
     <View style={s.container}>
-      <View style={s.icon}>
-        <Users size={28} color={colors.textTertiary} />
+      {/* Skeleton ghost cards — arrière-plan décoratif */}
+      <View style={feedEmptyStyles.ghostStack}>
+        <FeedGhostCard opacity={0.35} colors={colors} />
+        <FeedGhostCard opacity={0.18} colors={colors} />
       </View>
-      <Text style={s.title}>Ton feed est vide.</Text>
+      <Text style={[s.title, { marginTop: spacing.s4 }]}>Ton feed est vide.</Text>
       <Text style={s.subtitle}>Suis d'autres athlètes pour voir leurs séances.</Text>
     </View>
   )
 }
+
+const feedEmptyStyles = StyleSheet.create({
+  ghostStack: {
+    width: '100%',
+    gap: spacing.s3,
+  },
+  ghostCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.s3,
+    borderRadius: radius.md,
+    paddingVertical: spacing.s3,
+    paddingHorizontal: spacing.s3,
+    minHeight: 52,
+  },
+  ghostAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    flexShrink: 0,
+  },
+  ghostLine: {
+    height: 12,
+    borderRadius: 4,
+  },
+  ghostMyoDot: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    flexShrink: 0,
+  },
+})
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
@@ -433,8 +480,8 @@ export default function FeedScreen() {
           typography.title,
           {
             color: colors.textPrimary,
-            paddingHorizontal: spacing.s5,
-            paddingTop: spacing.s6,
+            paddingHorizontal: spacing.s4,
+            paddingTop: spacing.s4,
             paddingBottom: spacing.s2,
           },
         ]}
@@ -458,15 +505,15 @@ export default function FeedScreen() {
       )}
 
       {loading ? (
-        <View style={{ paddingHorizontal: spacing.s5, paddingTop: spacing.s3 }}>
+        <View style={{ paddingHorizontal: spacing.s4, paddingTop: spacing.s3 }}>
           <SkeletonCard />
           {Array.from({ length: 4 }).map((_, i) => (
-            <View key={i} style={[styles.feedItem, { borderBottomColor: colors.separator }]}>
+            <View key={i} style={[styles.feedItemSkeleton, { backgroundColor: colors.backgroundSecondary }]}>
               <View style={styles.mainRow}>
-                <View style={[styles.avatar, { backgroundColor: colors.backgroundSecondary }]} />
+                <View style={[styles.avatar, { backgroundColor: colors.backgroundTertiary }]} />
                 <View style={styles.centerCol}>
-                  <View style={{ width: '50%', height: 12, borderRadius: 4, backgroundColor: colors.backgroundSecondary, marginBottom: 6 }} />
-                  <View style={{ width: '35%', height: 10, borderRadius: 4, backgroundColor: colors.backgroundSecondary }} />
+                  <View style={{ width: '50%', height: 12, borderRadius: 4, backgroundColor: colors.backgroundTertiary, marginBottom: 6 }} />
+                  <View style={{ width: '35%', height: 10, borderRadius: 4, backgroundColor: colors.backgroundTertiary }} />
                 </View>
               </View>
             </View>
@@ -477,7 +524,7 @@ export default function FeedScreen() {
           data={workouts}
           keyExtractor={item => item.id}
           contentContainerStyle={{
-            paddingHorizontal: spacing.s5,
+            paddingHorizontal: spacing.s4,
             paddingBottom: spacing.s12,
           }}
           ItemSeparatorComponent={() => null}
@@ -518,7 +565,17 @@ const styles = StyleSheet.create({
   },
   feedItem: {
     paddingVertical: spacing.s3,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: spacing.s3,
+    borderRadius: radius.md,
+    marginBottom: spacing.s3,
+    overflow: 'hidden',
+  },
+  feedItemSkeleton: {
+    paddingVertical: spacing.s3,
+    paddingHorizontal: spacing.s3,
+    borderRadius: radius.md,
+    marginBottom: spacing.s3,
+    overflow: 'hidden',
   },
   mainRow: {
     flexDirection: 'row',
@@ -550,7 +607,7 @@ const styles = StyleSheet.create({
   likeBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.s5,
+    gap: spacing.s4,
     paddingTop: spacing.s2,
     paddingLeft: 52, // aligner sous le texte (avatar 40 + gap 12)
   },
@@ -560,8 +617,10 @@ const styles = StyleSheet.create({
   },
   skeletonCard: {
     paddingVertical: spacing.s3,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(255,255,255,0.06)',
+    paddingHorizontal: spacing.s3,
+    borderRadius: radius.md,
+    marginBottom: spacing.s3,
+    overflow: 'hidden',
   },
   skeletonRow: {
     flexDirection: 'row',
