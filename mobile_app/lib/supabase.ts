@@ -17,8 +17,8 @@ if (!global.crypto.randomUUID) {
       bytes.slice(10, 16),
     ]
       .map(b => Array.from(b).map(x => x.toString(16).padStart(2, '0')).join(''))
-      .join('-')
-  }
+      .join('-') as unknown as ReturnType<typeof crypto.randomUUID>
+  } as any
 }
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!

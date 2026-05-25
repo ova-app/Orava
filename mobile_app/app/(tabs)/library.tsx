@@ -13,10 +13,12 @@ import Animated, {
   withTiming,
   useAnimatedStyle,
   Easing,
+  withSpring,
 } from 'react-native-reanimated'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { ChevronRight, Search } from 'lucide-react-native'
+import { ChevronRight, Search, Star } from 'lucide-react-native'
 import { useRouter } from 'expo-router'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useTheme } from '@/context/ThemeContext'
 import { spacing, radius, typography, font, touchTarget } from '@/constants/theme'
 import { emptyStateRecipe, skeletonRecipe } from '@/constants/recipes'
@@ -96,11 +98,14 @@ function SkeletonRow() {
 
 interface ExerciseRowProps {
   item: Exercise
+  isFavorite: boolean
   onPress: () => void
+  onToggleFavorite: () => void
 }
 
-function ExerciseRow({ item, onPress }: ExerciseRowProps) {
+function ExerciseRow({ item, isFavorite, onPress, onToggleFavorite }: ExerciseRowProps) {
   const { colors } = useTheme()
+  const starScale = useSharedValue(1)
 
   const equipmentLabel = item.equipment_type
     ? item.equipment_type
@@ -113,6 +118,16 @@ function ExerciseRow({ item, onPress }: ExerciseRowProps) {
   const subtitle = equipmentLabel
     ? `${equipmentLabel} · ${muscleLabel}`
     : muscleLabel
+
+  const starAnimStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: starScale.value }],
+  }))
+
+  const handleToggleFavorite = () => {
+    starScale.value = withSpring(0.8, { damping: 18, stiffness: 300 })
+    starScale.value = withSpring(1, { damping: 18, stiffness: 300 })
+    onToggleFavorite()
+  }
 
   return (
     <TouchableOpacity
@@ -131,6 +146,21 @@ function ExerciseRow({ item, onPress }: ExerciseRowProps) {
           {subtitle}
         </Text>
       </View>
+      <TouchableOpacity
+        activeOpacity={0.6}
+        onPress={handleToggleFavorite}
+        hitSlop={12}
+        style={{ marginRight: spacing.s2 }}
+      >
+        <Animated.View style={starAnimStyle}>
+          <Star
+            size={18}
+            color={colors.accent}
+            fill={isFavorite ? colors.accent : 'none'}
+            strokeWidth={isFavorite ? 0 : 1.5}
+          />
+        </Animated.View>
+      </TouchableOpacity>
       <ChevronRight size={16} color={colors.textTertiary} />
     </TouchableOpacity>
   )
@@ -162,6 +192,20 @@ export default function LibraryScreen() {
   const [loading, setLoading] = useState(true)
   const [query, setQuery] = useState('')
   const [activeGroup, setActiveGroup] = useState<string | null>(null)
+  const [favorites, setFavorites] = useState<Set<string>>(new Set())
+
+  // ─── Load favorites ─────────────────────────────────────────────────────────
+
+  const loadFavorites = useCallback(async () => {
+    try {
+      const stored = await AsyncStorage.getItem('library_favorites')
+      if (stored) {
+        setFavorites(new Set(JSON.parse(stored) as string[]))
+      }
+    } catch {
+      // Silently fail
+    }
+  }, [])
 
   // ─── Fetch ──────────────────────────────────────────────────────────────────
 
@@ -177,8 +221,25 @@ export default function LibraryScreen() {
   }, [])
 
   useEffect(() => {
-    fetchExercises().finally(() => setLoading(false))
-  }, [fetchExercises])
+    Promise.all([loadFavorites(), fetchExercises()]).finally(() => setLoading(false))
+  }, [loadFavorites, fetchExercises])
+
+  // ─── Toggle favorite ────────────────────────────────────────────────────────
+
+  const toggleFavorite = useCallback(async (exerciseId: string) => {
+    const newFavs = new Set(favorites)
+    if (newFavs.has(exerciseId)) {
+      newFavs.delete(exerciseId)
+    } else {
+      newFavs.add(exerciseId)
+    }
+    setFavorites(newFavs)
+    try {
+      await AsyncStorage.setItem('library_favorites', JSON.stringify(Array.from(newFavs)))
+    } catch {
+      // Silently fail
+    }
+  }, [favorites])
 
   // ─── Filter + sections ───────────────────────────────────────────────────────
 
@@ -194,6 +255,17 @@ export default function LibraryScreen() {
       return matchesGroup && matchesQuery
     })
 
+    const result: LibrarySection[] = []
+
+    // Favorites section first if any
+    const favoriteExercises = filtered.filter(ex => favorites.has(ex.id))
+    if (favoriteExercises.length > 0) {
+      result.push({
+        title: 'FAVORIS',
+        data: favoriteExercises,
+      })
+    }
+
     // Group by muscle_group in canonical order
     const grouped = new Map<string, Exercise[]>()
     for (const ex of filtered) {
@@ -201,7 +273,6 @@ export default function LibraryScreen() {
       grouped.get(ex.muscle_group)!.push(ex)
     }
 
-    const result: LibrarySection[] = []
     for (const key of MUSCLE_GROUP_ORDER) {
       const group = grouped.get(key)
       if (group && group.length > 0) {
@@ -219,7 +290,7 @@ export default function LibraryScreen() {
     }
 
     return result
-  }, [exercises, query, activeGroup])
+  }, [exercises, query, activeGroup, favorites])
 
   // Muscle groups présents dans les données
   const presentGroups = useMemo(() => {
@@ -360,7 +431,9 @@ export default function LibraryScreen() {
           renderItem={({ item }) => (
             <ExerciseRow
               item={item}
+              isFavorite={favorites.has(item.id)}
               onPress={() => router.push(`/exercise/${item.id}` as const)}
+              onToggleFavorite={() => void toggleFavorite(item.id)}
             />
           )}
           ItemSeparatorComponent={() => null}

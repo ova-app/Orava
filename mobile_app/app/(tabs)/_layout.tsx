@@ -1,62 +1,70 @@
-import { Tabs, useRouter } from 'expo-router'
-import { TouchableOpacity, StyleSheet } from 'react-native'
-import { Home, BookOpen, History, User } from 'lucide-react-native'
+import React from 'react'
+import { View, StyleSheet } from 'react-native'
+import { Tabs } from 'expo-router'
+import { Home, Plus, BookOpen, User } from 'lucide-react-native'
 import { dark, spacing, radius } from '@/constants/theme'
-import { Dumbbell } from 'lucide-react-native'
 
-function FabButton() {
-  const router = useRouter()
-  return (
-    <TouchableOpacity
-      style={styles.fab}
-      onPress={() => router.push('/workout/session')}
-      activeOpacity={0.85}
-    >
-      <Dumbbell size={24} color="#0A0A0F" />
-    </TouchableOpacity>
-  )
-}
-
-export default function TabsLayout() {
+export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
         tabBarStyle: styles.tabBar,
+        tabBarLabelStyle: {
+          fontSize: 11,
+          fontWeight: '500',
+          marginTop: 4,
+        },
         tabBarActiveTintColor: dark.accent,
-        tabBarInactiveTintColor: dark.textTertiary,
-        tabBarShowLabel: false,
+        tabBarInactiveTintColor: dark.textSecondary,
       }}
     >
       <Tabs.Screen
         name="feed"
         options={{
-          tabBarIcon: ({ color }) => <Home size={22} color={color} />,
+          title: 'Feed',
+          tabBarIcon: ({ color }) => (
+            <Home size={24} color={color} strokeWidth={1.5} />
+          ),
         }}
       />
-      <Tabs.Screen
-        name="history"
-        options={{
-          tabBarIcon: ({ color }) => <History size={22} color={color} />,
-        }}
-      />
+
       <Tabs.Screen
         name="start"
         options={{
-          tabBarIcon: () => <FabButton />,
-          tabBarStyle: { display: 'none' },
+          title: '',
+          tabBarIcon: () => (
+            <View style={styles.fabContainer}>
+              <Plus size={32} color={dark.background} strokeWidth={2.5} />
+            </View>
+          ),
+          tabBarLabel: () => null,
         }}
+        listeners={({ navigation }) => ({
+          tabPress: (e) => {
+            e.preventDefault()
+            navigation.navigate('workout/session')
+          },
+        })}
       />
+
       <Tabs.Screen
         name="library"
         options={{
-          tabBarIcon: ({ color }) => <BookOpen size={22} color={color} />,
+          title: 'Library',
+          tabBarIcon: ({ color }) => (
+            <BookOpen size={24} color={color} strokeWidth={1.5} />
+          ),
         }}
       />
+
       <Tabs.Screen
         name="profile"
         options={{
-          tabBarIcon: ({ color }) => <User size={22} color={color} />,
+          title: 'Profile',
+          tabBarIcon: ({ color }) => (
+            <User size={24} color={color} strokeWidth={1.5} />
+          ),
         }}
       />
     </Tabs>
@@ -71,13 +79,18 @@ const styles = StyleSheet.create({
     height: 64,
     paddingBottom: spacing.s2,
   },
-  fab: {
-    width: 52,
-    height: 52,
+  fabContainer: {
+    width: 60,
+    height: 60,
     borderRadius: radius.full,
     backgroundColor: dark.accent,
-    alignItems: 'center',
     justifyContent: 'center',
+    alignItems: 'center',
     marginBottom: spacing.s3,
+    shadowColor: dark.accent,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 8,
   },
 })

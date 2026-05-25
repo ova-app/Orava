@@ -19,6 +19,7 @@ import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/context/ThemeContext'
 import { spacing, radius, typography, font } from '@/constants/theme'
 import { inputRecipe, InputState } from '@/constants/recipes'
+import RulerPicker from '@/components/RulerPicker'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -27,6 +28,9 @@ interface ProfileForm {
   fullName: string
   dateNaissance: string
   poidsKg: string
+  tailleCm: string
+  ageLeBrut: string
+  masseGrassePct: string
 }
 
 interface ProfileErrors {
@@ -34,6 +38,9 @@ interface ProfileErrors {
   fullName?: string
   dateNaissance?: string
   poidsKg?: string
+  tailleCm?: string
+  ageLeBrut?: string
+  masseGrassePct?: string
   global?: string
 }
 
@@ -81,6 +88,9 @@ export default function EditProfileScreen(): React.JSX.Element {
     fullName: '',
     dateNaissance: '',
     poidsKg: '',
+    tailleCm: '',
+    ageLeBrut: '',
+    masseGrassePct: '',
   })
   const [errors, setErrors] = useState<ProfileErrors>({})
   const [loading, setLoading] = useState<boolean>(true)
@@ -92,6 +102,7 @@ export default function EditProfileScreen(): React.JSX.Element {
   const [poidsKgFocused, setPoidsKgFocused] = useState<boolean>(false)
   const [datePickerOpen, setDatePickerOpen] = useState<boolean>(false)
   const dateInputRef = useRef<TextInput>(null)
+  const [rulerMode, setRulerMode] = useState<string | null>(null)
 
   // ─── Load profil existant ──────────────────────────────────────────────────
 
@@ -123,6 +134,7 @@ export default function EditProfileScreen(): React.JSX.Element {
           .maybeSingle()
 
         setAvatarUrl(data.avatar_url ?? null)
+        const dataAny = data as any
         setForm({
           username: data.username ?? '',
           fullName: data.full_name ?? '',
@@ -130,6 +142,9 @@ export default function EditProfileScreen(): React.JSX.Element {
             ? formatDateForDisplay(data.date_naissance)
             : '',
           poidsKg: metricsData?.weight_kg ? String(metricsData.weight_kg) : '',
+          tailleCm: dataAny?.taille_cm ? String(dataAny.taille_cm) : '',
+          ageLeBrut: dataAny?.age ? String(dataAny.age) : '',
+          masseGrassePct: dataAny?.masse_grasse_pct ? String(dataAny.masse_grasse_pct) : '',
         })
       } catch {
         setErrors({ global: 'Impossible de charger le profil.' })
@@ -163,6 +178,27 @@ export default function EditProfileScreen(): React.JSX.Element {
       }
     }
 
+    if (form.tailleCm) {
+      const taille = parseFloat(form.tailleCm)
+      if (isNaN(taille) || taille < 100 || taille > 220) {
+        newErrors.tailleCm = 'Taille invalide (100–220 cm)'
+      }
+    }
+
+    if (form.ageLeBrut) {
+      const age = parseFloat(form.ageLeBrut)
+      if (isNaN(age) || age < 10 || age > 100) {
+        newErrors.ageLeBrut = 'Âge invalide (10–100 ans)'
+      }
+    }
+
+    if (form.masseGrassePct) {
+      const mg = parseFloat(form.masseGrassePct)
+      if (isNaN(mg) || mg < 5 || mg > 50) {
+        newErrors.masseGrassePct = 'Masse grasse invalide (5–50%)'
+      }
+    }
+
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
   }
@@ -179,12 +215,19 @@ export default function EditProfileScreen(): React.JSX.Element {
         ? parseDateInput(form.dateNaissance)
         : null
 
+      const tailleCmNum = form.tailleCm ? parseInt(form.tailleCm, 10) : null
+      const ageNum = form.ageLeBrut ? parseInt(form.ageLeBrut, 10) : null
+      const masseGrassaPctNum = form.masseGrassePct ? parseFloat(form.masseGrassePct) : null
+
       const { error: userError } = await supabase
         .from('users')
         .update({
           username: form.username.trim(),
           full_name: form.fullName.trim(),
           date_naissance: isoDate,
+          taille_cm: tailleCmNum,
+          age: ageNum,
+          masse_grasse_pct: masseGrassaPctNum,
         })
         .eq('id', userId)
 
@@ -446,45 +489,148 @@ export default function EditProfileScreen(): React.JSX.Element {
           })()}
 
           {/* Poids */}
-          {(() => {
-            const state: InputState =
-              errors.poidsKg ? 'error' :
-              poidsKgFocused ? 'active' :
-              form.poidsKg.length > 0 ? 'filled' : 'default'
-            const r = inputRecipe(state, colors)
-            return (
-              <View style={s.fieldGroup}>
-                <Text style={r.label}>POIDS</Text>
-                <View style={r.container}>
-                  <TextInput
-                    style={r.input}
-                    value={form.poidsKg}
-                    onChangeText={(v) => setForm(f => ({ ...f, poidsKg: v }))}
-                    onFocus={() => setPoidsKgFocused(true)}
-                    onBlur={() => setPoidsKgFocused(false)}
-                    placeholder="70"
-                    placeholderTextColor={colors.textTertiary}
-                    keyboardType="decimal-pad"
-                    accessibilityLabel="Poids en kilogrammes"
-                  />
-                  <View style={r.icon}>
-                    {errors.poidsKg ? (
-                      <AlertCircle size={16} color={colors.error} strokeWidth={2} />
-                    ) : (
-                      <Text style={s.inputUnit}>kg</Text>
-                    )}
-                  </View>
-                </View>
-                {errors.poidsKg ? (
-                  <Text style={r.helper}>{errors.poidsKg}</Text>
-                ) : null}
-                <Text style={s.fieldNote}>
-                  {'Utilisé pour calculer tes métriques. '}
-                  <Text style={s.fieldNoteAccent}>Non visible.</Text>
-                </Text>
+          <View style={s.fieldGroup}>
+            <Text style={[inputRecipe('default', colors).label]}>POIDS</Text>
+            {rulerMode === 'poids' ? (
+              <View style={s.rulerContainer}>
+                <RulerPicker
+                  value={form.poidsKg ? parseFloat(form.poidsKg) : 70}
+                  min={20}
+                  max={200}
+                  step={0.5}
+                  unit="kg"
+                  onChange={(v) => setForm(f => ({ ...f, poidsKg: String(v) }))}
+                  colors={colors}
+                />
+                <Pressable
+                  onPress={() => setRulerMode(null)}
+                  style={s.rulerDoneBtn}
+                >
+                  <Text style={s.rulerDoneBtnText}>Valider</Text>
+                </Pressable>
               </View>
-            )
-          })()}
+            ) : (
+              <Pressable
+                style={[inputRecipe(errors.poidsKg ? 'error' : form.poidsKg ? 'filled' : 'default', colors).container, s.rulerPressable]}
+                onPress={() => setRulerMode('poids')}
+              >
+                <Text style={[inputRecipe(form.poidsKg ? 'filled' : 'default', colors).input, form.poidsKg ? { color: colors.textPrimary } : { color: colors.textTertiary }]}>
+                  {form.poidsKg || '70'} kg
+                </Text>
+              </Pressable>
+            )}
+            {errors.poidsKg ? (
+              <Text style={inputRecipe('error', colors).helper}>{errors.poidsKg}</Text>
+            ) : null}
+          </View>
+
+          {/* Taille */}
+          <View style={s.fieldGroup}>
+            <Text style={[inputRecipe('default', colors).label]}>TAILLE</Text>
+            {rulerMode === 'taille' ? (
+              <View style={s.rulerContainer}>
+                <RulerPicker
+                  value={form.tailleCm ? parseFloat(form.tailleCm) : 170}
+                  min={100}
+                  max={220}
+                  step={1}
+                  unit="cm"
+                  onChange={(v) => setForm(f => ({ ...f, tailleCm: String(v) }))}
+                  colors={colors}
+                />
+                <Pressable
+                  onPress={() => setRulerMode(null)}
+                  style={s.rulerDoneBtn}
+                >
+                  <Text style={s.rulerDoneBtnText}>Valider</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <Pressable
+                style={[inputRecipe(errors.tailleCm ? 'error' : form.tailleCm ? 'filled' : 'default', colors).container, s.rulerPressable]}
+                onPress={() => setRulerMode('taille')}
+              >
+                <Text style={[inputRecipe(form.tailleCm ? 'filled' : 'default', colors).input, form.tailleCm ? { color: colors.textPrimary } : { color: colors.textTertiary }]}>
+                  {form.tailleCm || '170'} cm
+                </Text>
+              </Pressable>
+            )}
+            {errors.tailleCm ? (
+              <Text style={inputRecipe('error', colors).helper}>{errors.tailleCm}</Text>
+            ) : null}
+          </View>
+
+          {/* Âge */}
+          <View style={s.fieldGroup}>
+            <Text style={[inputRecipe('default', colors).label]}>ÂGE</Text>
+            {rulerMode === 'age' ? (
+              <View style={s.rulerContainer}>
+                <RulerPicker
+                  value={form.ageLeBrut ? parseFloat(form.ageLeBrut) : 25}
+                  min={10}
+                  max={100}
+                  step={1}
+                  unit="ans"
+                  onChange={(v) => setForm(f => ({ ...f, ageLeBrut: String(v) }))}
+                  colors={colors}
+                />
+                <Pressable
+                  onPress={() => setRulerMode(null)}
+                  style={s.rulerDoneBtn}
+                >
+                  <Text style={s.rulerDoneBtnText}>Valider</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <Pressable
+                style={[inputRecipe(errors.ageLeBrut ? 'error' : form.ageLeBrut ? 'filled' : 'default', colors).container, s.rulerPressable]}
+                onPress={() => setRulerMode('age')}
+              >
+                <Text style={[inputRecipe(form.ageLeBrut ? 'filled' : 'default', colors).input, form.ageLeBrut ? { color: colors.textPrimary } : { color: colors.textTertiary }]}>
+                  {form.ageLeBrut || '25'} ans
+                </Text>
+              </Pressable>
+            )}
+            {errors.ageLeBrut ? (
+              <Text style={inputRecipe('error', colors).helper}>{errors.ageLeBrut}</Text>
+            ) : null}
+          </View>
+
+          {/* Masse grasse */}
+          <View style={s.fieldGroup}>
+            <Text style={[inputRecipe('default', colors).label]}>MASSE GRASSE</Text>
+            {rulerMode === 'mg' ? (
+              <View style={s.rulerContainer}>
+                <RulerPicker
+                  value={form.masseGrassePct ? parseFloat(form.masseGrassePct) : 20}
+                  min={5}
+                  max={50}
+                  step={0.5}
+                  unit="%"
+                  onChange={(v) => setForm(f => ({ ...f, masseGrassePct: String(v) }))}
+                  colors={colors}
+                />
+                <Pressable
+                  onPress={() => setRulerMode(null)}
+                  style={s.rulerDoneBtn}
+                >
+                  <Text style={s.rulerDoneBtnText}>Valider</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <Pressable
+                style={[inputRecipe(errors.masseGrassePct ? 'error' : form.masseGrassePct ? 'filled' : 'default', colors).container, s.rulerPressable]}
+                onPress={() => setRulerMode('mg')}
+              >
+                <Text style={[inputRecipe(form.masseGrassePct ? 'filled' : 'default', colors).input, form.masseGrassePct ? { color: colors.textPrimary } : { color: colors.textTertiary }]}>
+                  {form.masseGrassePct || '20'} %
+                </Text>
+              </Pressable>
+            )}
+            {errors.masseGrassePct ? (
+              <Text style={inputRecipe('error', colors).helper}>{errors.masseGrassePct}</Text>
+            ) : null}
+          </View>
 
         </View>
 
@@ -608,7 +754,7 @@ function buildStyles(colors: ReturnType<typeof useTheme>['colors']) {
       gap: spacing.s4,
     },
     fieldGroup: {
-      gap: spacing.s1,
+      gap: spacing.s2,
     },
     inputUnit: {
       ...typography.body,
@@ -622,6 +768,31 @@ function buildStyles(colors: ReturnType<typeof useTheme>['colors']) {
     },
     fieldNoteAccent: {
       color: colors.accent,
+    },
+
+    // ── RulerPicker ──
+    rulerPressable: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+    },
+    rulerContainer: {
+      backgroundColor: colors.backgroundSecondary,
+      borderRadius: radius.md,
+      padding: spacing.s5,
+      gap: spacing.s4,
+    },
+    rulerDoneBtn: {
+      backgroundColor: colors.accent,
+      height: 44,
+      borderRadius: radius.md,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    rulerDoneBtnText: {
+      ...typography.body,
+      fontFamily: font.bold,
+      color: colors.background,
     },
 
     // ── Date display ──

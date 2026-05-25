@@ -24,12 +24,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import * as Haptics from 'expo-haptics'
-import { Timer, Plus, Trash2, X, Search, Zap, Flame, Trophy, Dumbbell, Check } from 'lucide-react-native'
+import { Plus, Trash2, X, Search, Zap, Flame, Trophy, Dumbbell, Check } from 'lucide-react-native'
 import { useTheme } from '@/context/ThemeContext'
 import { spacing, radius, typography, touchTarget, spring } from '@/constants/theme'
 import {
   useWorkout,
-  computePodium,
   WorkoutExercise,
   WorkoutSet,
   PrLevel,
@@ -60,8 +59,6 @@ interface PrEvent {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const ITEM_HEIGHT = 72
-const VISIBLE_ITEMS = 5
-const PICKER_HEIGHT = ITEM_HEIGHT * VISIBLE_ITEMS
 
 const REPS_VALUES = Array.from({ length: 50 }, (_, i) => i + 1)
 
@@ -97,14 +94,6 @@ function getWeightValues(equipType: string | null): number[] {
   return Array.from({ length: 80 }, (_, i) => (i + 1) * 2.5)
 }
 
-function formatElapsed(s: number): string {
-  const h = Math.floor(s / 3600)
-  const m = Math.floor((s % 3600) / 60)
-  const sec = s % 60
-  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
-  return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
-}
-
 function snapshotToMMKV(
   exercises: WorkoutExercise[],
   currentIndex: number,
@@ -132,130 +121,176 @@ function normalizeNFD(s: string): string {
   return s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 }
 
-// ─── WheelPicker ─────────────────────────────────────────────────────────────
+// ─── LogoOrava ───────────────────────────────────────────────────────────────
 
-interface WheelPickerProps {
+function LogoOrava() {
+  const { colors } = useTheme()
+  return (
+    <View
+      style={{
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+        backgroundColor: colors.accent,
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      <View
+        style={{
+          width: 16,
+          height: 16,
+          backgroundColor: colors.background,
+          transform: [{ rotate: '45deg' }],
+        }}
+      />
+    </View>
+  )
+}
+
+// ─── WheelPicker Modal ────────────────────────────────────────────────────────
+
+interface WheelPickerModalProps {
+  visible: boolean
   values: number[]
   selectedValue: number
   onValueChange: (val: number) => void
+  onClose: () => void
   label: string
   isEmpty?: boolean
   ghostValue?: number
   ghostBeaten?: boolean
 }
 
-function WheelPicker({ values, selectedValue, onValueChange, label, isEmpty, ghostValue, ghostBeaten }: WheelPickerProps) {
+function WheelPickerModal({
+  visible,
+  values,
+  selectedValue,
+  onValueChange,
+  onClose,
+  label,
+  isEmpty,
+  ghostValue,
+  ghostBeaten,
+}: WheelPickerModalProps) {
   const { colors } = useTheme()
-  const scrollRef = useRef<ScrollView>(null)
+  const insets = useSafeAreaInsets()
+  const scrollRef = useRef<any>(null)
+  const scrollAnimValue = useSharedValue(Dimensions.get('window').height)
   const selectedIndex = values.indexOf(selectedValue)
   const currentIndex = selectedIndex === -1 ? 0 : selectedIndex
-  const isScrolling = useRef(false)
+
+  const scrollStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: scrollAnimValue.value }],
+  }))
 
   useEffect(() => {
-    if (scrollRef.current && values.length > 0) {
-      const y = currentIndex * ITEM_HEIGHT
-      scrollRef.current.scrollTo({ y, animated: false })
+    if (visible) {
+      scrollAnimValue.value = withSpring(0, spring.bouncy)
+      setTimeout(() => {
+        scrollRef.current?.scrollToIndex({
+          index: Math.max(0, currentIndex - 2),
+          animated: false,
+        })
+      }, 50)
+    } else {
+      scrollAnimValue.value = withSpring(Dimensions.get('window').height, spring.snappy)
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [visible, currentIndex, scrollAnimValue])
 
-  // Scroll programmatically when selectedValue changes externally (exercise switch)
-  useEffect(() => {
-    if (!isScrolling.current && scrollRef.current && values.length > 0) {
-      const y = currentIndex * ITEM_HEIGHT
-      scrollRef.current.scrollTo({ y, animated: true })
-    }
-  }, [selectedValue, currentIndex, values])
-
-  const snapOffsets = useMemo(
-    () => values.map((_, i) => i * ITEM_HEIGHT),
-    [values],
-  )
+  function handleScroll() {
+    // Track scroll position for potential use
+  }
 
   function handleMomentumScrollEnd(e: { nativeEvent: { contentOffset: { y: number } } }) {
-    isScrolling.current = false
     const idx = Math.round(e.nativeEvent.contentOffset.y / ITEM_HEIGHT)
-    const clamped = Math.max(0, Math.min(idx, values.length - 1))
-    onValueChange(values[clamped])
+    const clamped = Math.max(0, Math.min(idx, Math.max(0, values.length - 1)))
+    if (clamped < values.length) {
+      onValueChange(values[clamped])
+    }
   }
 
   function handleScrollEndDrag(e: { nativeEvent: { contentOffset: { y: number } } }) {
-    isScrolling.current = false
     const idx = Math.round(e.nativeEvent.contentOffset.y / ITEM_HEIGHT)
-    const clamped = Math.max(0, Math.min(idx, values.length - 1))
-    onValueChange(values[clamped])
+    const clamped = Math.max(0, Math.min(idx, Math.max(0, values.length - 1)))
+    if (clamped < values.length) {
+      onValueChange(values[clamped])
+    }
   }
 
-  function handleScrollBeginDrag() {
-    isScrolling.current = true
-  }
+  if (!visible) return null
 
   if (isEmpty || values.length === 0) {
     return (
-      <View style={styles.pickerOuter}>
-        <View style={[styles.pickerContainer, { height: PICKER_HEIGHT }]}>
-          <View style={[styles.pickerCenterHighlight, { backgroundColor: colors.backgroundSecondary }]} />
-          <View style={styles.pickerCenterItemAbs}>
-            <Text style={[styles.pickerItemSelected, { color: colors.textSecondary }]}>—</Text>
+      <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+        <TouchableOpacity
+          style={[styles.pickerModalOverlay]}
+          activeOpacity={1}
+          onPress={onClose}
+        />
+        <Animated.View
+          style={[
+            styles.pickerModalSheet,
+            { backgroundColor: colors.backgroundSecondary },
+            scrollStyle,
+          ]}
+        >
+          <View style={[styles.pickerModalHandle, { backgroundColor: colors.border }]} />
+          <View style={styles.pickerModalContent}>
+            <Text style={[styles.pickerModalTitle, { color: colors.textSecondary }]}>
+              {label}
+            </Text>
+            <Text style={[styles.pickerModalSubtitle, { color: colors.textTertiary }]}>
+              —
+            </Text>
           </View>
-        </View>
-        <Text style={[styles.pickerLabel, { color: colors.textSecondary }]}>{label}</Text>
+        </Animated.View>
       </View>
     )
   }
 
   return (
-    <View style={styles.pickerOuter}>
-      <View style={[styles.pickerContainer, { height: PICKER_HEIGHT }]}>
-        {/* Center highlight box */}
-        <View
-          style={[
-            styles.pickerCenterHighlight,
-            { backgroundColor: colors.backgroundSecondary },
-          ]}
-          pointerEvents="none"
-        />
-        {/* Ghost bar — position relative to selected item */}
-        {ghostValue !== undefined && (() => {
-          const gIdx = values.indexOf(ghostValue)
-          if (gIdx === -1) return null
-          const ghostTop = ITEM_HEIGHT * 2 + (gIdx - currentIndex) * ITEM_HEIGHT
-          return (
-            <View
-              pointerEvents="none"
-              style={{
-                position: 'absolute',
-                top: ghostTop,
-                left: spacing.s2,
-                right: spacing.s2,
-                height: 2,
-                borderRadius: 1,
-                backgroundColor: ghostBeaten ? colors.prGold : colors.textTertiary,
-                opacity: ghostBeaten ? 0.8 : 0.35,
-                zIndex: 3,
-              }}
-            />
-          )
-        })()}
-        <ScrollView
+    <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+      <TouchableOpacity
+        style={[styles.pickerModalOverlay]}
+        activeOpacity={1}
+        onPress={onClose}
+      />
+      <Animated.View
+        style={[
+          styles.pickerModalSheet,
+          { backgroundColor: colors.backgroundSecondary },
+          scrollStyle,
+        ]}
+      >
+        <View style={[styles.pickerModalHandle, { backgroundColor: colors.border }]} />
+        <View style={styles.pickerModalHeader}>
+          <Text style={[styles.pickerModalTitle, { color: colors.textPrimary }]}>
+            {label}
+          </Text>
+        </View>
+
+        <View style={styles.pickerModalCenterHighlight}>
+          <View
+            style={[
+              styles.pickerModalCenterBox,
+              { backgroundColor: colors.backgroundTertiary, borderRadius: radius.md },
+            ]}
+          />
+        </View>
+
+        <FlatList
           ref={scrollRef}
-          showsVerticalScrollIndicator={false}
-          snapToOffsets={snapOffsets}
-          decelerationRate="fast"
-          onScrollBeginDrag={handleScrollBeginDrag}
-          onMomentumScrollEnd={handleMomentumScrollEnd}
-          onScrollEndDrag={handleScrollEndDrag}
-          contentContainerStyle={{ paddingVertical: ITEM_HEIGHT * 2 }}
-          scrollEventThrottle={16}
-        >
-          {values.map((val, idx) => {
-            const dist = Math.abs(idx - currentIndex)
-            const isSelected = dist === 0
-            const fontSize = isSelected ? 40 : dist === 1 ? 28 : 18
-            const opacity = isSelected ? 1 : dist === 1 ? 0.4 : 0.15
-            const fontFamily = isSelected ? 'Barlow_800ExtraBold' : 'Barlow_400Regular'
+          data={values}
+          keyExtractor={(item, idx) => `${item}-${idx}`}
+          renderItem={({ item: val, index: idx }) => {
+            const distFromCenter = Math.abs(idx - currentIndex)
+            const isSelected = distFromCenter === 0
+            const fontSize = isSelected ? 48 : distFromCenter === 1 ? 32 : 20
+            const opacity = isSelected ? 1 : distFromCenter === 1 ? 0.5 : 0.2
+            const fontFamily = isSelected ? 'Barlow_800ExtraBold' : 'Barlow_500Medium'
             return (
-              <View key={val} style={[styles.pickerItem, { height: ITEM_HEIGHT }]}>
+              <View style={[styles.pickerModalItem, { height: ITEM_HEIGHT }]}>
                 <Text
                   style={{
                     fontSize,
@@ -263,17 +298,105 @@ function WheelPicker({ values, selectedValue, onValueChange, label, isEmpty, gho
                     color: colors.textPrimary,
                     opacity,
                     fontVariant: ['tabular-nums'],
-                    letterSpacing: isSelected ? -1.0 : 0,
-                    lineHeight: ITEM_HEIGHT,
+                    letterSpacing: isSelected ? -1.5 : 0,
                   }}
                 >
                   {val}
                 </Text>
               </View>
             )
-          })}
-        </ScrollView>
-      </View>
+          }}
+          onScroll={handleScroll}
+          onMomentumScrollEnd={handleMomentumScrollEnd}
+          onScrollEndDrag={handleScrollEndDrag}
+          scrollEventThrottle={16}
+          snapToAlignment="center"
+          snapToOffsets={values.map((_, i) => i * ITEM_HEIGHT - ITEM_HEIGHT * 2)}
+          decelerationRate="fast"
+          contentContainerStyle={{
+            paddingVertical: ITEM_HEIGHT * 2,
+          }}
+          showsVerticalScrollIndicator={false}
+        />
+
+        {/* Ghost badge — below the center highlight */}
+        {ghostValue !== undefined && (
+          <View style={[styles.ghostBadgeContainer, { bottom: insets.bottom + spacing.s6 }]}>
+            <View
+              style={[
+                styles.ghostBadge,
+                {
+                  backgroundColor: ghostBeaten
+                    ? colors.accent
+                    : colors.backgroundTertiary,
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.ghostBadgeText,
+                  {
+                    color: ghostBeaten ? colors.background : colors.textSecondary,
+                  },
+                ]}
+              >
+                {ghostBeaten
+                  ? `↑ BATTU · +${formatKg(selectedValue - ghostValue)} kg`
+                  : `↑ ${formatKg(ghostValue)} kg`}
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {/* Close button */}
+        <View style={[styles.pickerModalFooter, { paddingBottom: Math.max(insets.bottom, spacing.s4) }]}>
+          <TouchableOpacity
+            style={[styles.pickerModalCloseButton, { backgroundColor: colors.accent }]}
+            onPress={onClose}
+            activeOpacity={0.85}
+          >
+            <Text style={[styles.pickerModalCloseText, { color: colors.background }]}>
+              VALIDER
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </Animated.View>
+    </View>
+  )
+}
+
+// ─── WheelPicker Inline ───────────────────────────────────────────────────────
+
+interface WheelPickerProps {
+  values: number[]
+  selectedValue: number
+  onValueChange: (val: number) => void
+  label: string
+  isEmpty?: boolean
+  onOpen?: () => void
+}
+
+function WheelPicker({ values, selectedValue, onValueChange, label, isEmpty, onOpen }: WheelPickerProps) {
+  const { colors } = useTheme()
+  const insets = useSafeAreaInsets()
+
+  return (
+    <View style={styles.pickerOuter}>
+      <TouchableOpacity
+        style={[styles.pickerTapZone, { borderColor: colors.border }]}
+        onPress={onOpen}
+        activeOpacity={0.7}
+      >
+        <Text
+          style={[
+            styles.pickerDisplayValue,
+            { color: isEmpty || values.length === 0 ? colors.textSecondary : colors.textPrimary },
+          ]}
+          numberOfLines={1}
+        >
+          {isEmpty || values.length === 0 ? '—' : selectedValue}
+        </Text>
+      </TouchableOpacity>
       <Text style={[styles.pickerLabel, { color: colors.textSecondary }]}>{label}</Text>
     </View>
   )
@@ -783,7 +906,6 @@ export default function SessionScreen() {
     startedAt,
     exercises,
     currentIndex,
-    elapsedSeconds,
     startWorkout,
     finishWorkout,
     addExercise,
@@ -796,6 +918,8 @@ export default function SessionScreen() {
 
   const [modalVisible, setModalVisible] = useState(false)
   const [prFlash, setPrFlash] = useState<PrEvent[] | null>(null)
+  const [weightPickerModalVisible, setWeightPickerModalVisible] = useState(false)
+  const [repsPickerModalVisible, setRepsPickerModalVisible] = useState(false)
   const tabsScrollRef = useRef<ScrollView>(null)
 
   // ── Ghost state ──
@@ -862,15 +986,6 @@ export default function SessionScreen() {
   // Set number being prepared
   const nextSetNumber = validatedSets.length + 1
 
-  // Prev best: best validated set of current exercise
-  const prevBest = useMemo(() => {
-    if (validatedSets.length === 0) return null
-    let best: WorkoutSet | null = null
-    for (const s of validatedSets) {
-      if (!best || s.weight_kg * s.reps > best.weight_kg * best.reps) best = s
-    }
-    return best
-  }, [validatedSets])
 
   // Ghost beaten: current draft weight beats ghost reference
   const ghostBeaten = ghostEnabled && ghostRef !== null && draftWeight > ghostRef.weight_kg
@@ -931,6 +1046,11 @@ export default function SessionScreen() {
     if (events.length > 0) {
       setPrFlash(events)
     }
+
+    // Auto-navigate to timer after PR flash (2500ms)
+    setTimeout(() => {
+      router.push('/workout/timer')
+    }, 2500)
   }
 
   async function handleAddExercise(ex: ExerciseRow) {
@@ -985,16 +1105,8 @@ export default function SessionScreen() {
       {/* Top safe area + header */}
       <View style={{ paddingTop: insets.top }}>
         <View style={[styles.header, { borderBottomColor: colors.separator }]}>
-          <TouchableOpacity
-            style={styles.timerButton}
-            onPress={() => router.push('/workout/timer')}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Timer size={16} color={colors.accent} />
-            <Text style={[styles.timerText, { color: colors.accent }]}>
-              {formatElapsed(elapsedSeconds)}
-            </Text>
-          </TouchableOpacity>
+          <LogoOrava />
+          <View style={styles.headerCenter} />
           {exercises.length > 0 && (
             <TouchableOpacity
               style={[styles.finishButton, { backgroundColor: colors.backgroundSecondary, borderColor: colors.border }]}
@@ -1109,7 +1221,7 @@ export default function SessionScreen() {
             </ScrollView>
           )}
 
-          {/* WheelPicker — fills remaining space */}
+          {/* WheelPicker inline buttons — opens modals */}
           <View style={styles.pickersArea}>
             <View style={styles.pickersRow}>
               {weightValues.length > 0 ? (
@@ -1118,8 +1230,7 @@ export default function SessionScreen() {
                   selectedValue={draftWeight}
                   onValueChange={handleWeightChange}
                   label="KG"
-                  ghostValue={ghostRef && ghostEnabled ? ghostRef.weight_kg : undefined}
-                  ghostBeaten={ghostBeaten}
+                  onOpen={() => setWeightPickerModalVisible(true)}
                 />
               ) : (
                 <WheelPicker
@@ -1135,27 +1246,9 @@ export default function SessionScreen() {
                 selectedValue={draftReps}
                 onValueChange={handleRepsChange}
                 label="REPS"
+                onOpen={() => setRepsPickerModalVisible(true)}
               />
             </View>
-          </View>
-
-          {/* Ghost / Prev best indicator */}
-          <View style={styles.prevBestRow}>
-            <View style={[styles.prevBestLine, {
-              backgroundColor: ghostBeaten ? colors.prGold : colors.textTertiary,
-              opacity: ghostBeaten ? 1 : 0.5,
-            }]} />
-            <Text style={[styles.prevBestText, {
-              color: ghostBeaten ? colors.prGold : colors.textTertiary,
-            }]}>
-              {ghostRef && ghostEnabled
-                ? ghostBeaten
-                  ? `FANTÔME BATTU · +${formatKg(draftWeight - ghostRef.weight_kg)} KG`
-                  : `FANTÔME · ${ghostRef.weight_kg} KG × ${ghostRef.reps}`
-                : prevBest
-                  ? `PREV BEST · ${prevBest.weight_kg}KG × ${prevBest.reps}`
-                  : 'PREV BEST · —'}
-            </Text>
           </View>
 
           {/* LOG SET button — sticky at bottom */}
@@ -1184,6 +1277,29 @@ export default function SessionScreen() {
         onSelect={handleAddExercise}
         addedIds={addedIds}
         colors={colors}
+      />
+
+      {/* Weight picker modal */}
+      <WheelPickerModal
+        visible={weightPickerModalVisible}
+        values={weightValues}
+        selectedValue={draftWeight}
+        onValueChange={handleWeightChange}
+        onClose={() => setWeightPickerModalVisible(false)}
+        label="KG"
+        isEmpty={weightValues.length === 0}
+        ghostValue={ghostRef && ghostEnabled ? ghostRef.weight_kg : undefined}
+        ghostBeaten={ghostBeaten}
+      />
+
+      {/* Reps picker modal */}
+      <WheelPickerModal
+        visible={repsPickerModalVisible}
+        values={REPS_VALUES}
+        selectedValue={draftReps}
+        onValueChange={handleRepsChange}
+        onClose={() => setRepsPickerModalVisible(false)}
+        label="REPS"
       />
     </View>
   )
@@ -1231,17 +1347,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.s4,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  timerButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.s2,
-    height: touchTarget.min,
-    paddingHorizontal: spacing.s2,
-  },
-  timerText: {
-    ...typography.mono,
-    fontSize: 16,
-    fontVariant: ['tabular-nums'],
+  headerCenter: {
+    flex: 1,
   },
   finishButton: {
     height: 36,
@@ -1398,69 +1505,117 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.s4,
-    gap: 0,
+    gap: spacing.s4,
   },
   pickerOuter: {
     flex: 1,
     alignItems: 'center',
     gap: spacing.s2,
   },
-  pickerContainer: {
+  pickerTapZone: {
+    flex: 1,
     width: '100%',
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  pickerCenterHighlight: {
-    position: 'absolute',
-    top: ITEM_HEIGHT * 2,
-    left: spacing.s2,
-    right: spacing.s2,
-    height: ITEM_HEIGHT,
+    borderWidth: 1,
     borderRadius: radius.md,
-    zIndex: 1,
-    pointerEvents: 'none',
-  },
-  pickerItem: {
     alignItems: 'center',
     justifyContent: 'center',
+    paddingVertical: spacing.s3,
   },
-  pickerCenterItemAbs: {
-    position: 'absolute',
-    top: ITEM_HEIGHT * 2,
-    left: 0,
-    right: 0,
-    height: ITEM_HEIGHT,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  pickerItemSelected: {
-    fontSize: 40,
+  pickerDisplayValue: {
+    ...typography.display,
     fontVariant: ['tabular-nums'],
-    fontFamily: 'Barlow_800ExtraBold',
-    letterSpacing: -1.0,
-    lineHeight: 44,
   },
   pickerLabel: {
     ...typography.caption,
     letterSpacing: 1.2,
   },
 
-  // ── Prev best ──
-  prevBestRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.s2,
+  // ── Picker Modal ──
+  pickerModalOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+  },
+  pickerModalSheet: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: '85%',
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
+    overflow: 'hidden',
+  },
+  pickerModalHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: radius.full,
+    alignSelf: 'center',
+    marginTop: spacing.s3,
+    marginBottom: spacing.s2,
+  },
+  pickerModalHeader: {
     paddingHorizontal: spacing.s4,
-    paddingBottom: spacing.s3,
+    paddingVertical: spacing.s3,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(255,255,255,0.06)',
   },
-  prevBestLine: {
-    width: 16,
-    height: 1,
-    opacity: 0.5,
+  pickerModalTitle: {
+    ...typography.title,
   },
-  prevBestText: {
+  pickerModalContent: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.s10,
+  },
+  pickerModalSubtitle: {
+    ...typography.display,
+  },
+  pickerModalCenterHighlight: {
+    position: 'absolute',
+    top: '50%',
+    left: spacing.s4,
+    right: spacing.s4,
+    transform: [{ translateY: -ITEM_HEIGHT / 2 }],
+    height: ITEM_HEIGHT,
+    zIndex: 10,
+    pointerEvents: 'none',
+  },
+  pickerModalCenterBox: {
+    flex: 1,
+  },
+  pickerModalItem: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ghostBadgeContainer: {
+    position: 'absolute',
+    left: spacing.s4,
+    right: spacing.s4,
+    alignItems: 'center',
+  },
+  ghostBadge: {
+    paddingHorizontal: spacing.s3,
+    paddingVertical: spacing.s2,
+    borderRadius: radius.full,
+  },
+  ghostBadgeText: {
     ...typography.caption,
-    letterSpacing: 0.5,
+    letterSpacing: 0.3,
+    fontSize: 11,
+  },
+  pickerModalFooter: {
+    paddingHorizontal: spacing.s4,
+    paddingTop: spacing.s4,
+  },
+  pickerModalCloseButton: {
+    height: touchTarget.hero,
+    borderRadius: radius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pickerModalCloseText: {
+    ...typography.subtitle,
+    letterSpacing: 1.5,
   },
 
   // ── LOG SET button ──

@@ -6,9 +6,12 @@ import {
   Pressable,
   StyleSheet,
   ActivityIndicator,
+  SectionList,
+  TouchableOpacity,
 } from 'react-native'
+import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
-import { Zap, Flame } from 'lucide-react-native'
+import { Zap, Flame, Trophy, ChevronRight } from 'lucide-react-native'
 import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/context/ThemeContext'
 import { spacing, radius, typography, font } from '@/constants/theme'
@@ -22,6 +25,7 @@ interface UserProfile {
   full_name: string | null
   plan: 'free' | 'premium'
   avatar_url: string | null
+  created_at: string | null
 }
 
 interface MonthStats {
@@ -32,13 +36,32 @@ interface MonthStats {
 
 interface TopPR {
   exerciseName: string
-  prType: 'charge' | 'serie'
   value: number
-  unit: string
   level: 'gold' | 'silver' | 'bronze'
 }
 
+interface WorkoutRow {
+  id: string
+  title: string
+  started_at: string
+  duration_sec: number | null
+  total_volume_kg: number | null
+  total_sets: number
+  pr_seance: 'gold' | 'silver' | 'bronze' | null
+}
+
+interface HistorySection {
+  title: string
+  data: WorkoutRow[]
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
+
+const MONTHS_FR = [
+  'JANVIER', 'FÉVRIER', 'MARS', 'AVRIL', 'MAI', 'JUIN',
+  'JUILLET', 'AOÛT', 'SEPTEMBRE', 'OCTOBRE', 'NOVEMBRE', 'DÉCEMBRE',
+]
+const DAYS_FR = ['DIM', 'LUN', 'MAR', 'MER', 'JEU', 'VEN', 'SAM']
 
 function getInitiale(profile: UserProfile): string {
   const src = profile.full_name ?? profile.username ?? 'O'
@@ -51,6 +74,182 @@ function getUsername(profile: UserProfile): string {
   return 'Athlète'
 }
 
+function sectionKeyFromDate(dateStr: string): string {
+  const d = new Date(dateStr)
+  return `${MONTHS_FR[d.getMonth()]} ${d.getFullYear()}`
+}
+
+function formatDuration(sec: number | null): string {
+  if (!sec) return '—'
+  const h = Math.floor(sec / 3600)
+  const m = Math.floor((sec % 3600) / 60)
+  if (h > 0) return `${h}h ${m.toString().padStart(2, '0')}min`
+  return `${m}min`
+}
+
+function groupByMonth(rows: WorkoutRow[]): HistorySection[] {
+  const map = new Map<string, WorkoutRow[]>()
+  for (const row of rows) {
+    const key = sectionKeyFromDate(row.started_at)
+    if (!map.has(key)) map.set(key, [])
+    map.get(key)!.push(row)
+  }
+  return Array.from(map.entries()).map(([title, data]) => ({ title, data }))
+}
+
+// ─── Sparkline mini ────────────────────────────────────────────────────────────
+
+interface SparklineData {
+  volume: number
+  date: string
+}
+
+function SparklineRow({ data, colors }: { data: SparklineData[]; colors: any }) {
+  if (data.length === 0) {
+    return (
+      <Text style={{ ...typography.caption, color: colors.textTertiary, textAlign: 'center', marginVertical: spacing.s3 }}>
+        Aucune séance récente
+      </Text>
+    )
+  }
+
+  const maxVol = Math.max(...data.map(d => d.volume), 1)
+  const h = 48
+
+  return (
+    <View style={{ flexDirection: 'row', gap: spacing.s1, alignItems: 'flex-end', height: h, marginVertical: spacing.s3 }}>
+      {data.map((item, idx) => {
+        const ratio = item.volume / maxVol
+        const barH = Math.max(4, h * ratio)
+        return (
+          <View
+            key={idx}
+            style={{
+              flex: 1,
+              height: barH,
+              backgroundColor: colors.accent,
+              borderRadius: radius.sm,
+              opacity: 0.8,
+            }}
+          />
+        )
+      })}
+    </View>
+  )
+}
+
+// ─── History row ──────────────────────────────────────────────────────────────
+
+interface HistoryRowProps {
+  item: WorkoutRow
+  onPress: () => void
+  colors: any
+}
+
+function HistoryRowInProfile({ item, onPress, colors }: HistoryRowProps) {
+  const d = new Date(item.started_at)
+  const day = d.getDate().toString()
+  const weekday = DAYS_FR[d.getDay()]
+  const volumeStr = formatVolume(item.total_volume_kg ?? 0)
+  const subtitleParts = [
+    `${item.total_sets} série${item.total_sets > 1 ? 's' : ''}`,
+    formatDuration(item.duration_sec),
+  ]
+
+  return (
+    <TouchableOpacity
+      activeOpacity={0.75}
+      onPress={onPress}
+      style={[styles.card, { backgroundColor: colors.backgroundSecondary, marginBottom: spacing.s2 }]}
+    >
+      <View style={styles.cardInner}>
+        {/* Bloc date */}
+        <View style={styles.dateBlock}>
+          <Text
+            style={[
+              typography.title,
+              {
+                color: colors.textPrimary,
+                fontSize: 22,
+                lineHeight: 26,
+                letterSpacing: -0.3,
+                fontFamily: font.bold,
+              },
+            ]}
+          >
+            {day}
+          </Text>
+          <Text
+            style={[
+              typography.caption,
+              { color: colors.textTertiary, textTransform: 'uppercase', marginTop: 2 },
+            ]}
+          >
+            {weekday}
+          </Text>
+        </View>
+
+        {/* Centre */}
+        <View style={styles.centerCol}>
+          <Text
+            style={[
+              typography.body,
+              { color: colors.textPrimary, fontFamily: font.bold },
+            ]}
+            numberOfLines={1}
+          >
+            {item.title ?? '—'}
+          </Text>
+          <Text
+            style={[typography.caption, { color: colors.textSecondary, marginTop: 2 }]}
+            numberOfLines={1}
+          >
+            {subtitleParts.join(' · ')}
+          </Text>
+        </View>
+
+        {/* Right : icône PR + volume + chevron */}
+        <View style={styles.rightCol}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            {item.pr_seance === 'gold' && (
+              <Trophy size={14} color={colors.prGold} />
+            )}
+            {item.pr_seance === 'silver' && (
+              <Trophy size={14} color={colors.prSilver} />
+            )}
+            {item.pr_seance === 'bronze' && (
+              <Trophy size={14} color={colors.prBronze} />
+            )}
+            <Text
+              style={[
+                typography.body,
+                {
+                  color: colors.textPrimary,
+                  fontFamily: font.bold,
+                  fontVariant: ['tabular-nums'],
+                  fontSize: 14,
+                },
+              ]}
+            >
+              {volumeStr}{' '}
+              <Text
+                style={{
+                  fontFamily: font.regular,
+                  color: colors.textSecondary,
+                  fontSize: 12,
+                }}
+              >
+                kg
+              </Text>
+            </Text>
+          </View>
+          <ChevronRight size={14} color={colors.textTertiary} style={{ marginTop: 2 }} />
+        </View>
+      </View>
+    </TouchableOpacity>
+  )
+}
+
 // ─── Screen ──────────────────────────────────────────────────────────────────
 
 export default function ProfileScreen(): React.JSX.Element {
@@ -60,6 +259,10 @@ export default function ProfileScreen(): React.JSX.Element {
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [stats, setStats] = useState<MonthStats>({ seances: 0, volumeKg: 0, streakSemaines: 0 })
   const [topPRs, setTopPRs] = useState<TopPR[]>([])
+  const [followers, setFollowers] = useState<number>(0)
+  const [follows, setFollows] = useState<number>(0)
+  const [sparklineData, setSparklineData] = useState<SparklineData[]>([])
+  const [historySections, setHistorySections] = useState<HistorySection[]>([])
   const [loading, setLoading] = useState<boolean>(true)
   const [deconnexionLoading, setDeconnexionLoading] = useState<boolean>(false)
 
@@ -72,9 +275,10 @@ export default function ProfileScreen(): React.JSX.Element {
       return
     }
 
+    // Profile data
     const { data: profileData } = await supabase
       .from('users')
-      .select('id, username, full_name, plan, avatar_url')
+      .select('id, username, full_name, plan, avatar_url, created_at')
       .eq('id', user.id)
       .single()
 
@@ -97,7 +301,7 @@ export default function ProfileScreen(): React.JSX.Element {
     const seances = workoutsData?.length ?? 0
     const volumeKg = workoutsData?.reduce((sum, w) => sum + (w.total_volume_kg ?? 0), 0) ?? 0
 
-    // Streak semaines : workout_metrics.data.streak_semaines depuis la dernière séance
+    // Streak semaines
     let streakSemaines = 0
     if (workoutsData && workoutsData.length > 0) {
       const { data: metricsData } = await supabase
@@ -114,11 +318,25 @@ export default function ProfileScreen(): React.JSX.Element {
 
     setStats({ seances, volumeKg, streakSemaines })
 
-    // Top PRs — 3 records charge les plus récents
+    // Followers / Follows counts
+    const { data: followerData } = await supabase
+      .from('follows')
+      .select('id', { count: 'exact' })
+      .eq('following_id', user.id)
+
+    const { data: followingData } = await supabase
+      .from('follows')
+      .select('id', { count: 'exact' })
+      .eq('follower_id', user.id)
+
+    setFollowers(followerData?.length ?? 0)
+    setFollows(followingData?.length ?? 0)
+
+    // Top 3 PRs charge
     const { data: setsData } = await supabase
       .from('workout_sets')
       .select(`
-        id, weight_kg, reps, pr_charge, pr_serie,
+        weight_kg, pr_charge,
         workout_exercises!inner(
           exercise_id,
           exercises!inner(name_fr)
@@ -132,7 +350,6 @@ export default function ProfileScreen(): React.JSX.Element {
     if (setsData) {
       type SetsRow = {
         weight_kg: number | null
-        reps: number | null
         pr_charge: string | null
         workout_exercises: {
           exercise_id: string
@@ -151,13 +368,76 @@ export default function ProfileScreen(): React.JSX.Element {
           const ex = Array.isArray(exRaw) ? exRaw[0] : exRaw
           return {
             exerciseName: ex.name_fr,
-            prType: 'charge' as const,
             value: s.weight_kg ?? 0,
-            unit: 'kg',
             level: (s.pr_charge ?? 'bronze') as 'gold' | 'silver' | 'bronze',
           }
         })
       setTopPRs(prs)
+    }
+
+    // Sparkline : 8 dernières séances volumes
+    const { data: last8 } = await supabase
+      .from('workouts')
+      .select('total_volume_kg, started_at')
+      .eq('user_id', user.id)
+      .order('started_at', { ascending: false })
+      .limit(8)
+
+    if (last8) {
+      setSparklineData(
+        last8
+          .reverse()
+          .map(w => ({
+            volume: w.total_volume_kg ?? 0,
+            date: new Date(w.started_at).toLocaleDateString('fr-FR', { day: 'numeric' }),
+          }))
+      )
+    }
+
+    // Historique 50 dernières séances
+    const { data: historyData } = await supabase
+      .from('workouts')
+      .select(`
+        id,
+        title,
+        started_at,
+        duration_sec,
+        total_volume_kg,
+        pr_seance,
+        workout_exercises (
+          workout_sets ( id )
+        )
+      `)
+      .eq('user_id', user.id)
+      .order('started_at', { ascending: false })
+      .limit(50)
+
+    if (historyData) {
+      const rows: WorkoutRow[] = (historyData as Array<{
+        id: string
+        title: string
+        started_at: string
+        duration_sec: number | null
+        total_volume_kg: number | null
+        pr_seance: 'gold' | 'silver' | 'bronze' | null
+        workout_exercises: Array<{ workout_sets: Array<{ id: string }> }>
+      }>).map(w => {
+        const totalSets = w.workout_exercises.reduce(
+          (acc, ex) => acc + ex.workout_sets.length,
+          0
+        )
+        return {
+          id: w.id,
+          title: w.title ?? '—',
+          started_at: w.started_at,
+          duration_sec: w.duration_sec,
+          total_volume_kg: w.total_volume_kg,
+          total_sets: totalSets,
+          pr_seance: w.pr_seance,
+        }
+      })
+
+      setHistorySections(groupByMonth(rows))
     }
 
     setLoading(false)
@@ -174,15 +454,15 @@ export default function ProfileScreen(): React.JSX.Element {
     router.replace('/auth/login')
   }
 
-  // ── Styles ────────────────────────────────────────────────────────────────
+  // ── Render ────────────────────────────────────────────────────────────────
 
   const s = buildStyles(colors)
 
   if (loading) {
     return (
-      <View style={s.loader}>
+      <SafeAreaView style={[s.container, s.loader]} edges={['top']}>
         <ActivityIndicator color={colors.accent} size="large" />
-      </View>
+      </SafeAreaView>
     )
   }
 
@@ -191,135 +471,172 @@ export default function ProfileScreen(): React.JSX.Element {
   const isPro = profile?.plan === 'premium'
 
   return (
-    <View style={s.container}>
-      <ScrollView
-        style={s.scroll}
-        contentContainerStyle={s.scrollContent}
+    <SafeAreaView style={[s.container]} edges={['top']}>
+      <SectionList
+        sections={historySections}
+        keyExtractor={item => item.id}
+        scrollEnabled
         showsVerticalScrollIndicator={false}
-      >
-        {/* ── Avatar + Nom ── */}
-        <View style={s.headerSection}>
-          <View style={s.avatarCircle}>
-            <Text style={s.avatarLetter}>{initiale}</Text>
-          </View>
+        ListHeaderComponent={() => (
+          <View style={s.headerContainer}>
+            {/* Avatar + Nom */}
+            <View style={s.headerSection}>
+              <View style={s.avatarCircle}>
+                <Text style={s.avatarLetter}>{initiale}</Text>
+              </View>
 
-          <Text style={s.username}>{displayName}</Text>
+              <Text style={s.username}>{displayName}</Text>
 
-          {isPro && (
-            <View style={s.proBadge}>
-              <Text style={s.proBadgeText}>PRO</Text>
+              {isPro && (
+                <View style={s.proBadge}>
+                  <Text style={s.proBadgeText}>PRO</Text>
+                </View>
+              )}
+
+              <Pressable
+                style={({ pressed }) => [s.editBtn, pressed && { opacity: 0.7 }]}
+                onPress={() => router.push('/edit-profile')}
+              >
+                <Text style={s.editBtnText}>Modifier</Text>
+              </Pressable>
             </View>
-          )}
-        </View>
 
-        {/* ── Hero Stats ── */}
-        <View style={s.statsCard}>
-          {/* Séances */}
-          <View style={s.statCol}>
-            <Text
-              style={s.statValueSide}
-              accessibilityLabel={`${stats.seances} séances ce mois`}
-            >
-              {stats.seances}
-            </Text>
-            <Text style={s.statLabel}>SÉANCES</Text>
-          </View>
+            {/* Stats row */}
+            <View style={s.statsCard}>
+              <View style={s.statCol}>
+                <Text style={s.statValueSide}>{stats.seances}</Text>
+                <Text style={s.statLabel}>SÉANCES</Text>
+              </View>
+              <View style={s.statSep} />
+              <View style={s.statColCenter}>
+                <Text style={s.statValueHero}>{formatVolume(stats.volumeKg)}</Text>
+                <Text style={[s.statLabel, s.statLabelAccent]}>KG CE MOIS</Text>
+              </View>
+              <View style={s.statSep} />
+              <View style={s.statCol}>
+                <Text style={s.statValueSide}>{stats.streakSemaines}</Text>
+                <Text style={s.statLabel}>STREAK SEM.</Text>
+              </View>
+            </View>
 
-          <View style={s.statSep} />
+            {/* Followers */}
+            <View style={s.followersRow}>
+              <Pressable style={s.followerCol}>
+                <Text style={s.followerValue}>{followers}</Text>
+                <Text style={s.followerLabel}>FOLLOWERS</Text>
+              </Pressable>
+              <Pressable style={s.followerCol}>
+                <Text style={s.followerValue}>{follows}</Text>
+                <Text style={s.followerLabel}>FOLLOWS</Text>
+              </Pressable>
+            </View>
 
-          {/* Volume — hero centré accent, formatVolume pour espace milliers */}
-          <View style={s.statColCenter}>
-            <Text
-              style={s.statValueHero}
-              accessibilityLabel={`${formatVolume(stats.volumeKg)} kilogrammes ce mois`}
-            >
-              {formatVolume(stats.volumeKg)}
-            </Text>
-            <Text style={[s.statLabel, s.statLabelAccent]}>KG CE MOIS</Text>
-          </View>
+            {/* Sparkline */}
+            <View style={s.sparklineSection}>
+              <Text style={s.sparklineTitle}>8 DERNIÈRES SÉANCES</Text>
+              <SparklineRow data={sparklineData} colors={colors} />
+            </View>
 
-          <View style={s.statSep} />
-
-          {/* Streak */}
-          <View style={s.statCol}>
-            <Text
-              style={s.statValueSide}
-              accessibilityLabel={`${stats.streakSemaines} semaines de streak`}
-            >
-              {stats.streakSemaines}
-            </Text>
-            <Text style={s.statLabel}>STREAK SEM.</Text>
-          </View>
-        </View>
-
-        {/* ── PRs ── */}
-        <View style={s.section}>
-          <Text style={s.sectionTitle}>MES PRs</Text>
-
-          {topPRs.length === 0 ? (
-            <Text style={s.emptyText}>Aucun record encore. Lance une séance !</Text>
-          ) : (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={s.prsScrollContent}
-              style={s.prsScroll}
-            >
-              {topPRs.map((pr, idx) => {
-                const isPrGold = pr.level === 'gold'
-
-                return (
-                  <View key={idx} style={s.prCard}>
-                    {/* Icône PR en haut à droite */}
-                    <View style={s.prIconRow}>
-                      <Text style={s.prExercise} numberOfLines={2}>
-                        {pr.exerciseName.toUpperCase()}
+            {/* PRs */}
+            <View style={s.prsSection}>
+              <Text style={s.prsTitle}>MES PRs</Text>
+              {topPRs.length === 0 ? (
+                <Text style={s.emptyText}>Aucun record encore. Lance une séance !</Text>
+              ) : (
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={s.prsScrollContent}
+                >
+                  {topPRs.map((pr, idx) => (
+                    <View key={idx} style={s.prCard}>
+                      <View style={s.prIconRow}>
+                        <Text style={s.prExercise} numberOfLines={2}>
+                          {pr.exerciseName.toUpperCase()}
+                        </Text>
+                        {pr.level === 'gold' ? (
+                          <Zap size={14} color={colors.prGold} fill={colors.prGold} strokeWidth={0} />
+                        ) : (
+                          <Flame size={14} color={colors.accent} fill={colors.accent} strokeWidth={0} />
+                        )}
+                      </View>
+                      <Text style={s.prValue}>
+                        {pr.value}
+                        <Text style={s.prUnit}> kg</Text>
                       </Text>
-                      {isPrGold ? (
-                        <Zap size={14} color={colors.prGold} fill={colors.prGold} strokeWidth={0} />
-                      ) : (
-                        <Flame size={14} color={colors.accent} fill={colors.accent} strokeWidth={0} />
-                      )}
                     </View>
-                    <Text style={s.prValue} accessibilityLabel={`${pr.value} ${pr.unit}`}>
-                      {pr.value}{' '}
-                      <Text style={s.prUnit}>{pr.unit}</Text>
-                    </Text>
-                  </View>
-                )
-              })}
-            </ScrollView>
-          )}
+                  ))}
+                </ScrollView>
+              )}
+              <Pressable
+                style={({ pressed }) => [s.armurerieBtn, pressed && { opacity: 0.7 }]}
+                onPress={() => router.push('/prs')}
+              >
+                <Text style={s.armurerieBtnText}>Voir l'Armurerie →</Text>
+              </Pressable>
+            </View>
 
-          {/* Voir l'Armurerie */}
-          <Pressable
-            style={({ pressed }) => [s.armurerieBtn, pressed && { opacity: 0.7 }]}
-            onPress={() => router.push('/prs')}
-            accessibilityRole="button"
-            accessibilityLabel="Voir l&apos;Armurerie"
-          >
-            <Text style={s.armurerieBtnText}>Voir l&apos;Armurerie →</Text>
-          </Pressable>
-        </View>
+            {/* Menus footer */}
+            <View style={s.footerMenus}>
+              <Pressable
+                style={({ pressed }) => [s.menuItem, pressed && { opacity: 0.7 }]}
+                onPress={() => router.push('/prs')}
+              >
+                <Text style={s.menuItemText}>Armurerie</Text>
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [s.menuItem, pressed && { opacity: 0.7 }]}
+                onPress={() => router.push('/analytics')}
+              >
+                <Text style={s.menuItemText}>Analytics</Text>
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [s.menuItem, pressed && { opacity: 0.7 }]}
+                onPress={() => router.push('/settings')}
+              >
+                <Text style={s.menuItemText}>Paramètres</Text>
+              </Pressable>
+            </View>
 
-        <View style={s.bottomSpacer} />
-      </ScrollView>
-
-      {/* ── Déconnexion ── */}
-      <Pressable
-        style={({ pressed }) => [s.deconnexionBtn, pressed && { opacity: 0.6 }]}
-        onPress={() => void seDeconnecter()}
-        disabled={deconnexionLoading}
-        accessibilityRole="button"
-        accessibilityLabel="Se déconnecter"
-      >
-        {deconnexionLoading ? (
-          <ActivityIndicator color={colors.textTertiary} size="small" />
-        ) : (
-          <Text style={s.deconnexionText}>Déconnexion</Text>
+            {/* Historique title */}
+            <Text style={[s.sectionTitle, { marginTop: spacing.s8, marginBottom: spacing.s4 }]}>
+              HISTORIQUE
+            </Text>
+          </View>
         )}
-      </Pressable>
-    </View>
+        ListHeaderComponentStyle={s.headerContent}
+        contentContainerStyle={s.contentContainer}
+        renderSectionHeader={({ section }) => (
+          <Text style={s.sectionHeader}>
+            {section.title}
+          </Text>
+        )}
+        renderItem={({ item }) => (
+          <HistoryRowInProfile
+            item={item}
+            onPress={() => router.push(`/history/${item.id}` as const)}
+            colors={colors}
+          />
+        )}
+        ItemSeparatorComponent={() => null}
+        SectionSeparatorComponent={() => null}
+        ListFooterComponent={() => (
+          <View style={s.footerContainer}>
+            <Pressable
+              style={({ pressed }) => [s.deconnexionBtn, pressed && { opacity: 0.6 }]}
+              onPress={() => void seDeconnecter()}
+              disabled={deconnexionLoading}
+            >
+              {deconnexionLoading ? (
+                <ActivityIndicator color={colors.textTertiary} size="small" />
+              ) : (
+                <Text style={s.deconnexionText}>Déconnexion</Text>
+              )}
+            </Pressable>
+          </View>
+        )}
+      />
+    </SafeAreaView>
   )
 }
 
@@ -333,59 +650,70 @@ function buildStyles(colors: ReturnType<typeof useTheme>['colors']) {
       backgroundColor: colors.background,
     },
     loader: {
-      flex: 1,
-      backgroundColor: colors.background,
       alignItems: 'center',
       justifyContent: 'center',
     },
-    scroll: {
-      flex: 1,
+    headerContent: {},
+    contentContainer: {
+      paddingHorizontal: spacing.s5,
     },
-    scrollContent: {
-      paddingTop: 64,
-      paddingBottom: spacing.s12,
+    headerContainer: {
+      paddingHorizontal: spacing.s5,
+      paddingTop: spacing.s6,
+      paddingBottom: spacing.s2,
     },
 
-    // ── Header avatar ──
+    // ── Avatar section ──
     headerSection: {
       alignItems: 'center',
-      marginTop: spacing.s6,
       marginBottom: spacing.s6,
-      paddingHorizontal: spacing.s4,
     },
     avatarCircle: {
-      width: 64,
-      height: 64,
-      borderRadius: 32,
+      width: 80,
+      height: 80,
+      borderRadius: 40,
       backgroundColor: colors.accent,
       alignItems: 'center',
       justifyContent: 'center',
-      marginBottom: spacing.s2,
+      marginBottom: spacing.s3,
     },
     avatarLetter: {
-      ...typography.title,
+      ...typography.display,
       fontFamily: font.black,
       color: colors.background,
     },
     username: {
       ...typography.body,
-      color: colors.textSecondary,
+      color: colors.textPrimary,
       marginBottom: spacing.s2,
+      fontFamily: font.bold,
     },
     proBadge: {
       backgroundColor: colors.accent,
       borderRadius: radius.full,
-      height: 24,
+      height: 28,
       paddingHorizontal: spacing.s3,
       alignItems: 'center',
       justifyContent: 'center',
       marginTop: spacing.s2,
+      marginBottom: spacing.s3,
     },
     proBadgeText: {
       ...typography.caption,
       fontFamily: font.bold,
       color: colors.background,
       letterSpacing: 1,
+    },
+    editBtn: {
+      paddingVertical: spacing.s2,
+      paddingHorizontal: spacing.s4,
+      minHeight: 44,
+      justifyContent: 'center',
+    },
+    editBtnText: {
+      ...typography.body,
+      color: colors.textSecondary,
+      textDecorationLine: 'underline',
     },
 
     // ── Stats card ──
@@ -395,9 +723,7 @@ function buildStyles(colors: ReturnType<typeof useTheme>['colors']) {
       borderRadius: radius.lg,
       paddingVertical: spacing.s5,
       paddingHorizontal: spacing.s4,
-      marginTop: spacing.s6,
       marginBottom: spacing.s6,
-      marginHorizontal: spacing.s4,
       alignItems: 'center',
     },
     statCol: {
@@ -413,13 +739,11 @@ function buildStyles(colors: ReturnType<typeof useTheme>['colors']) {
       height: 48,
       backgroundColor: colors.separator,
     },
-    // colonnes latérales — typography.display (40px) blanc
     statValueSide: {
       ...typography.display,
       color: colors.textPrimary,
       fontVariant: ['tabular-nums'],
     },
-    // colonne centrale — typography.hero (56px) accent
     statValueHero: {
       ...typography.hero,
       color: colors.accent,
@@ -436,12 +760,50 @@ function buildStyles(colors: ReturnType<typeof useTheme>['colors']) {
       color: colors.accent,
     },
 
-    // ── Section PRs ──
-    section: {
-      marginBottom: spacing.s8,
-      paddingHorizontal: spacing.s4,
+    // ── Followers ──
+    followersRow: {
+      flexDirection: 'row',
+      gap: spacing.s4,
+      marginBottom: spacing.s6,
     },
-    sectionTitle: {
+    followerCol: {
+      flex: 1,
+      alignItems: 'center',
+      padding: spacing.s4,
+      backgroundColor: colors.backgroundSecondary,
+      borderRadius: radius.md,
+      minHeight: 60,
+      justifyContent: 'center',
+    },
+    followerValue: {
+      ...typography.display,
+      color: colors.textPrimary,
+      fontVariant: ['tabular-nums'],
+    },
+    followerLabel: {
+      ...typography.caption,
+      color: colors.textTertiary,
+      textTransform: 'uppercase',
+      marginTop: spacing.s1,
+    },
+
+    // ── Sparkline ──
+    sparklineSection: {
+      marginBottom: spacing.s6,
+    },
+    sparklineTitle: {
+      ...typography.caption,
+      color: colors.textTertiary,
+      textTransform: 'uppercase',
+      letterSpacing: 1,
+      marginBottom: spacing.s3,
+    },
+
+    // ── PRs ──
+    prsSection: {
+      marginBottom: spacing.s6,
+    },
+    prsTitle: {
       ...typography.subtitle,
       color: colors.textPrimary,
       marginBottom: spacing.s4,
@@ -449,13 +811,11 @@ function buildStyles(colors: ReturnType<typeof useTheme>['colors']) {
     emptyText: {
       ...typography.body,
       color: colors.textSecondary,
-    },
-    prsScroll: {
-      marginBottom: spacing.s3,
+      marginBottom: spacing.s4,
     },
     prsScrollContent: {
       gap: spacing.s3,
-      paddingRight: spacing.s4,
+      paddingRight: spacing.s5,
     },
     prCard: {
       minWidth: 140,
@@ -488,8 +848,6 @@ function buildStyles(colors: ReturnType<typeof useTheme>['colors']) {
       fontFamily: font.regular,
       color: colors.textPrimary,
     },
-
-    // ── Armurerie ──
     armurerieBtn: {
       alignSelf: 'center',
       paddingVertical: spacing.s2,
@@ -502,15 +860,48 @@ function buildStyles(colors: ReturnType<typeof useTheme>['colors']) {
       color: colors.accent,
     },
 
-    bottomSpacer: {
-      height: spacing.s12,
+    // ── Footer menus ──
+    footerMenus: {
+      flexDirection: 'row',
+      gap: spacing.s3,
+      marginTop: spacing.s6,
+      marginBottom: spacing.s6,
+    },
+    menuItem: {
+      flex: 1,
+      alignItems: 'center',
+      paddingVertical: spacing.s3,
+      minHeight: 44,
+      justifyContent: 'center',
+    },
+    menuItemText: {
+      ...typography.body,
+      color: colors.textSecondary,
+      fontSize: 13,
+    },
+
+    // ── Historique ──
+    sectionTitle: {
+      ...typography.subtitle,
+      color: colors.textPrimary,
+    },
+    sectionHeader: {
+      ...typography.caption,
+      color: colors.textTertiary,
+      textTransform: 'uppercase',
+      letterSpacing: 1,
+      paddingTop: spacing.s6,
+      paddingBottom: spacing.s3,
     },
 
     // ── Déconnexion ──
+    footerContainer: {
+      paddingVertical: spacing.s6,
+      alignItems: 'center',
+    },
     deconnexionBtn: {
       alignItems: 'center',
       paddingVertical: spacing.s5,
-      paddingBottom: spacing.s8,
       minHeight: 44,
       justifyContent: 'center',
     },
@@ -520,3 +911,32 @@ function buildStyles(colors: ReturnType<typeof useTheme>['colors']) {
     },
   })
 }
+
+const styles = StyleSheet.create({
+  card: {
+    borderRadius: radius.md,
+    overflow: 'hidden',
+  },
+  cardInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.s4,
+    paddingVertical: spacing.s4,
+    gap: spacing.s3,
+  },
+  dateBlock: {
+    width: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  centerCol: {
+    flex: 1,
+    minWidth: 0,
+  },
+  rightCol: {
+    alignItems: 'flex-end',
+    flexShrink: 0,
+    gap: 2,
+  },
+})

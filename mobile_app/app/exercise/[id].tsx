@@ -8,7 +8,7 @@ import {
   ActivityIndicator,
 } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { ChevronLeft, Zap, Flame } from 'lucide-react-native'
+import { ChevronLeft, Zap, Flame, Image as ImageIcon } from 'lucide-react-native'
 import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/context/ThemeContext'
 import { spacing, radius, typography, font } from '@/constants/theme'
@@ -295,6 +295,16 @@ export default function ExerciseDetailScreen(): React.JSX.Element {
           <View style={s.backBtnPlaceholder} />
         </View>
 
+        {/* ── Visuel placeholder ── */}
+        <View style={s.section}>
+          <View style={[s.visualPlaceholder, { backgroundColor: colors.backgroundSecondary }]}>
+            <ImageIcon size={32} color={colors.textTertiary} />
+            <Text style={[s.visualPlaceholderText, { color: colors.textTertiary }]}>
+              Visuel à venir
+            </Text>
+          </View>
+        </View>
+
         {/* ── Muscles ── */}
         {muscles.length > 0 && (
           <View style={s.section}>
@@ -304,17 +314,28 @@ export default function ExerciseDetailScreen(): React.JSX.Element {
               <View style={s.muscleGroup}>
                 <Text style={s.muscleGroupLabel}>PRIMARY</Text>
                 {primaryMuscles.map((m, idx) => (
-                  <View key={idx} style={s.muscleRow}>
-                    <View style={[s.muscleDot, { backgroundColor: colors.accent }]} />
-                    <Text style={[s.muscleName, { color: colors.textPrimary }]} numberOfLines={1}>
-                      {muscleName(m)}
-                    </Text>
-                    <Text
-                      style={[s.musclePct, { color: colors.accent }]}
-                      accessibilityLabel={`${m.activation_pct} pourcent`}
-                    >
-                      {m.activation_pct}%
-                    </Text>
+                  <View key={idx} style={{ gap: spacing.s1 }}>
+                    <View style={s.muscleRow}>
+                      <View style={[s.muscleDot, { backgroundColor: colors.accent }]} />
+                      <Text style={[s.muscleName, { color: colors.textPrimary }]} numberOfLines={1}>
+                        {muscleName(m)}
+                      </Text>
+                      <Text
+                        style={[s.musclePct, { color: colors.accent }]}
+                        accessibilityLabel={`${m.activation_pct} pourcent`}
+                      >
+                        {m.activation_pct}%
+                      </Text>
+                    </View>
+                    <View
+                      style={{
+                        height: 3,
+                        borderRadius: 2,
+                        backgroundColor: colors.accent,
+                        width: `${m.activation_pct}%`,
+                        marginLeft: spacing.s4,
+                      }}
+                    />
                   </View>
                 ))}
               </View>
@@ -324,17 +345,28 @@ export default function ExerciseDetailScreen(): React.JSX.Element {
               <View style={[s.muscleGroup, s.muscleGroupGap]}>
                 <Text style={s.muscleGroupLabel}>SECONDARY</Text>
                 {secondaryMuscles.map((m, idx) => (
-                  <View key={idx} style={s.muscleRow}>
-                    <View style={[s.muscleDot, { backgroundColor: DOT_SECONDARY }]} />
-                    <Text style={[s.muscleName, { color: colors.textPrimary }]} numberOfLines={1}>
-                      {muscleName(m)}
-                    </Text>
-                    <Text
-                      style={[s.musclePct, { color: colors.accent }]}
-                      accessibilityLabel={`${m.activation_pct} pourcent`}
-                    >
-                      {m.activation_pct}%
-                    </Text>
+                  <View key={idx} style={{ gap: spacing.s1 }}>
+                    <View style={s.muscleRow}>
+                      <View style={[s.muscleDot, { backgroundColor: DOT_SECONDARY }]} />
+                      <Text style={[s.muscleName, { color: colors.textPrimary }]} numberOfLines={1}>
+                        {muscleName(m)}
+                      </Text>
+                      <Text
+                        style={[s.musclePct, { color: colors.accent }]}
+                        accessibilityLabel={`${m.activation_pct} pourcent`}
+                      >
+                        {m.activation_pct}%
+                      </Text>
+                    </View>
+                    <View
+                      style={{
+                        height: 3,
+                        borderRadius: 2,
+                        backgroundColor: DOT_SECONDARY,
+                        width: `${m.activation_pct}%`,
+                        marginLeft: spacing.s4,
+                      }}
+                    />
                   </View>
                 ))}
               </View>
@@ -344,17 +376,28 @@ export default function ExerciseDetailScreen(): React.JSX.Element {
               <View style={[s.muscleGroup, s.muscleGroupGap]}>
                 <Text style={s.muscleGroupLabel}>STABILIZER</Text>
                 {stabilizerMuscles.map((m, idx) => (
-                  <View key={idx} style={s.muscleRow}>
-                    <View style={[s.muscleDot, { backgroundColor: colors.textTertiary }]} />
-                    <Text style={[s.muscleName, { color: colors.textSecondary }]} numberOfLines={1}>
-                      {muscleName(m)}
-                    </Text>
-                    <Text
-                      style={[s.musclePct, { color: colors.textTertiary }]}
-                      accessibilityLabel={`${m.activation_pct} pourcent`}
-                    >
-                      {m.activation_pct}%
-                    </Text>
+                  <View key={idx} style={{ gap: spacing.s1 }}>
+                    <View style={s.muscleRow}>
+                      <View style={[s.muscleDot, { backgroundColor: colors.textTertiary }]} />
+                      <Text style={[s.muscleName, { color: colors.textSecondary }]} numberOfLines={1}>
+                        {muscleName(m)}
+                      </Text>
+                      <Text
+                        style={[s.musclePct, { color: colors.textTertiary }]}
+                        accessibilityLabel={`${m.activation_pct} pourcent`}
+                      >
+                        {m.activation_pct}%
+                      </Text>
+                    </View>
+                    <View
+                      style={{
+                        height: 3,
+                        borderRadius: 2,
+                        backgroundColor: colors.textTertiary,
+                        width: `${m.activation_pct}%`,
+                        marginLeft: spacing.s4,
+                      }}
+                    />
                   </View>
                 ))}
               </View>
@@ -510,6 +553,19 @@ function buildStyles(colors: ReturnType<typeof useTheme>['colors']) {
       color: colors.textPrimary,
       textTransform: 'uppercase',
       marginBottom: spacing.s4,
+    },
+
+    // Visual Placeholder
+    visualPlaceholder: {
+      height: 180,
+      borderRadius: radius.lg,
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: spacing.s3,
+    },
+    visualPlaceholderText: {
+      ...typography.body,
+      fontFamily: font.bold,
     },
 
     // Muscles
