@@ -1,30 +1,27 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import {
   View,
   Text,
   Pressable,
   StyleSheet,
   SafeAreaView,
+  ActivityIndicator,
 } from 'react-native'
 import { useRouter } from 'expo-router'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { CheckCircle } from 'lucide-react-native'
 import { useTheme } from '@/context/ThemeContext'
+import { useWorkout } from '@/context/WorkoutContext'
 import { spacing, radius, typography } from '@/constants/theme'
+import { supabase } from '@/lib/supabase'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-interface ExercicePresentSelection {
+interface ExerciceDB {
   id: string
-  nomFr: string
-  groupeMusculaire: string
-}
-
-// ─── Constante exercice pré-sélectionné ──────────────────────────────────────
-
-const EXERCICE_DEFAUT: ExercicePresentSelection = {
-  id: 'developpe-couche',
-  nomFr: 'Développé Couché',
-  groupeMusculaire: 'Pectoraux',
+  name_fr: string
+  muscle_group: string | null
+  equipment_type: string | null
 }
 
 // ─── Dots progression ────────────────────────────────────────────────────────
@@ -33,39 +30,15 @@ function DotsProgression({ actif }: { actif: 0 | 1 }): React.JSX.Element {
   const { colors } = useTheme()
   return (
     <View style={dotsStyles.conteneur}>
-      <View
-        style={[
-          dotsStyles.point,
-          {
-            width: actif === 0 ? 8 : 6,
-            height: actif === 0 ? 8 : 6,
-            backgroundColor: actif === 0 ? colors.accent : colors.textTertiary,
-          },
-        ]}
-      />
-      <View
-        style={[
-          dotsStyles.point,
-          {
-            width: actif === 1 ? 8 : 6,
-            height: actif === 1 ? 8 : 6,
-            backgroundColor: actif === 1 ? colors.accent : colors.textTertiary,
-          },
-        ]}
-      />
+      <View style={[dotsStyles.point, { width: actif === 0 ? 8 : 6, height: actif === 0 ? 8 : 6, backgroundColor: actif === 0 ? colors.accent : colors.textTertiary }]} />
+      <View style={[dotsStyles.point, { width: actif === 1 ? 8 : 6, height: actif === 1 ? 8 : 6, backgroundColor: actif === 1 ? colors.accent : colors.textTertiary }]} />
     </View>
   )
 }
 
 const dotsStyles = StyleSheet.create({
-  conteneur: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  point: {
-    borderRadius: 9999,
-  },
+  conteneur: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  point: { borderRadius: 9999 },
 })
 
 // ─── Screen ──────────────────────────────────────────────────────────────────
@@ -73,10 +46,56 @@ const dotsStyles = StyleSheet.create({
 export default function OnboardingFirstSetScreen(): React.JSX.Element {
   const { colors } = useTheme()
   const router = useRouter()
+  const { startWorkout, addExercise } = useWorkout()
+  const [exercise, setExercise] = useState<ExerciceDB | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [starting, setStarting] = useState(false)
   const styles = buildStyles(colors)
 
-  function allerVersSession(): void {
-    router.replace('/(tabs)/feed')
+  // Fetch "Développé Couché" (ou premier exo pectoraux si absent)
+  useEffect(() => {
+    async function fetchExercise(): Promise<void> {
+      try {
+        const { data } = await supabase
+          .from('exercises')
+          .select('id, name_fr, muscle_group, equipment_type')
+          .or("name_fr.ilike.développé couché,name_en.ilike.bench press")
+          .limit(1)
+          .single()
+        if (data) {
+          setExercise(data as ExerciceDB)
+          return
+        }
+        // Fallback : premier exercice pectoraux
+        const { data: fallback } = await supabase
+          .from('exercises')
+          .select('id, name_fr, muscle_group, equipment_type')
+          .eq('muscle_group', 'pectoraux')
+          .limit(1)
+          .single()
+        if (fallback) setExercise(fallback as ExerciceDB)
+      } catch {
+        // Silent — card shows "Séance libre"
+      } finally {
+        setLoading(false)
+      }
+    }
+    void fetchExercise()
+  }, [])
+
+  async function allerVersSession(): Promise<void> {
+    if (starting) return
+    setStarting(true)
+    try {
+      await AsyncStorage.setItem('onboarding_done', 'true')
+      startWorkout()
+      if (exercise) {
+        await addExercise(exercise.id, exercise.name_fr, exercise.muscle_group, exercise.equipment_type)
+      }
+      router.replace('/workout/session')
+    } catch {
+      router.replace('/workout/session')
+    }
   }
 
   return (
@@ -85,40 +104,47 @@ export default function OnboardingFirstSetScreen(): React.JSX.Element {
       <View style={styles.header}>
         <Text style={styles.titre}>Ta première série</Text>
         <Text style={styles.sousTitre}>
-          Sélectionne un exercice pour commencer.
+          Commence avec cet exercice. Tu peux en changer dans la séance.
         </Text>
       </View>
 
-      {/* Card exercice pré-sélectionné */}
+      {/* Card exercice */}
       <View style={styles.zoneCard}>
-        <View style={styles.cardExercice}>
-          <View style={styles.cardInfo}>
-            <Text style={styles.cardNomExercice}>
-              {EXERCICE_DEFAUT.nomFr}
-            </Text>
-            <Text style={styles.cardGroupeMusculaire}>
-              {EXERCICE_DEFAUT.groupeMusculaire}
+        {loading ? (
+          <View style={[styles.cardExercice, styles.cardLoading]}>
+            <ActivityIndicator color={colors.accent} />
+          </View>
+        ) : exercise ? (
+          <View style={styles.cardExercice}>
+            <View style={styles.cardInfo}>
+              <Text style={styles.cardNomExercice}>{exercise.name_fr}</Text>
+              <Text style={styles.cardGroupeMusculaire}>
+                {(exercise.muscle_group ?? '').toUpperCase()}
+              </Text>
+            </View>
+            <View style={styles.cardCheckmark}>
+              <CheckCircle size={24} color={colors.accent} strokeWidth={2} />
+            </View>
+          </View>
+        ) : (
+          <View style={[styles.cardExercice, styles.cardLoading]}>
+            <Text style={[typography.body, { color: colors.textSecondary }]}>
+              Séance libre
             </Text>
           </View>
-          <View style={styles.cardCheckmark}>
-            <CheckCircle
-              size={24}
-              color={colors.accent}
-              strokeWidth={2}
-            />
-          </View>
-        </View>
+        )}
       </View>
 
-      {/* Progression + Actions */}
+      {/* Progression + CTA */}
       <View style={styles.zoneActions}>
         <DotsProgression actif={1} />
 
         <Pressable
-          style={({ pressed }) => [styles.cta, pressed && styles.ctaAppuye]}
-          onPress={allerVersSession}
+          style={({ pressed }) => [styles.cta, pressed && styles.ctaAppuye, starting && styles.ctaAppuye]}
+          onPress={() => void allerVersSession()}
           accessibilityRole="button"
           accessibilityLabel="Logger ma première série"
+          disabled={starting}
         >
           <Text style={styles.ctaTexte}>LOGGER MA 1RE SÉRIE</Text>
         </Pressable>
@@ -160,6 +186,10 @@ function buildStyles(colors: ReturnType<typeof useTheme>['colors']) {
       padding: spacing.s4,
       gap: spacing.s4,
     },
+    cardLoading: {
+      justifyContent: 'center',
+      minHeight: 72,
+    },
     cardInfo: {
       flex: 1,
       gap: spacing.s1,
@@ -171,7 +201,6 @@ function buildStyles(colors: ReturnType<typeof useTheme>['colors']) {
     cardGroupeMusculaire: {
       ...typography.caption,
       color: colors.textSecondary,
-      textTransform: 'uppercase',
       letterSpacing: 0.8,
     },
     cardCheckmark: {

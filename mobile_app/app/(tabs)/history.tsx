@@ -14,11 +14,41 @@ import Animated, {
   Easing,
 } from 'react-native-reanimated'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { ChevronRight, Trophy } from 'lucide-react-native'
+import { ChevronRight, Dumbbell, Flame, Trophy, Zap } from 'lucide-react-native'
 import { useRouter } from 'expo-router'
 import { useTheme } from '@/context/ThemeContext'
 import { spacing, radius, typography } from '@/constants/theme'
+import { emptyStateRecipe, prBadgeRecipe, type PrType } from '@/constants/recipes'
 import { supabase } from '@/lib/supabase'
+
+// ─── PR Badge (unified) ──────────────────────────────────────────────────────
+
+const PR_ICON: Record<PrType, React.ComponentType<{ size?: number; color?: string }>> = {
+  charge:   Zap,
+  serie:    Flame,
+  exercice: Dumbbell,
+  seance:   Trophy,
+}
+
+function PrBadge({
+  level,
+  type,
+  label,
+}: {
+  level: 'gold' | 'silver' | 'bronze'
+  type: PrType
+  label: string
+}) {
+  const { colors } = useTheme()
+  const r = prBadgeRecipe(level, type, colors)
+  const Icon = PR_ICON[type]
+  return (
+    <View style={r.container}>
+      <Icon size={12} color={r.iconColor} />
+      <Text style={r.label}>{label}</Text>
+    </View>
+  )
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -133,7 +163,6 @@ function HistoryRow({ item, onPress }: HistoryRowProps) {
   const weekday = DAYS_FR[d.getDay()]
 
   const volumeStr = formatVolume(item.total_volume_kg)
-  const isGoldPR = item.pr_seance === 'gold'
 
   const subtitleParts = [
     `${item.total_sets} série${item.total_sets > 1 ? 's' : ''}`,
@@ -192,17 +221,17 @@ function HistoryRow({ item, onPress }: HistoryRowProps) {
           </Text>
         </View>
 
-        {/* Right : trophy + volume + chevron */}
+        {/* Right : PR badge + volume + chevron */}
         <View style={styles.rightCol}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             {item.pr_seance != null && (
-              <Trophy size={14} color={colors.prGold} />
+              <PrBadge level={item.pr_seance} type="seance" label="Séance" />
             )}
             <Text
               style={[
                 typography.body,
                 {
-                  color: isGoldPR ? colors.accent : colors.textPrimary,
+                  color: colors.textPrimary,
                   fontFamily: 'Barlow_700Bold',
                   fontVariant: ['tabular-nums'],
                   fontSize: 14,
@@ -225,6 +254,30 @@ function HistoryRow({ item, onPress }: HistoryRowProps) {
         </View>
       </View>
     </TouchableOpacity>
+  )
+}
+
+// ─── Empty state ──────────────────────────────────────────────────────────────
+
+function HistoryEmptyState() {
+  const { colors } = useTheme()
+  const router = useRouter()
+  const s = emptyStateRecipe('history', colors)
+  return (
+    <View style={s.container}>
+      <View style={s.icon}>
+        <Dumbbell size={28} color={colors.textTertiary} />
+      </View>
+      <Text style={s.title}>Aucune séance encore.</Text>
+      <Text style={s.subtitle}>Lance ta première séance.</Text>
+      <TouchableOpacity
+        activeOpacity={0.85}
+        onPress={() => router.push('/workout/session')}
+        style={s.cta}
+      >
+        <Text style={s.ctaLabel}>Commencer</Text>
+      </TouchableOpacity>
+    </View>
   )
 }
 
@@ -348,26 +401,7 @@ export default function HistoryScreen() {
           )}
           ItemSeparatorComponent={() => null}
           SectionSeparatorComponent={() => null}
-          ListEmptyComponent={() => (
-            <View style={styles.empty}>
-              <Text
-                style={[
-                  typography.subtitle,
-                  { color: colors.textSecondary, textAlign: 'center' },
-                ]}
-              >
-                Aucune séance enregistrée.
-              </Text>
-              <Text
-                style={[
-                  typography.caption,
-                  { color: colors.textTertiary, textAlign: 'center', marginTop: spacing.s2 },
-                ]}
-              >
-                Lance ta première séance avec le bouton +
-              </Text>
-            </View>
-          )}
+          ListEmptyComponent={() => <HistoryEmptyState />}
           showsVerticalScrollIndicator={false}
           stickySectionHeadersEnabled={false}
         />
@@ -407,10 +441,5 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     flexShrink: 0,
     gap: 2,
-  },
-  empty: {
-    paddingTop: spacing.s12,
-    paddingHorizontal: spacing.s6,
-    alignItems: 'center',
   },
 })

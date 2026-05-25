@@ -16,9 +16,10 @@ import Animated, {
 } from 'react-native-reanimated'
 import Svg, { Path, Circle } from 'react-native-svg'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { Heart, MessageCircle, RefreshCw } from 'lucide-react-native'
+import { Heart, MessageCircle, RefreshCw, Users } from 'lucide-react-native'
 import { useTheme } from '@/context/ThemeContext'
 import { spacing, typography } from '@/constants/theme'
+import { emptyStateRecipe } from '@/constants/recipes'
 import { supabase } from '@/lib/supabase'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -270,6 +271,22 @@ function FeedItem({ item, currentUserId, onLike }: FeedItemProps) {
   )
 }
 
+// ─── Empty state ──────────────────────────────────────────────────────────────
+
+function FeedEmptyState() {
+  const { colors } = useTheme()
+  const s = emptyStateRecipe('feed', colors)
+  return (
+    <View style={s.container}>
+      <View style={s.icon}>
+        <Users size={28} color={colors.textTertiary} />
+      </View>
+      <Text style={s.title}>Ton feed est vide.</Text>
+      <Text style={s.subtitle}>Suis d'autres athlètes pour voir leurs séances.</Text>
+    </View>
+  )
+}
+
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function FeedScreen() {
@@ -479,16 +496,7 @@ export default function FeedScreen() {
               onLike={handleLike}
             />
           )}
-          ListEmptyComponent={() => (
-            <View style={styles.empty}>
-              <Text style={[typography.subtitle, { color: colors.textSecondary, textAlign: 'center' }]}>
-                Ton feed est vide.
-              </Text>
-              <Text style={[typography.caption, { color: colors.textTertiary, textAlign: 'center', marginTop: spacing.s2 }]}>
-                Suis des athletes pour voir leurs séances.
-              </Text>
-            </View>
-          )}
+          ListEmptyComponent={() => <FeedEmptyState />}
           showsVerticalScrollIndicator={false}
         />
       )}
@@ -576,10 +584,5 @@ const styles = StyleSheet.create({
     height: 32,
     borderRadius: 16,
     flexShrink: 0,
-  },
-  empty: {
-    paddingTop: spacing.s12,
-    paddingHorizontal: spacing.s6,
-    alignItems: 'center',
   },
 })

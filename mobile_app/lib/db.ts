@@ -67,3 +67,21 @@ export async function insertLocalSession(params: {
     params.logged_at
   )
 }
+
+export async function getLastLocalSet(
+  exerciseId: string,
+): Promise<{ weight_kg: number; reps: number } | null> {
+  try {
+    const db = getDB()
+    const row = await db.getFirstAsync<{ weight_kg: number; reps: number }>(
+      `SELECT weight_kg, reps FROM local_sets
+       WHERE exercise_id = ?
+       ORDER BY logged_at DESC
+       LIMIT 1`,
+      exerciseId,
+    )
+    return row ?? null
+  } catch {
+    return null
+  }
+}

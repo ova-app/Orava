@@ -13,11 +13,12 @@ import {
   Image,
 } from 'react-native'
 import { useRouter } from 'expo-router'
-import { ChevronLeft, Calendar } from 'lucide-react-native'
+import { ChevronLeft, Calendar, AlertCircle } from 'lucide-react-native'
 import * as ImagePicker from 'expo-image-picker'
 import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/context/ThemeContext'
 import { spacing, radius, typography, font } from '@/constants/theme'
+import { inputRecipe, InputState } from '@/constants/recipes'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -86,6 +87,10 @@ export default function EditProfileScreen(): React.JSX.Element {
   const [saving, setSaving] = useState<boolean>(false)
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const [userId, setUserId] = useState<string | null>(null)
+  const [usernameFocused, setUsernameFocused] = useState<boolean>(false)
+  const [fullNameFocused, setFullNameFocused] = useState<boolean>(false)
+  const [dateNaissanceFocused, setDateNaissanceFocused] = useState<boolean>(false)
+  const [poidsKgFocused, setPoidsKgFocused] = useState<boolean>(false)
 
   // ─── Load profil existant ──────────────────────────────────────────────────
 
@@ -307,89 +312,155 @@ export default function EditProfileScreen(): React.JSX.Element {
         <View style={s.form}>
 
           {/* Nom d'utilisateur */}
-          <View style={s.fieldGroup}>
-            <Text style={s.fieldLabel}>NOM D'UTILISATEUR</Text>
-            <TextInput
-              style={[s.input, errors.username ? s.inputError : null]}
-              value={form.username}
-              onChangeText={(v) => setForm(f => ({ ...f, username: v }))}
-              placeholder="@tonpseudo"
-              placeholderTextColor={colors.textTertiary}
-              autoCapitalize="none"
-              autoCorrect={false}
-              textContentType="username"
-              accessibilityLabel="Nom d'utilisateur"
-            />
-            {errors.username ? (
-              <Text style={s.fieldError}>{errors.username}</Text>
-            ) : null}
-          </View>
+          {(() => {
+            const state: InputState =
+              errors.username ? 'error' :
+              usernameFocused ? 'active' :
+              form.username.length > 0 ? 'filled' : 'default'
+            const r = inputRecipe(state, colors)
+            return (
+              <View style={s.fieldGroup}>
+                <Text style={r.label}>NOM D&apos;UTILISATEUR</Text>
+                <View style={r.container}>
+                  <TextInput
+                    style={r.input}
+                    value={form.username}
+                    onChangeText={(v) => setForm(f => ({ ...f, username: v }))}
+                    onFocus={() => setUsernameFocused(true)}
+                    onBlur={() => setUsernameFocused(false)}
+                    placeholder="@tonpseudo"
+                    placeholderTextColor={colors.textTertiary}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    textContentType="username"
+                    accessibilityLabel="Nom d'utilisateur"
+                  />
+                  {errors.username ? (
+                    <View style={r.icon}>
+                      <AlertCircle size={16} color={colors.error} strokeWidth={2} />
+                    </View>
+                  ) : null}
+                </View>
+                {errors.username ? (
+                  <Text style={r.helper}>{errors.username}</Text>
+                ) : null}
+              </View>
+            )
+          })()}
 
           {/* Nom complet */}
-          <View style={s.fieldGroup}>
-            <Text style={s.fieldLabel}>NOM COMPLET</Text>
-            <TextInput
-              style={[s.input, errors.fullName ? s.inputError : null]}
-              value={form.fullName}
-              onChangeText={(v) => setForm(f => ({ ...f, fullName: v }))}
-              placeholder="Prénom Nom"
-              placeholderTextColor={colors.textTertiary}
-              textContentType="name"
-              accessibilityLabel="Nom complet"
-            />
-            {errors.fullName ? (
-              <Text style={s.fieldError}>{errors.fullName}</Text>
-            ) : null}
-          </View>
+          {(() => {
+            const state: InputState =
+              errors.fullName ? 'error' :
+              fullNameFocused ? 'active' :
+              form.fullName.length > 0 ? 'filled' : 'default'
+            const r = inputRecipe(state, colors)
+            return (
+              <View style={s.fieldGroup}>
+                <Text style={r.label}>NOM COMPLET</Text>
+                <View style={r.container}>
+                  <TextInput
+                    style={r.input}
+                    value={form.fullName}
+                    onChangeText={(v) => setForm(f => ({ ...f, fullName: v }))}
+                    onFocus={() => setFullNameFocused(true)}
+                    onBlur={() => setFullNameFocused(false)}
+                    placeholder="Prénom Nom"
+                    placeholderTextColor={colors.textTertiary}
+                    textContentType="name"
+                    accessibilityLabel="Nom complet"
+                  />
+                  {errors.fullName ? (
+                    <View style={r.icon}>
+                      <AlertCircle size={16} color={colors.error} strokeWidth={2} />
+                    </View>
+                  ) : null}
+                </View>
+                {errors.fullName ? (
+                  <Text style={r.helper}>{errors.fullName}</Text>
+                ) : null}
+              </View>
+            )
+          })()}
 
           {/* Date de naissance */}
-          <View style={s.fieldGroup}>
-            <Text style={s.fieldLabel}>DATE DE NAISSANCE</Text>
-            <View style={[s.inputWithIcon, errors.dateNaissance ? s.inputError : null]}>
-              <TextInput
-                style={s.inputInner}
-                value={form.dateNaissance}
-                onChangeText={(v) => setForm(f => ({ ...f, dateNaissance: v }))}
-                placeholder="jj / mm / aaaa"
-                placeholderTextColor={colors.textTertiary}
-                keyboardType="numeric"
-                maxLength={14}
-                accessibilityLabel="Date de naissance"
-              />
-              <View style={s.inputIconRight}>
-                <Calendar size={16} color={colors.textTertiary} strokeWidth={1.5} />
+          {(() => {
+            const state: InputState =
+              errors.dateNaissance ? 'error' :
+              dateNaissanceFocused ? 'active' :
+              form.dateNaissance.length > 0 ? 'filled' : 'default'
+            const r = inputRecipe(state, colors)
+            return (
+              <View style={s.fieldGroup}>
+                <Text style={r.label}>DATE DE NAISSANCE</Text>
+                <View style={r.container}>
+                  <TextInput
+                    style={r.input}
+                    value={form.dateNaissance}
+                    onChangeText={(v) => setForm(f => ({ ...f, dateNaissance: v }))}
+                    onFocus={() => setDateNaissanceFocused(true)}
+                    onBlur={() => setDateNaissanceFocused(false)}
+                    placeholder="jj / mm / aaaa"
+                    placeholderTextColor={colors.textTertiary}
+                    keyboardType="numeric"
+                    maxLength={14}
+                    accessibilityLabel="Date de naissance"
+                  />
+                  <View style={r.icon}>
+                    {errors.dateNaissance ? (
+                      <AlertCircle size={16} color={colors.error} strokeWidth={2} />
+                    ) : (
+                      <Calendar size={16} color={colors.textTertiary} strokeWidth={1.5} />
+                    )}
+                  </View>
+                </View>
+                {errors.dateNaissance ? (
+                  <Text style={r.helper}>{errors.dateNaissance}</Text>
+                ) : null}
               </View>
-            </View>
-            {errors.dateNaissance ? (
-              <Text style={s.fieldError}>{errors.dateNaissance}</Text>
-            ) : null}
-          </View>
+            )
+          })()}
 
           {/* Poids */}
-          <View style={s.fieldGroup}>
-            <Text style={s.fieldLabel}>POIDS</Text>
-            <View style={[s.inputWithIcon, errors.poidsKg ? s.inputError : null]}>
-              <TextInput
-                style={s.inputInner}
-                value={form.poidsKg}
-                onChangeText={(v) => setForm(f => ({ ...f, poidsKg: v }))}
-                placeholder="70"
-                placeholderTextColor={colors.textTertiary}
-                keyboardType="decimal-pad"
-                accessibilityLabel="Poids en kilogrammes"
-              />
-              <View style={s.inputIconRight}>
-                <Text style={s.inputUnit}>kg</Text>
+          {(() => {
+            const state: InputState =
+              errors.poidsKg ? 'error' :
+              poidsKgFocused ? 'active' :
+              form.poidsKg.length > 0 ? 'filled' : 'default'
+            const r = inputRecipe(state, colors)
+            return (
+              <View style={s.fieldGroup}>
+                <Text style={r.label}>POIDS</Text>
+                <View style={r.container}>
+                  <TextInput
+                    style={r.input}
+                    value={form.poidsKg}
+                    onChangeText={(v) => setForm(f => ({ ...f, poidsKg: v }))}
+                    onFocus={() => setPoidsKgFocused(true)}
+                    onBlur={() => setPoidsKgFocused(false)}
+                    placeholder="70"
+                    placeholderTextColor={colors.textTertiary}
+                    keyboardType="decimal-pad"
+                    accessibilityLabel="Poids en kilogrammes"
+                  />
+                  <View style={r.icon}>
+                    {errors.poidsKg ? (
+                      <AlertCircle size={16} color={colors.error} strokeWidth={2} />
+                    ) : (
+                      <Text style={s.inputUnit}>kg</Text>
+                    )}
+                  </View>
+                </View>
+                {errors.poidsKg ? (
+                  <Text style={r.helper}>{errors.poidsKg}</Text>
+                ) : null}
+                <Text style={s.fieldNote}>
+                  {'Utilisé pour calculer tes métriques. '}
+                  <Text style={s.fieldNoteAccent}>Non visible.</Text>
+                </Text>
               </View>
-            </View>
-            {errors.poidsKg ? (
-              <Text style={s.fieldError}>{errors.poidsKg}</Text>
-            ) : null}
-            <Text style={s.fieldNote}>
-              {'Utilisé pour calculer tes métriques. '}
-              <Text style={s.fieldNoteAccent}>Non visible.</Text>
-            </Text>
-          </View>
+            )
+          })()}
 
         </View>
 
@@ -517,54 +588,9 @@ function buildStyles(colors: ReturnType<typeof useTheme>['colors']) {
     fieldGroup: {
       gap: spacing.s1,
     },
-    fieldLabel: {
-      ...typography.caption,
-      color: colors.textTertiary,
-      textTransform: 'uppercase',
-      letterSpacing: 1.2,
-      marginBottom: spacing.s1,
-    },
-    input: {
-      height: 52,
-      backgroundColor: colors.backgroundTertiary,
-      borderRadius: radius.sm,
-      paddingHorizontal: spacing.s4,
-      ...typography.body,
-      color: colors.textPrimary,
-    },
-    inputWithIcon: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      backgroundColor: colors.backgroundTertiary,
-      borderRadius: radius.sm,
-      height: 52,
-      overflow: 'hidden',
-    },
-    inputInner: {
-      flex: 1,
-      height: 52,
-      paddingHorizontal: spacing.s4,
-      ...typography.body,
-      color: colors.textPrimary,
-    },
-    inputError: {
-      borderWidth: 1,
-      borderColor: colors.error,
-    },
-    inputIconRight: {
-      paddingHorizontal: spacing.s4,
-      height: 52,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
     inputUnit: {
       ...typography.body,
       color: colors.textSecondary,
-    },
-    fieldError: {
-      ...typography.caption,
-      color: colors.error,
-      marginTop: spacing.s1,
     },
     fieldNote: {
       ...typography.caption,

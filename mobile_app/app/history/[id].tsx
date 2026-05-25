@@ -9,10 +9,42 @@ import {
   ActivityIndicator,
 } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { ChevronLeft, Dumbbell, MapPin, Trophy, Zap } from 'lucide-react-native'
+import { ChevronLeft, Dumbbell, Flame, MapPin, Trophy, Zap } from 'lucide-react-native'
 import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/context/ThemeContext'
 import { spacing, radius, typography, font } from '@/constants/theme'
+import { prBadgeRecipe, type PrType } from '@/constants/recipes'
+
+// ─── PR Badge (unified) ──────────────────────────────────────────────────────
+
+const PR_ICON: Record<PrType, React.ComponentType<{ size?: number; color?: string }>> = {
+  charge:   Zap,
+  serie:    Flame,
+  exercice: Dumbbell,
+  seance:   Trophy,
+}
+
+function PrBadge({
+  level,
+  type,
+  label,
+  size = 14,
+}: {
+  level: 'gold' | 'silver' | 'bronze'
+  type: PrType
+  label: string
+  size?: number
+}) {
+  const { colors } = useTheme()
+  const r = prBadgeRecipe(level, type, colors)
+  const Icon = PR_ICON[type]
+  return (
+    <View style={r.container}>
+      <Icon size={size} color={r.iconColor} />
+      <Text style={r.label}>{label}</Text>
+    </View>
+  )
+}
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -253,6 +285,20 @@ export default function HistoryDetailScreen(): React.JSX.Element {
   const prChargeEx = exercises.find(ex => ex.sets.some(s => s.pr_charge != null))
   const prSerieEx = exercises.find(ex => ex.sets.some(s => s.pr_serie != null))
 
+  // Best level helpers — gold > silver > bronze
+  const bestLevel = (vals: Array<'gold' | 'silver' | 'bronze' | null>): 'gold' | 'silver' | 'bronze' | null => {
+    if (vals.includes('gold')) return 'gold'
+    if (vals.includes('silver')) return 'silver'
+    if (vals.includes('bronze')) return 'bronze'
+    return null
+  }
+  const prChargeLevel = prChargeEx
+    ? bestLevel(prChargeEx.sets.map(s => s.pr_charge))
+    : null
+  const prSerieLevel = prSerieEx
+    ? bestLevel(prSerieEx.sets.map(s => s.pr_serie))
+    : null
+
   return (
     <View style={s.container}>
       <ScrollView
@@ -327,29 +373,26 @@ export default function HistoryDetailScreen(): React.JSX.Element {
         {/* ── PR Badges ── */}
         {(hasPrSeance || prChargeEx != null || prSerieEx != null || prExercises.length > 0) && (
           <View style={s.prBadgesRow}>
-            {hasPrSeance && (
-              <View style={[s.prBadge, { backgroundColor: `${colors.prGold}26` }]}>
-                <Trophy size={12} color={colors.prGold} />
-                <Text style={[s.prBadgeText, { color: colors.prGold }]}>PR SÉANCE</Text>
-              </View>
+            {hasPrSeance && workout.pr_seance && (
+              <PrBadge level={workout.pr_seance} type="seance" label="Séance" size={12} />
             )}
 
-            {prChargeEx != null && (
-              <View style={[s.prBadge, { backgroundColor: `${colors.accent}1A` }]}>
-                <Zap size={12} color={colors.accent} />
-                <Text style={[s.prBadgeText, { color: colors.accent }]}>
-                  PR CHARGE · {prChargeEx.nameFr}
-                </Text>
-              </View>
+            {prChargeEx != null && prChargeLevel && (
+              <PrBadge
+                level={prChargeLevel}
+                type="charge"
+                label={`Charge · ${prChargeEx.nameFr}`}
+                size={12}
+              />
             )}
 
-            {prSerieEx != null && prSerieEx !== prChargeEx && (
-              <View style={[s.prBadge, { backgroundColor: `${colors.accent}1A` }]}>
-                <Zap size={12} color={colors.accent} />
-                <Text style={[s.prBadgeText, { color: colors.accent }]}>
-                  PR SÉRIE · {prSerieEx.nameFr}
-                </Text>
-              </View>
+            {prSerieEx != null && prSerieEx !== prChargeEx && prSerieLevel && (
+              <PrBadge
+                level={prSerieLevel}
+                type="serie"
+                label={`Série · ${prSerieEx.nameFr}`}
+                size={12}
+              />
             )}
           </View>
         )}
@@ -384,17 +427,26 @@ export default function HistoryDetailScreen(): React.JSX.Element {
             <Text style={s.sectionTitle}>EXERCICES</Text>
 
             {exercises.map(ex => {
-              const hasPr = ex.pr_exercice != null || ex.sets.some(s => s.pr_charge != null || s.pr_serie != null)
+              const exSetPrCharge = bestLevel(ex.sets.map(set => set.pr_charge))
+              const exSetPrSerie  = bestLevel(ex.sets.map(set => set.pr_serie))
+              // Priorité d'affichage : exercice > charge > série (un seul badge — header compact)
+              const exBadgeLevel: 'gold' | 'silver' | 'bronze' | null =
+                ex.pr_exercice ?? exSetPrCharge ?? exSetPrSerie
+              const exBadgeType: PrType =
+                ex.pr_exercice != null ? 'exercice' :
+                exSetPrCharge != null ? 'charge' :
+                'serie'
+              const exBadgeLabel =
+                ex.pr_exercice != null ? 'Exercice' :
+                exSetPrCharge != null ? 'Charge' :
+                'Série'
               return (
                 <View key={ex.workoutExerciseId} style={s.exCard}>
                   {/* Nom + PR badge */}
                   <View style={s.exHeader}>
                     <Text style={s.exName} numberOfLines={1}>{ex.nameFr}</Text>
-                    {hasPr && (
-                      <View style={[s.exPrBadge, { backgroundColor: `${colors.accent}1A` }]}>
-                        <Zap size={10} color={colors.accent} />
-                        <Text style={[s.exPrBadgeText, { color: colors.accent }]}>PR</Text>
-                      </View>
+                    {exBadgeLevel && (
+                      <PrBadge level={exBadgeLevel} type={exBadgeType} label={exBadgeLabel} size={10} />
                     )}
                   </View>
 
@@ -561,21 +613,6 @@ function buildStyles(colors: ReturnType<typeof useTheme>['colors']) {
       paddingHorizontal: spacing.s4,
       marginBottom: spacing.s5,
     },
-    prBadge: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: spacing.s1,
-      borderRadius: radius.sm,
-      paddingVertical: spacing.s1 + 2,
-      paddingHorizontal: spacing.s3,
-    },
-    prBadgeText: {
-      ...typography.caption,
-      fontFamily: font.bold,
-      textTransform: 'uppercase',
-      letterSpacing: 0.5,
-    },
-
     // Section
     section: {
       paddingHorizontal: spacing.s4,
@@ -644,21 +681,6 @@ function buildStyles(colors: ReturnType<typeof useTheme>['colors']) {
       color: colors.textPrimary,
       flex: 1,
     },
-    exPrBadge: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 3,
-      borderRadius: radius.sm,
-      paddingVertical: 3,
-      paddingHorizontal: spacing.s2,
-      marginLeft: spacing.s2,
-    },
-    exPrBadgeText: {
-      ...typography.caption,
-      fontFamily: font.bold,
-      letterSpacing: 0.5,
-    },
-
     // Sets table
     setsTable: {
       gap: 1,

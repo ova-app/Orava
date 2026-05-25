@@ -11,9 +11,11 @@ import {
   ActivityIndicator,
 } from 'react-native'
 import { useRouter } from 'expo-router'
+import { AlertCircle } from 'lucide-react-native'
 import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/context/ThemeContext'
 import { spacing, radius, typography, font } from '@/constants/theme'
+import { inputRecipe, InputState } from '@/constants/recipes'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -64,6 +66,8 @@ export default function LoginScreen(): React.JSX.Element {
   const [erreurs, setErreurs] = useState<ErreurFormulaire>({})
   const [chargement, setChargement] = useState<boolean>(false)
   const [motDePasseVisible, setMotDePasseVisible] = useState<boolean>(false)
+  const [emailFocused, setEmailFocused] = useState<boolean>(false)
+  const [motDePasseFocused, setMotDePasseFocused] = useState<boolean>(false)
 
   function validerFormulaire(): boolean {
     const nouvellesErreurs: ErreurFormulaire = {}
@@ -122,56 +126,85 @@ export default function LoginScreen(): React.JSX.Element {
         <View style={styles.form}>
 
           {/* Email */}
-          <View style={styles.champGroupe}>
-            <TextInput
-              style={[styles.input, erreurs.email ? styles.inputErreur : null]}
-              value={form.email}
-              onChangeText={(v) => setForm(f => ({ ...f, email: v }))}
-              placeholder="Adresse e-mail"
-              placeholderTextColor={colors.textTertiary}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
-              textContentType="emailAddress"
-              accessibilityLabel="Champ email"
-            />
-            {erreurs.email ? (
-              <Text style={styles.texteErreur}>{erreurs.email}</Text>
-            ) : null}
-          </View>
+          {(() => {
+            const emailState: InputState =
+              erreurs.email ? 'error' :
+              emailFocused ? 'active' :
+              form.email.length > 0 ? 'filled' : 'default'
+            const r = inputRecipe(emailState, colors)
+            return (
+              <View style={styles.champGroupe}>
+                <View style={r.container}>
+                  <TextInput
+                    style={r.input}
+                    value={form.email}
+                    onChangeText={(v) => setForm(f => ({ ...f, email: v }))}
+                    onFocus={() => setEmailFocused(true)}
+                    onBlur={() => setEmailFocused(false)}
+                    placeholder="Adresse e-mail"
+                    placeholderTextColor={colors.textTertiary}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    textContentType="emailAddress"
+                    accessibilityLabel="Champ email"
+                  />
+                  {erreurs.email ? (
+                    <View style={r.icon}>
+                      <AlertCircle size={16} color={colors.error} strokeWidth={2} />
+                    </View>
+                  ) : null}
+                </View>
+                {erreurs.email ? (
+                  <Text style={r.helper}>{erreurs.email}</Text>
+                ) : null}
+              </View>
+            )
+          })()}
 
           {/* Mot de passe */}
-          <View style={styles.champGroupe}>
-            <View style={styles.inputWrapper}>
-              <TextInput
-                style={[
-                  styles.input,
-                  styles.inputAvecBouton,
-                  erreurs.motDePasse ? styles.inputErreur : null,
-                ]}
-                value={form.motDePasse}
-                onChangeText={(v) => setForm(f => ({ ...f, motDePasse: v }))}
-                placeholder="Mot de passe"
-                placeholderTextColor={colors.textTertiary}
-                secureTextEntry={!motDePasseVisible}
-                textContentType="password"
-                accessibilityLabel="Champ mot de passe"
-              />
-              <Pressable
-                style={styles.boutonVisibilite}
-                onPress={() => setMotDePasseVisible(v => !v)}
-                accessibilityLabel={motDePasseVisible ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
-                hitSlop={8}
-              >
-                <Text style={styles.texteVisibilite}>
-                  {motDePasseVisible ? 'Masquer' : 'Voir'}
-                </Text>
-              </Pressable>
-            </View>
-            {erreurs.motDePasse ? (
-              <Text style={styles.texteErreur}>{erreurs.motDePasse}</Text>
-            ) : null}
-          </View>
+          {(() => {
+            const mdpState: InputState =
+              erreurs.motDePasse ? 'error' :
+              motDePasseFocused ? 'active' :
+              form.motDePasse.length > 0 ? 'filled' : 'default'
+            const r = inputRecipe(mdpState, colors)
+            return (
+              <View style={styles.champGroupe}>
+                <View style={r.container}>
+                  <TextInput
+                    style={r.input}
+                    value={form.motDePasse}
+                    onChangeText={(v) => setForm(f => ({ ...f, motDePasse: v }))}
+                    onFocus={() => setMotDePasseFocused(true)}
+                    onBlur={() => setMotDePasseFocused(false)}
+                    placeholder="Mot de passe"
+                    placeholderTextColor={colors.textTertiary}
+                    secureTextEntry={!motDePasseVisible}
+                    textContentType="password"
+                    accessibilityLabel="Champ mot de passe"
+                  />
+                  <Pressable
+                    onPress={() => setMotDePasseVisible(v => !v)}
+                    accessibilityLabel={motDePasseVisible ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
+                    hitSlop={8}
+                  >
+                    <Text style={styles.texteVisibilite}>
+                      {motDePasseVisible ? 'Masquer' : 'Voir'}
+                    </Text>
+                  </Pressable>
+                  {erreurs.motDePasse ? (
+                    <View style={r.icon}>
+                      <AlertCircle size={16} color={colors.error} strokeWidth={2} />
+                    </View>
+                  ) : null}
+                </View>
+                {erreurs.motDePasse ? (
+                  <Text style={r.helper}>{erreurs.motDePasse}</Text>
+                ) : null}
+              </View>
+            )
+          })()}
 
           {/* Erreur globale */}
           {erreurs.global ? (
@@ -255,39 +288,10 @@ function buildStyles(colors: ReturnType<typeof useTheme>['colors']) {
     champGroupe: {
       gap: spacing.s1,
     },
-    input: {
-      height: 52,
-      backgroundColor: colors.backgroundTertiary,
-      borderRadius: radius.sm,
-      paddingHorizontal: spacing.s4,
-      ...typography.body,
-      color: colors.textPrimary,
-    },
-    inputWrapper: {
-      position: 'relative',
-    },
-    inputAvecBouton: {
-      paddingRight: 72,
-    },
-    boutonVisibilite: {
-      position: 'absolute',
-      right: spacing.s4,
-      top: 0,
-      bottom: 0,
-      justifyContent: 'center',
-    },
     texteVisibilite: {
       ...typography.caption,
       color: colors.textSecondary,
-    },
-    inputErreur: {
-      borderWidth: 1,
-      borderColor: colors.error,
-    },
-    texteErreur: {
-      ...typography.caption,
-      color: colors.error,
-      marginTop: spacing.s1,
+      paddingHorizontal: spacing.s2,
     },
     banniereErreur: {
       backgroundColor: `${colors.error}18`,

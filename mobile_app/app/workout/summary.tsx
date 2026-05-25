@@ -17,15 +17,45 @@ import Animated, {
 } from 'react-native-reanimated'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
-import { Flame, Zap } from 'lucide-react-native'
+import { Dumbbell, Flame, Trophy, Zap } from 'lucide-react-native'
 import * as ImagePicker from 'expo-image-picker'
 import { useTheme } from '@/context/ThemeContext'
 import { spacing, radius, typography, touchTarget, spring } from '@/constants/theme'
+import { prBadgeRecipe, type PrType } from '@/constants/recipes'
 import { useWorkout, computePodium, WorkoutExercise, PrLevel } from '@/context/WorkoutContext'
 import { saveMyoSignature } from '@/lib/myo'
 import { insertLocalSet, insertLocalSession } from '@/lib/db'
 import { storage } from '@/lib/storage'
 import { supabase } from '@/lib/supabase'
+
+// ─── PR Badge (unified) ──────────────────────────────────────────────────────
+
+const PR_ICON: Record<PrType, React.ComponentType<{ size?: number; color?: string }>> = {
+  charge:   Zap,
+  serie:    Flame,
+  exercice: Dumbbell,
+  seance:   Trophy,
+}
+
+function PrBadge({
+  level,
+  type,
+  label,
+}: {
+  level: 'gold' | 'silver' | 'bronze'
+  type: PrType
+  label: string
+}) {
+  const { colors } = useTheme()
+  const r = prBadgeRecipe(level, type, colors)
+  const Icon = PR_ICON[type]
+  return (
+    <View style={r.container}>
+      <Icon size={14} color={r.iconColor} />
+      <Text style={r.label}>{label}</Text>
+    </View>
+  )
+}
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -634,25 +664,26 @@ export default function SummaryScreen() {
         {hasPrs && (
           <Animated.View style={[styles.section, style2]}>
             <Text style={[styles.sectionLabel, { color: colors.textTertiary }]}>PRs DÉTECTÉS</Text>
-            {bestPrCharge !== null && (
-              <View style={[styles.prRow, { backgroundColor: colors.backgroundSecondary }]}>
-                <Zap size={16} color={colors.accent} />
-                <Text style={[styles.prText, { color: colors.textPrimary }]}>
-                  PR Charge
-                  {prChargeDetected.length > 0
-                    ? ` · +${Math.round(prChargeDetected.reduce((m, s) => Math.max(m, s.weight_kg), 0))} kg`
-                    : ''}
-                </Text>
-              </View>
-            )}
-            {bestPrSerie !== null && prSerieMax > 0 && (
-              <View style={[styles.prRow, { backgroundColor: colors.backgroundSecondary, marginTop: spacing.s2 }]}>
-                <Flame size={16} color={colors.accent} />
-                <Text style={[styles.prText, { color: colors.textPrimary }]}>
-                  PR Série · {prSerieMax} pts
-                </Text>
-              </View>
-            )}
+            <View style={styles.prBadgesWrap}>
+              {bestPrCharge !== null && (
+                <PrBadge
+                  level={bestPrCharge}
+                  type="charge"
+                  label={
+                    prChargeDetected.length > 0
+                      ? `Charge · +${Math.round(prChargeDetected.reduce((m, s) => Math.max(m, s.weight_kg), 0))} kg`
+                      : 'Charge'
+                  }
+                />
+              )}
+              {bestPrSerie !== null && prSerieMax > 0 && (
+                <PrBadge
+                  level={bestPrSerie}
+                  type="serie"
+                  label={`Série · ${prSerieMax} pts`}
+                />
+              )}
+            </View>
           </Animated.View>
         )}
 
@@ -817,20 +848,11 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
     fontVariant: ['tabular-nums'],
   },
-  // PR rows
-  prRow: {
+  // PR badges
+  prBadgesWrap: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.s3,
-    paddingHorizontal: spacing.s3,
-    paddingVertical: spacing.s3,
-    borderRadius: radius.md,
-    minHeight: touchTarget.comfort,
-  },
-  prText: {
-    ...typography.body,
-    fontWeight: '600',
-    flex: 1,
+    flexWrap: 'wrap',
+    gap: spacing.s2,
   },
   // Muscle bars
   legendRow: {

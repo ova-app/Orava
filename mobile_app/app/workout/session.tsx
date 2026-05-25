@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import {
   FlatList,
   Keyboard,
-  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -23,7 +22,9 @@ import Animated, {
 import { Gesture, GestureDetector, type PanGestureHandlerEventPayload, type GestureStateChangeEvent, type GestureUpdateEvent } from 'react-native-gesture-handler'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
-import { Timer, Plus, Trash2, X, Search, Zap, Flame, Trophy, Check } from 'lucide-react-native'
+import AsyncStorage from '@react-native-async-storage/async-storage'
+import * as Haptics from 'expo-haptics'
+import { Timer, Plus, Trash2, X, Search, Zap, Flame, Trophy, Dumbbell, Check } from 'lucide-react-native'
 import { useTheme } from '@/context/ThemeContext'
 import { spacing, radius, typography, touchTarget, spring } from '@/constants/theme'
 import {
@@ -33,8 +34,11 @@ import {
   WorkoutSet,
   PrLevel,
 } from '@/context/WorkoutContext'
+import { prOverlayRecipe, prBadgeRecipe, type PrLevel as PrLevelStrict, type PrType } from '@/constants/recipes'
 import { storage } from '@/lib/storage'
 import { supabase } from '@/lib/supabase'
+import { getGhostReference, type GhostSet } from './ghost'
+import { getLastLocalSet } from '@/lib/db'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -45,13 +49,12 @@ interface ExerciseRow {
   equipment_type: string | null
 }
 
-interface PrFlashData {
-  prCharge: PrLevel
-  prSerie: PrLevel
-  weight: number
-  reps: number
-  sessionVolume?: number
-  sessionDelta?: number
+interface PrEvent {
+  type: PrType
+  level: PrLevelStrict
+  title: string       // "RECORD CHARGE" etc.
+  value: string       // "120 kg" / "1 240 kg" / "120 × 8"
+  subtitle: string    // "+5 kg vs ancien record" or "Nouveau sommet"
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -137,9 +140,11 @@ interface WheelPickerProps {
   onValueChange: (val: number) => void
   label: string
   isEmpty?: boolean
+  ghostValue?: number
+  ghostBeaten?: boolean
 }
 
-function WheelPicker({ values, selectedValue, onValueChange, label, isEmpty }: WheelPickerProps) {
+function WheelPicker({ values, selectedValue, onValueChange, label, isEmpty, ghostValue, ghostBeaten }: WheelPickerProps) {
   const { colors } = useTheme()
   const scrollRef = useRef<ScrollView>(null)
   const selectedIndex = values.indexOf(selectedValue)
@@ -210,6 +215,28 @@ function WheelPicker({ values, selectedValue, onValueChange, label, isEmpty }: W
           ]}
           pointerEvents="none"
         />
+        {/* Ghost bar — position relative to selected item */}
+        {ghostValue !== undefined && (() => {
+          const gIdx = values.indexOf(ghostValue)
+          if (gIdx === -1) return null
+          const ghostTop = ITEM_HEIGHT * 2 + (gIdx - currentIndex) * ITEM_HEIGHT
+          return (
+            <View
+              pointerEvents="none"
+              style={{
+                position: 'absolute',
+                top: ghostTop,
+                left: spacing.s2,
+                right: spacing.s2,
+                height: 2,
+                borderRadius: 1,
+                backgroundColor: ghostBeaten ? colors.prGold : colors.textTertiary,
+                opacity: ghostBeaten ? 0.8 : 0.35,
+                zIndex: 3,
+              }}
+            />
+          )
+        })()}
         <ScrollView
           ref={scrollRef}
           showsVerticalScrollIndicator={false}
@@ -563,123 +590,189 @@ function ExerciseModal({ visible, onClose, onSelect, addedIds, colors }: Exercis
 // ─── PR Flash Overlay ─────────────────────────────────────────────────────────
 
 interface PrFlashOverlayProps {
-  flash: PrFlashData | null
+  events: PrEvent[] | null
   onDismiss: () => void
-  colors: ReturnType<typeof useTheme>['colors']
 }
 
-function PrFlashOverlay({ flash, onDismiss, colors }: PrFlashOverlayProps) {
-  const opacityValue = useSharedValue(0)
-  const scaleValue = useSharedValue(0.85)
-  const prevKey = useRef<string | null>(null)
+// Max number of simultaneous PR cards (charge + serie + exercice + seance)
+const MAX_PR_CARDS = 4
+const REVEAL_STAGGER_MS = 80
+const AUTO_DISMISS_MS = 2500
+const FADE_OUT_MS = 260
 
-  const flashKey = flash
-    ? `${flash.prCharge}-${flash.prSerie}-${flash.weight}-${flash.reps}`
+// Map PR type → lucide icon component (kept as ref, not JSX, to allow reuse)
+const PR_TYPE_ICON: Record<PrType, typeof Zap> = {
+  charge:   Zap,
+  serie:    Flame,
+  exercice: Dumbbell,
+  seance:   Trophy,
+}
+
+function PrFlashOverlay({ events, onDismiss }: PrFlashOverlayProps) {
+  const { colors } = useTheme()
+  const backdropOpacity = useSharedValue(0)
+  const prevKey = useRef<string | null>(null)
+  const dismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const fadeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Pre-allocate sharedValues for up to MAX_PR_CARDS — hooks order stable
+  const op0 = useSharedValue(0); const ty0 = useSharedValue(20); const sc0 = useSharedValue(0.9)
+  const op1 = useSharedValue(0); const ty1 = useSharedValue(20); const sc1 = useSharedValue(0.9)
+  const op2 = useSharedValue(0); const ty2 = useSharedValue(20); const sc2 = useSharedValue(0.9)
+  const op3 = useSharedValue(0); const ty3 = useSharedValue(20); const sc3 = useSharedValue(0.9)
+
+  const cardOps = [op0, op1, op2, op3]
+  const cardTys = [ty0, ty1, ty2, ty3]
+  const cardScs = [sc0, sc1, sc2, sc3]
+
+  const backdropStyle = useAnimatedStyle(() => ({ opacity: backdropOpacity.value }))
+  const card0Style = useAnimatedStyle(() => ({
+    opacity: op0.value,
+    transform: [{ translateY: ty0.value }, { scale: sc0.value }],
+  }))
+  const card1Style = useAnimatedStyle(() => ({
+    opacity: op1.value,
+    transform: [{ translateY: ty1.value }, { scale: sc1.value }],
+  }))
+  const card2Style = useAnimatedStyle(() => ({
+    opacity: op2.value,
+    transform: [{ translateY: ty2.value }, { scale: sc2.value }],
+  }))
+  const card3Style = useAnimatedStyle(() => ({
+    opacity: op3.value,
+    transform: [{ translateY: ty3.value }, { scale: sc3.value }],
+  }))
+  const cardStyles = [card0Style, card1Style, card2Style, card3Style]
+
+  // Unique key per events batch to retrigger animations
+  const eventsKey = events && events.length > 0
+    ? events.map(e => `${e.type}:${e.level}:${e.value}`).join('|')
     : null
 
-  const overlayStyle = useAnimatedStyle(() => ({ opacity: opacityValue.value }))
-  const cardsStyle = useAnimatedStyle(() => ({ transform: [{ scale: scaleValue.value }] }))
+  function clearTimers() {
+    if (dismissTimerRef.current) { clearTimeout(dismissTimerRef.current); dismissTimerRef.current = null }
+    if (fadeTimerRef.current) { clearTimeout(fadeTimerRef.current); fadeTimerRef.current = null }
+  }
+
+  function dismiss() {
+    clearTimers()
+    backdropOpacity.value = withTiming(0, { duration: FADE_OUT_MS, easing: Easing.out(Easing.quad) })
+    for (let i = 0; i < MAX_PR_CARDS; i++) {
+      cardOps[i].value = withTiming(0, { duration: FADE_OUT_MS, easing: Easing.out(Easing.quad) })
+    }
+    // setTimeout JS side — no runOnJS needed (we're already on JS thread)
+    fadeTimerRef.current = setTimeout(onDismiss, FADE_OUT_MS + 20)
+  }
 
   useEffect(() => {
-    if (flash && flashKey !== prevKey.current) {
-      prevKey.current = flashKey
-      opacityValue.value = 0
-      scaleValue.value = 0.85
-      opacityValue.value = withSpring(1, spring.bouncy)
-      scaleValue.value = withSpring(1, spring.bouncy)
+    if (events && events.length > 0 && eventsKey !== prevKey.current) {
+      prevKey.current = eventsKey
+      clearTimers()
 
-      const timer = setTimeout(() => {
-        opacityValue.value = withTiming(0, { duration: 250, easing: Easing.out(Easing.quad) })
-        scaleValue.value = withSpring(0.9, spring.snappy)
-        setTimeout(onDismiss, 260)
-      }, 2200)
-      return () => clearTimeout(timer)
+      // Reset all card values
+      for (let i = 0; i < MAX_PR_CARDS; i++) {
+        cardOps[i].value = 0
+        cardTys[i].value = 20
+        cardScs[i].value = 0.9
+      }
+
+      // Backdrop fade in
+      backdropOpacity.value = withTiming(1, { duration: 250, easing: Easing.out(Easing.quad) })
+
+      // Choreography: stagger each card 80ms
+      const limit = Math.min(events.length, MAX_PR_CARDS)
+      for (let i = 0; i < limit; i++) {
+        const delay = i * REVEAL_STAGGER_MS
+        setTimeout(() => {
+          cardOps[i].value = withSpring(1, spring.bouncy)
+          cardTys[i].value = withSpring(0, spring.bouncy)
+          cardScs[i].value = withSpring(1, spring.bouncy)
+        }, delay)
+      }
+
+      // Auto-dismiss
+      dismissTimerRef.current = setTimeout(dismiss, AUTO_DISMISS_MS)
+      return clearTimers
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [flashKey])
+  }, [eventsKey])
 
-  if (!flash) return null
+  if (!events || events.length === 0) return null
 
-  const hasSeancePr = flash.sessionDelta !== undefined && flash.sessionDelta > 0
-  const hasChargePr = flash.prCharge !== null
-  const hasSeriePr = flash.prSerie !== null
+  // Take backdrop style from first event's level (visually identical across levels — backdrop is BACKDROP token)
+  const baseRecipe = prOverlayRecipe(events[0].level, colors)
 
   return (
     <Animated.View
-      style={[styles.prOverlay, overlayStyle]}
-      pointerEvents="box-none"
+      style={[baseRecipe.backdrop, backdropStyle, { zIndex: 200 }]}
+      pointerEvents="auto"
+      onTouchEnd={dismiss}
     >
-      <TouchableOpacity
-        style={StyleSheet.absoluteFill}
-        activeOpacity={1}
-        onPress={onDismiss}
-      />
-      <Animated.View style={[styles.prCardsContainer, cardsStyle]}>
-        {/* Card 1 — PR Séance (gold) */}
-        {hasSeancePr && (
-          <View
-            style={[
-              styles.prCard,
-              styles.prCardLarge,
-              { backgroundColor: 'rgba(250, 199, 117, 0.12)', borderColor: 'rgba(250, 199, 117, 0.25)' },
-            ]}
-          >
-            <Trophy size={28} color={colors.prGold} />
-            <Text style={[styles.prCardLabel, { color: colors.accent }]}>
-              NOUVEAU PR SÉANCE
-            </Text>
-            <Text style={[styles.prCardValue, { color: colors.textPrimary }]}>
-              {`+${flash.sessionDelta} kg vs meilleure séance`}
-            </Text>
-          </View>
-        )}
-
-        {/* Card 2 — PR Charge */}
-        {hasChargePr && (
-          <View
-            style={[
-              styles.prCard,
-              styles.prCardLarge,
-              {
-                backgroundColor: colors.backgroundTertiary,
-                borderColor: prLevelColor(flash.prCharge, colors) + '40',
-              },
-            ]}
-          >
-            <Zap size={28} color={prLevelColor(flash.prCharge, colors)} />
-            <Text style={[styles.prCardLabel, { color: prLevelColor(flash.prCharge, colors) }]}>
-              {`PR CHARGE · ${flash.prCharge === 'gold' ? 'OR' : flash.prCharge === 'silver' ? 'ARGENT' : 'BRONZE'}`}
-            </Text>
-            <Text style={[styles.prCardValue, { color: colors.textPrimary }]}>
-              {`${flash.weight} kg · ${flash.prCharge === 'gold' ? 'Nouvelle meilleure charge' : flash.prCharge === 'silver' ? '2e meilleure charge' : '3e meilleure charge'}`}
-            </Text>
-          </View>
-        )}
-
-        {/* Card 3 — PR Série (compact horizontal) */}
-        {hasSeriePr && (
-          <View
-            style={[
-              styles.prCard,
-              styles.prCardCompact,
-              {
-                backgroundColor: colors.backgroundTertiary,
-                borderColor: prLevelColor(flash.prSerie, colors) + '30',
-              },
-            ]}
-          >
-            <Flame size={20} color={prLevelColor(flash.prSerie, colors)} />
-            <Text style={[styles.prCardLabelInline, { color: colors.textSecondary }]}>
-              PR SÉRIE
-            </Text>
-            <Text style={[styles.prCardValueInline, { color: colors.textPrimary }]}>
-              {`${flash.weight * flash.reps} pts`}
-            </Text>
-          </View>
-        )}
-      </Animated.View>
+      <View style={baseRecipe.cardStack} pointerEvents="box-none">
+        {events.slice(0, MAX_PR_CARDS).map((ev, i) => {
+          const styles_i = prOverlayRecipe(ev.level, colors)
+          const badge = prBadgeRecipe(ev.level, ev.type, colors)
+          const Icon = PR_TYPE_ICON[ev.type]
+          return (
+            <Animated.View key={`${ev.type}-${i}`} style={[styles_i.card, cardStyles[i]]}>
+              <View style={styles_i.cardAccent} />
+              <Icon size={24} color={badge.iconColor} />
+              <Text style={styles_i.cardTitle}>{ev.title}</Text>
+              <Text style={styles_i.cardValue}>{ev.value}</Text>
+              <Text style={styles_i.cardSubtitle}>{ev.subtitle}</Text>
+            </Animated.View>
+          )
+        })}
+      </View>
     </Animated.View>
   )
+}
+
+// ─── PR event builder (pure, from validateSet results) ───────────────────────
+
+function formatKg(n: number): string {
+  // Thin space thousand separator, no trailing zeros after decimal
+  const rounded = Math.round(n * 10) / 10
+  const fixed = rounded % 1 === 0 ? rounded.toFixed(0) : rounded.toFixed(1)
+  return fixed.replace(/\B(?=(\d{3})+(?!\d))/g, ' ')
+}
+
+function levelSubtitle(level: PrLevelStrict, kind: 'charge' | 'serie' | 'exercice'): string {
+  const ordinal =
+    level === 'gold'   ? 'Nouveau sommet' :
+    level === 'silver' ? '2e meilleure' :
+                         '3e meilleure'
+  if (level === 'gold') return ordinal
+  const suffix = kind === 'charge' ? 'charge' : kind === 'serie' ? 'série' : 'performance'
+  return `${ordinal} ${suffix}`
+}
+
+function buildPrEvents(
+  prCharge: PrLevel,
+  prSerie: PrLevel,
+  weight: number,
+  reps: number,
+): PrEvent[] {
+  const out: PrEvent[] = []
+  if (prCharge !== null) {
+    out.push({
+      type: 'charge',
+      level: prCharge,
+      title: 'RECORD CHARGE',
+      value: `${formatKg(weight)} kg`,
+      subtitle: levelSubtitle(prCharge, 'charge'),
+    })
+  }
+  if (prSerie !== null) {
+    out.push({
+      type: 'serie',
+      level: prSerie,
+      title: 'RECORD SÉRIE',
+      value: `${formatKg(weight)} kg × ${reps}`,
+      subtitle: levelSubtitle(prSerie, 'serie'),
+    })
+  }
+  return out
 }
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
@@ -705,8 +798,35 @@ export default function SessionScreen() {
   } = useWorkout()
 
   const [modalVisible, setModalVisible] = useState(false)
-  const [prFlash, setPrFlash] = useState<PrFlashData | null>(null)
+  const [prFlash, setPrFlash] = useState<PrEvent[] | null>(null)
   const tabsScrollRef = useRef<ScrollView>(null)
+
+  // ── Ghost state ──
+  const [ghostRef, setGhostRef] = useState<GhostSet | null>(null)
+  const [ghostEnabled, setGhostEnabled] = useState(true)
+  const [vibrationEnabled, setVibrationEnabled] = useState(true)
+  const prevGhostBeatenRef = useRef(false)
+
+  // ── Load ghost settings once ──
+  useEffect(() => {
+    void Promise.all([
+      AsyncStorage.getItem('settings_ghost'),
+      AsyncStorage.getItem('settings_vibration'),
+    ]).then(([ghost, vibration]) => {
+      setGhostEnabled(ghost !== 'false')
+      setVibrationEnabled(vibration !== 'false')
+    })
+  }, [])
+
+  // ── Load ghost reference when exercise changes ──
+  const currentExerciseId = exercises[currentIndex]?.exercise_id
+  useEffect(() => {
+    if (!ghostEnabled || !currentExerciseId) {
+      setGhostRef(null)
+      return
+    }
+    void getGhostReference(currentExerciseId, 30).then(setGhostRef)
+  }, [currentExerciseId, ghostEnabled])
 
   // ── Status done redirect ──
   useEffect(() => {
@@ -755,8 +875,38 @@ export default function SessionScreen() {
     return best
   }, [validatedSets])
 
+  // Ghost beaten: current draft weight beats ghost reference
+  const ghostBeaten = ghostEnabled && ghostRef !== null && draftWeight > ghostRef.weight_kg
+
   // Added exercise IDs for checkmarks in modal
   const addedIds = useMemo(() => new Set(exercises.map(e => e.exercise_id)), [exercises])
+
+  // ── Haptic: ghost beaten (double pulse sur transition false→true) ──
+  useEffect(() => {
+    if (ghostBeaten && !prevGhostBeatenRef.current && vibrationEnabled) {
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).then(() => {
+        setTimeout(() => void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium), 120)
+      })
+    }
+    prevGhostBeatenRef.current = ghostBeaten
+  }, [ghostBeaten, vibrationEnabled])
+
+  // ── Haptic: PR flash (800ms après le visuel) ──
+  useEffect(() => {
+    if (!prFlash || prFlash.length === 0 || !vibrationEnabled) return
+    const bestLevel = prFlash.reduce<PrLevelStrict | null>((acc, ev) => {
+      const rank = (l: PrLevelStrict | null) => l === 'gold' ? 3 : l === 'silver' ? 2 : l === 'bronze' ? 1 : 0
+      return rank(ev.level) > rank(acc) ? ev.level : acc
+    }, null)
+    const t = setTimeout(() => {
+      if (bestLevel === 'gold') {
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
+      } else {
+        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+      }
+    }, 800)
+    return () => clearTimeout(t)
+  }, [prFlash, vibrationEnabled])
 
   function handleWeightChange(val: number) {
     if (currentExercise) {
@@ -774,22 +924,27 @@ export default function SessionScreen() {
 
   function handleValidate() {
     if (!currentExercise) return
+    if (vibrationEnabled) {
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+    }
     const { prCharge, prSerie } = validateSet(currentIndex)
     snapshotToMMKV(exercises, currentIndex, startedAt)
 
-    if (prCharge !== null || prSerie !== null) {
-      setPrFlash({
-        prCharge,
-        prSerie,
-        weight: draftWeight,
-        reps: draftReps,
-      })
+    const events = buildPrEvents(prCharge, prSerie, draftWeight, draftReps)
+    if (events.length > 0) {
+      setPrFlash(events)
     }
   }
 
   async function handleAddExercise(ex: ExerciseRow) {
     setModalVisible(false)
+    const newIdx = exercises.length
     await addExercise(ex.id, ex.name_fr, ex.muscle_group, ex.equipment_type)
+    const lastSet = await getLastLocalSet(ex.id)
+    if (lastSet) {
+      updateDraftSet(newIdx, 'weight_kg', lastSet.weight_kg)
+      updateDraftSet(newIdx, 'reps', lastSet.reps)
+    }
     snapshotToMMKV(exercises, currentIndex, startedAt)
   }
 
@@ -966,6 +1121,8 @@ export default function SessionScreen() {
                   selectedValue={draftWeight}
                   onValueChange={handleWeightChange}
                   label="KG"
+                  ghostValue={ghostRef && ghostEnabled ? ghostRef.weight_kg : undefined}
+                  ghostBeaten={ghostBeaten}
                 />
               ) : (
                 <WheelPicker
@@ -985,13 +1142,22 @@ export default function SessionScreen() {
             </View>
           </View>
 
-          {/* Prev best */}
+          {/* Ghost / Prev best indicator */}
           <View style={styles.prevBestRow}>
-            <View style={[styles.prevBestLine, { backgroundColor: colors.textTertiary }]} />
-            <Text style={[styles.prevBestText, { color: colors.textTertiary }]}>
-              {prevBest
-                ? `PREV BEST · ${prevBest.weight_kg}KG × ${prevBest.reps}`
-                : 'PREV BEST · —'}
+            <View style={[styles.prevBestLine, {
+              backgroundColor: ghostBeaten ? colors.prGold : colors.textTertiary,
+              opacity: ghostBeaten ? 1 : 0.5,
+            }]} />
+            <Text style={[styles.prevBestText, {
+              color: ghostBeaten ? colors.prGold : colors.textTertiary,
+            }]}>
+              {ghostRef && ghostEnabled
+                ? ghostBeaten
+                  ? `FANTÔME BATTU · +${formatKg(draftWeight - ghostRef.weight_kg)} KG`
+                  : `FANTÔME · ${ghostRef.weight_kg} KG × ${ghostRef.reps}`
+                : prevBest
+                  ? `PREV BEST · ${prevBest.weight_kg}KG × ${prevBest.reps}`
+                  : 'PREV BEST · —'}
             </Text>
           </View>
 
@@ -1010,9 +1176,8 @@ export default function SessionScreen() {
 
       {/* PR Flash overlay */}
       <PrFlashOverlay
-        flash={prFlash}
+        events={prFlash}
         onDismiss={() => setPrFlash(null)}
-        colors={colors}
       />
 
       {/* Exercise modal */}
@@ -1316,54 +1481,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontFamily: 'Barlow_700Bold',
     letterSpacing: 1.5,
-  },
-
-  // ── PR Flash overlay ──
-  prOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.72)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 200,
-  },
-  prCardsContainer: {
-    width: '82%',
-    gap: spacing.s3,
-  },
-  prCard: {
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    paddingHorizontal: spacing.s5,
-    paddingVertical: spacing.s4,
-  },
-  prCardLarge: {
-    alignItems: 'center',
-    gap: spacing.s2,
-  },
-  prCardCompact: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.s3,
-    paddingVertical: spacing.s3,
-  },
-  prCardLabel: {
-    ...typography.caption,
-    letterSpacing: 1,
-  },
-  prCardValue: {
-    ...typography.subtitle,
-    fontVariant: ['tabular-nums'],
-    textAlign: 'center',
-  },
-  prCardLabelInline: {
-    ...typography.caption,
-    letterSpacing: 1,
-    flex: 1,
-  },
-  prCardValueInline: {
-    ...typography.body,
-    fontVariant: ['tabular-nums'],
-    fontFamily: 'Barlow_700Bold',
   },
 
   // ── Modal ──

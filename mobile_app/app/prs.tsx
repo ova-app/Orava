@@ -8,10 +8,42 @@ import {
   ActivityIndicator,
 } from 'react-native'
 import { useRouter } from 'expo-router'
-import { ChevronLeft, Trophy } from 'lucide-react-native'
+import { ChevronLeft, Dumbbell, Flame, Trophy, Zap } from 'lucide-react-native'
 import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/context/ThemeContext'
 import { spacing, radius, typography } from '@/constants/theme'
+import { prBadgeRecipe, type PrType } from '@/constants/recipes'
+
+// ─── PR Badge (unified) ──────────────────────────────────────────────────────
+
+const PR_ICON: Record<PrType, React.ComponentType<{ size?: number; color?: string }>> = {
+  charge:   Zap,
+  serie:    Flame,
+  exercice: Dumbbell,
+  seance:   Trophy,
+}
+
+function PrBadge({
+  level,
+  type,
+  label,
+  size = 14,
+}: {
+  level: 'gold' | 'silver' | 'bronze'
+  type: PrType
+  label: string
+  size?: number
+}) {
+  const { colors } = useTheme()
+  const r = prBadgeRecipe(level, type, colors)
+  const Icon = PR_ICON[type]
+  return (
+    <View style={r.container}>
+      <Icon size={size} color={r.iconColor} />
+      <Text style={r.label}>{label}</Text>
+    </View>
+  )
+}
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 

@@ -13,6 +13,7 @@ import Animated, {
   useAnimatedStyle,
   Easing,
 } from 'react-native-reanimated'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/context/ThemeContext'
 import { spacing, font } from '@/constants/theme'
@@ -92,10 +93,15 @@ export default function SplashScreen(): React.JSX.Element {
 
   useEffect(() => {
     async function checkSession(): Promise<void> {
-      const { data: { session } } = await supabase.auth.getSession()
+      const [{ data: { session } }, onboardingDone] = await Promise.all([
+        supabase.auth.getSession(),
+        AsyncStorage.getItem('onboarding_done'),
+      ])
 
       if (session) {
         router.replace('/(tabs)/feed')
+      } else if (!onboardingDone) {
+        router.replace('/onboarding')
       } else {
         router.replace('/auth/login')
       }

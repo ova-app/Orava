@@ -3,16 +3,77 @@ import {
   View,
   Text,
   Pressable,
-  Switch,
   ScrollView,
   StyleSheet,
   StatusBar,
 } from 'react-native'
+import Animated, {
+  useSharedValue,
+  withSpring,
+  useAnimatedStyle,
+} from 'react-native-reanimated'
 import { useRouter } from 'expo-router'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { ChevronLeft, ChevronRight } from 'lucide-react-native'
 import { useTheme } from '@/context/ThemeContext'
-import { spacing, radius, typography } from '@/constants/theme'
+import { spacing, radius, typography, spring } from '@/constants/theme'
+import { toggleRecipe } from '@/constants/recipes'
+
+// ─── ToggleRow (inline) ──────────────────────────────────────────────────────
+// Custom toggle wired via toggleRecipe + Reanimated spring (snappy).
+// Track 52×32, thumb 26, translate 20px (52 - 26 - 2×3 padding).
+
+interface ToggleRowProps {
+  label: string
+  subtitle?: string
+  value: boolean
+  onChange: (v: boolean) => void
+  accessibilityLabel?: string
+}
+
+const THUMB_TRANSLATE = 20
+
+function ToggleRow({
+  label,
+  subtitle,
+  value,
+  onChange,
+  accessibilityLabel,
+}: ToggleRowProps): React.JSX.Element {
+  const { colors } = useTheme()
+  const styles = toggleRecipe(value, colors)
+
+  const progress = useSharedValue(value ? 1 : 0)
+
+  useEffect(() => {
+    progress.value = withSpring(value ? 1 : 0, spring.snappy)
+  }, [value, progress])
+
+  const thumbStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: progress.value * THUMB_TRANSLATE }],
+  }))
+
+  // Override alignSelf — translateX seul positionne le thumb.
+  const thumbBase = { ...styles.thumb, alignSelf: 'flex-start' as const }
+
+  return (
+    <Pressable
+      onPress={() => onChange(!value)}
+      style={styles.row}
+      accessibilityRole="switch"
+      accessibilityState={{ checked: value }}
+      accessibilityLabel={accessibilityLabel ?? label}
+    >
+      <View style={styles.textBlock}>
+        <Text style={styles.label}>{label}</Text>
+        {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+      </View>
+      <View style={styles.track}>
+        <Animated.View style={[thumbBase, thumbStyle]} />
+      </View>
+    </Pressable>
+  )
+}
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -23,6 +84,7 @@ interface SettingsState {
   vibrationEnabled: boolean
   defaultTimerSeconds: number
   publicWorkoutsByDefault: boolean
+  ghostEnabled: boolean
 }
 
 const STORAGE_KEYS = {
@@ -30,6 +92,7 @@ const STORAGE_KEYS = {
   vibration: 'settings_vibration',
   defaultTimer: 'settings_default_timer',
   publicWorkouts: 'settings_public_workouts',
+  ghost: 'settings_ghost',
 } as const
 
 // ─── Screen ──────────────────────────────────────────────────────────────────
@@ -42,8 +105,8 @@ export default function SettingsScreen(): React.JSX.Element {
     weightUnit: 'kg',
     vibrationEnabled: true,
     defaultTimerSeconds: 90,
-    // Règle absolue : is_public DEFAULT false
     publicWorkoutsByDefault: false,
+    ghostEnabled: true,
   })
 
   // ─── Persistance load ─────────────────────────────────────────────────────
@@ -51,11 +114,12 @@ export default function SettingsScreen(): React.JSX.Element {
   useEffect(() => {
     async function loadSettings(): Promise<void> {
       try {
-        const [unit, vibration, timer, publicWorkouts] = await Promise.all([
+        const [unit, vibration, timer, publicWorkouts, ghost] = await Promise.all([
           AsyncStorage.getItem(STORAGE_KEYS.weightUnit),
           AsyncStorage.getItem(STORAGE_KEYS.vibration),
           AsyncStorage.getItem(STORAGE_KEYS.defaultTimer),
           AsyncStorage.getItem(STORAGE_KEYS.publicWorkouts),
+          AsyncStorage.getItem(STORAGE_KEYS.ghost),
         ])
 
         setSettings(prev => ({
@@ -63,8 +127,8 @@ export default function SettingsScreen(): React.JSX.Element {
           weightUnit: (unit === 'lbs' ? 'lbs' : 'kg') as WeightUnit,
           vibrationEnabled: vibration !== 'false',
           defaultTimerSeconds: timer ? parseInt(timer, 10) : 90,
-          // Toujours forcer false si jamais stocké — règle is_public DEFAULT false
           publicWorkoutsByDefault: publicWorkouts === 'true',
+          ghostEnabled: ghost !== 'false',
         }))
       } catch {
         // Silent fail — valeurs par défaut conservées
@@ -89,6 +153,11 @@ export default function SettingsScreen(): React.JSX.Element {
   async function setPublicWorkouts(enabled: boolean): Promise<void> {
     setSettings(prev => ({ ...prev, publicWorkoutsByDefault: enabled }))
     await AsyncStorage.setItem(STORAGE_KEYS.publicWorkouts, String(enabled))
+  }
+
+  async function setGhostEnabled(enabled: boolean): Promise<void> {
+    setSettings(prev => ({ ...prev, ghostEnabled: enabled }))
+    await AsyncStorage.setItem(STORAGE_KEYS.ghost, String(enabled))
   }
 
   const s = buildStyles(colors)
@@ -171,40 +240,35 @@ export default function SettingsScreen(): React.JSX.Element {
           <View style={s.separator} />
 
           {/* Vibrations */}
-          <View style={s.row}>
-            <Text style={s.rowLabel}>Vibrations</Text>
-            <Switch
-              value={settings.vibrationEnabled}
-              onValueChange={setVibration}
-              thumbColor={settings.vibrationEnabled ? colors.accent : colors.textTertiary}
-              trackColor={{
-                false: colors.backgroundTertiary,
-                true: `${colors.accent}33`,
-              }}
-              accessibilityLabel="Activer les vibrations"
-            />
-          </View>
+          <ToggleRow
+            label="Vibrations"
+            value={settings.vibrationEnabled}
+            onChange={setVibration}
+            accessibilityLabel="Activer les vibrations"
+          />
+
+          <View style={s.separator} />
+
+          {/* Mode Fantôme */}
+          <ToggleRow
+            label="Mode Fantôme"
+            subtitle="Affiche ta meilleure perf passée sur chaque exercice."
+            value={settings.ghostEnabled}
+            onChange={setGhostEnabled}
+            accessibilityLabel="Activer le Mode Fantôme"
+          />
         </View>
 
         {/* GROUPE CONFIDENTIALITÉ */}
         <Text style={s.groupLabel}>CONFIDENTIALITÉ</Text>
         <View style={s.group}>
-          <View style={[s.row, s.rowTall]}>
-            <View style={s.rowLabelStack}>
-              <Text style={s.rowLabel}>Séances publiques par défaut</Text>
-              <Text style={s.rowSub}>Chaque séance démarre privée.</Text>
-            </View>
-            <Switch
-              value={settings.publicWorkoutsByDefault}
-              onValueChange={setPublicWorkouts}
-              thumbColor={settings.publicWorkoutsByDefault ? colors.accent : colors.textTertiary}
-              trackColor={{
-                false: colors.backgroundTertiary,
-                true: `${colors.accent}33`,
-              }}
-              accessibilityLabel="Séances publiques par défaut"
-            />
-          </View>
+          <ToggleRow
+            label="Séances publiques par défaut"
+            subtitle="Chaque séance démarre privée."
+            value={settings.publicWorkoutsByDefault}
+            onChange={setPublicWorkouts}
+            accessibilityLabel="Séances publiques par défaut"
+          />
         </View>
 
         {/* GROUPE COMPTE */}
@@ -296,25 +360,12 @@ function buildStyles(colors: ReturnType<typeof useTheme>['colors']) {
       height: 52,
       paddingHorizontal: spacing.s4,
     },
-    rowTall: {
-      height: 64,
-      alignItems: 'center',
-    },
     rowPressable: {
       // Pressable styles inherited via Pressable wrapper
-    },
-    rowLabelStack: {
-      flex: 1,
-      marginRight: spacing.s3,
     },
     rowLabel: {
       ...typography.body,
       color: colors.textPrimary,
-    },
-    rowSub: {
-      ...typography.caption,
-      color: colors.textSecondary,
-      marginTop: 2,
     },
     rowRight: {
       flexDirection: 'row',

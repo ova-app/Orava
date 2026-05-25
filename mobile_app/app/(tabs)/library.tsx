@@ -19,6 +19,7 @@ import { ChevronRight, Search } from 'lucide-react-native'
 import { useRouter } from 'expo-router'
 import { useTheme } from '@/context/ThemeContext'
 import { spacing, radius, typography } from '@/constants/theme'
+import { emptyStateRecipe } from '@/constants/recipes'
 import { supabase } from '@/lib/supabase'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -131,6 +132,22 @@ function ExerciseRow({ item, onPress }: ExerciseRowProps) {
       </View>
       <ChevronRight size={16} color={colors.textTertiary} />
     </TouchableOpacity>
+  )
+}
+
+// ─── Empty state ──────────────────────────────────────────────────────────────
+
+function LibraryEmptyState() {
+  const { colors } = useTheme()
+  const s = emptyStateRecipe('library', colors)
+  return (
+    <View style={s.container}>
+      <View style={s.icon}>
+        <Search size={28} color={colors.textTertiary} />
+      </View>
+      <Text style={s.title}>Aucun exercice trouvé.</Text>
+      <Text style={s.subtitle}>Essaie un autre terme ou filtre.</Text>
+    </View>
   )
 }
 
@@ -334,13 +351,9 @@ export default function LibraryScreen() {
             <View style={{ height: 1, backgroundColor: colors.separator, marginHorizontal: spacing.s5 }} />
           )}
           SectionSeparatorComponent={() => null}
-          ListEmptyComponent={() => (
-            <View style={styles.empty}>
-              <Text style={[typography.subtitle, { color: colors.textSecondary, textAlign: 'center' }]}>
-                Aucun exercice trouvé.
-              </Text>
-            </View>
-          )}
+          ListEmptyComponent={() =>
+            query.length > 0 || activeGroup != null ? <LibraryEmptyState /> : null
+          }
           showsVerticalScrollIndicator={false}
           stickySectionHeadersEnabled
         />
@@ -383,10 +396,5 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: spacing.s5,
-  },
-  empty: {
-    paddingTop: spacing.s12,
-    paddingHorizontal: spacing.s6,
-    alignItems: 'center',
   },
 })
