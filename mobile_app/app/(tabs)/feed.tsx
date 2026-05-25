@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
 import {
   FlatList,
   RefreshControl,
@@ -6,12 +6,19 @@ import {
   Text,
   TouchableOpacity,
   View,
-  Animated,
 } from 'react-native'
+import Animated, {
+  useSharedValue,
+  withRepeat,
+  withTiming,
+  useAnimatedStyle,
+  Easing,
+} from 'react-native-reanimated'
+import Svg, { Path, Circle } from 'react-native-svg'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Heart, MessageCircle, RefreshCw } from 'lucide-react-native'
 import { useTheme } from '@/context/ThemeContext'
-import { spacing, radius, typography } from '@/constants/theme'
+import { spacing, typography } from '@/constants/theme'
 import { supabase } from '@/lib/supabase'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -72,62 +79,29 @@ function MyoIcon({ size = 32, bg = '#0A0A0F' }: { size?: number; bg?: string }) 
   const cx = size / 2
   const cy = size / 2
   const r = size / 2
+  const gap = 0.06
+  const innerR = size * 0.32
 
-  const paths: string[] = MYO_SECTOR_COLORS.map((_, i) => {
-    const startAngle = i * segAngle - Math.PI / 2
-    const endAngle = startAngle + segAngle - 0.04 // petit gap entre secteurs
-    const x1 = cx + r * Math.cos(startAngle)
-    const y1 = cy + r * Math.sin(startAngle)
-    const x2 = cx + r * Math.cos(endAngle)
-    const y2 = cy + r * Math.sin(endAngle)
-    return `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 0 1 ${x2} ${y2} Z`
-  })
-
-  // Rendu sans SVG (React Native SVG non utilisé ici) — View avec border coloré par côtés
-  // On simule avec des View rotées en absolue
   return (
-    <View style={{ width: size, height: size, position: 'relative' }}>
+    <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
       {MYO_SECTOR_COLORS.map((color, i) => {
-        const rotation = (i / segments) * 360
+        const startAngle = i * segAngle - Math.PI / 2
+        const endAngle = startAngle + segAngle - gap
+        const x1 = cx + r * Math.cos(startAngle)
+        const y1 = cy + r * Math.sin(startAngle)
+        const x2 = cx + r * Math.cos(endAngle)
+        const y2 = cy + r * Math.sin(endAngle)
+        const largeArc = (segAngle - gap) > Math.PI ? 1 : 0
         return (
-          <View
+          <Path
             key={i}
-            style={{
-              position: 'absolute',
-              width: size,
-              height: size,
-              borderRadius: size / 2,
-              overflow: 'hidden',
-              transform: [{ rotate: `${rotation}deg` }],
-            }}
-          >
-            <View
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: size / 2,
-                width: size / 2,
-                height: size / 2,
-                backgroundColor: color,
-                transformOrigin: '0% 100%',
-              }}
-            />
-          </View>
+            d={`M ${cx.toFixed(2)} ${cy.toFixed(2)} L ${x1.toFixed(2)} ${y1.toFixed(2)} A ${r} ${r} 0 ${largeArc} 1 ${x2.toFixed(2)} ${y2.toFixed(2)} Z`}
+            fill={color}
+          />
         )
       })}
-      {/* Cercle central blanc cassé pour effet donut */}
-      <View
-        style={{
-          position: 'absolute',
-          width: size * 0.38,
-          height: size * 0.38,
-          borderRadius: size * 0.19,
-          backgroundColor: bg,
-          top: size * 0.31,
-          left: size * 0.31,
-        }}
-      />
-    </View>
+      <Circle cx={cx} cy={cy} r={innerR} fill={bg} />
+    </Svg>
   )
 }
 
@@ -160,19 +134,22 @@ function formatVolume(kg: number | null): string {
 
 function SkeletonCard() {
   const { colors } = useTheme()
-  const anim = useRef(new Animated.Value(0.4)).current
+  const shimmer = useSharedValue(0.4)
 
   useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(anim, { toValue: 0.8, duration: 700, useNativeDriver: true }),
-        Animated.timing(anim, { toValue: 0.4, duration: 700, useNativeDriver: true }),
-      ])
-    ).start()
-  }, [anim])
+    shimmer.value = withRepeat(
+      withTiming(0.8, { duration: 700, easing: Easing.inOut(Easing.sin) }),
+      -1,
+      true
+    )
+  }, [])
+
+  const shimmerStyle = useAnimatedStyle(() => ({
+    opacity: shimmer.value,
+  }))
 
   return (
-    <Animated.View style={[styles.skeletonCard, { opacity: anim }]}>
+    <Animated.View style={[styles.skeletonCard, shimmerStyle]}>
       {/* Row avatar + lignes */}
       <View style={styles.skeletonRow}>
         <View style={[styles.skeletonAvatar, { backgroundColor: colors.backgroundTertiary }]} />

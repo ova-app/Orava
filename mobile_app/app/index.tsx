@@ -1,13 +1,18 @@
-import React, { useEffect, useRef } from 'react'
+import React, { useEffect } from 'react'
 import {
   View,
   Text,
   StyleSheet,
-  Animated,
-  Easing,
 } from 'react-native'
 import { useRouter } from 'expo-router'
 import Svg, { Path } from 'react-native-svg'
+import Animated, {
+  useSharedValue,
+  withRepeat,
+  withTiming,
+  useAnimatedStyle,
+  Easing,
+} from 'react-native-reanimated'
 import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/context/ThemeContext'
 import { spacing, font } from '@/constants/theme'
@@ -42,33 +47,26 @@ function LogoOrava({ accentColor, bgColor }: { accentColor: string; bgColor: str
 // ─── Spinner — arc jaune animé ────────────────────────────────────────────────
 
 function LoadingSpinner({ color }: { color: string }): React.JSX.Element {
-  const rotation = useRef(new Animated.Value(0)).current
+  const rotation = useSharedValue(0)
 
   useEffect(() => {
-    const anim = Animated.loop(
-      Animated.timing(rotation, {
-        toValue: 1,
-        duration: 1200,
-        easing: Easing.linear,
-        useNativeDriver: true,
-      })
+    rotation.value = withRepeat(
+      withTiming(360, { duration: 1200, easing: Easing.linear }),
+      -1,
+      false
     )
-    anim.start()
-    return () => anim.stop()
   }, [rotation])
 
-  const spin = rotation.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', '360deg'],
-  })
+  const spinStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${rotation.value}deg` }],
+  }))
 
   return (
     <Animated.View
-      style={{
-        width: 40,
-        height: 40,
-        transform: [{ rotate: spin }],
-      }}
+      style={[
+        { width: 40, height: 40 },
+        spinStyle,
+      ]}
     >
       <Svg width={40} height={40} viewBox="0 0 40 40">
         {/* Arc partiel ~270° — de 12h à 9h dans le sens horaire */}

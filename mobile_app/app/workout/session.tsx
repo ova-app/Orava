@@ -1,10 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  Animated,
   FlatList,
   Keyboard,
   Platform,
-  PanResponder,
   ScrollView,
   StyleSheet,
   Text,
@@ -14,6 +12,15 @@ import {
   Dimensions,
   StatusBar,
 } from 'react-native'
+import Animated, {
+  useSharedValue,
+  withSpring,
+  withTiming,
+  useAnimatedStyle,
+  runOnJS,
+  Easing,
+} from 'react-native-reanimated'
+import { Gesture, GestureDetector, type PanGestureHandlerEventPayload, type GestureStateChangeEvent, type GestureUpdateEvent } from 'react-native-gesture-handler'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { Timer, Plus, Trash2, X, Search, Zap, Flame, Trophy, Check } from 'lucide-react-native'
@@ -254,34 +261,31 @@ interface SetRowProps {
 }
 
 function SetRow({ set, onDelete, colors }: SetRowProps) {
-  const translateX = useRef(new Animated.Value(0)).current
+  const translateX = useSharedValue(0)
   const THRESHOLD = 80
 
-  const panResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 6 && Math.abs(g.dy) < 20,
-        onPanResponderMove: (_, g) => {
-          if (g.dx < 0) translateX.setValue(g.dx)
-        },
-        onPanResponderRelease: (_, g) => {
-          if (g.dx < -THRESHOLD) {
-            Animated.spring(translateX, {
-              toValue: -300,
-              useNativeDriver: true,
-              ...spring.snappy,
-            }).start(() => onDelete())
-          } else {
-            Animated.spring(translateX, {
-              toValue: 0,
-              useNativeDriver: true,
-              ...spring.snappy,
-            }).start()
-          }
-        },
-      }),
-    [onDelete, translateX],
-  )
+  const panGesture = Gesture.Pan()
+    .activeOffsetX([-6, 6])
+    .failOffsetY([-20, 20])
+    .onUpdate((e: GestureUpdateEvent<PanGestureHandlerEventPayload>) => {
+      if (e.translationX < 0) {
+        translateX.value = e.translationX
+      }
+    })
+    .onEnd((e: GestureStateChangeEvent<PanGestureHandlerEventPayload>) => {
+      if (e.translationX < -THRESHOLD) {
+        translateX.value = withSpring(-300, spring.snappy, (finished) => {
+          'worklet'
+          if (finished) runOnJS(onDelete)()
+        })
+      } else {
+        translateX.value = withSpring(0, spring.snappy)
+      }
+    })
+
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: translateX.value }],
+  }))
 
   const prLevel = bestPrLevel(set.pr_charge, set.pr_serie)
   const prColor = prLevelColor(prLevel, colors)
@@ -291,35 +295,37 @@ function SetRow({ set, onDelete, colors }: SetRowProps) {
       <View style={[styles.setRowDeleteBg, { backgroundColor: colors.error, borderRadius: radius.md }]}>
         <Trash2 size={20} color="#fff" />
       </View>
-      <Animated.View
-        style={[
-          styles.setRowContent,
-          { backgroundColor: colors.backgroundSecondary, borderRadius: radius.md, transform: [{ translateX }] },
-        ]}
-        {...panResponder.panHandlers}
-      >
-        <Text style={[styles.setRowLabel, { color: colors.textSecondary }]}>
-          Set {set.set_number}
-        </Text>
-        <Text
-          style={[styles.setRowValue, { color: colors.textPrimary }]}
-          numberOfLines={1}
+      <GestureDetector gesture={panGesture}>
+        <Animated.View
+          style={[
+            styles.setRowContent,
+            { backgroundColor: colors.backgroundSecondary, borderRadius: radius.md },
+            animStyle,
+          ]}
         >
-          {set.weight_kg > 0 ? `${set.weight_kg} kg × ${set.reps}` : `${set.reps} reps`}
-        </Text>
-        {prLevel !== null && (
-          <View style={[styles.prBadge, { borderColor: prColor }]}>
-            {prLevel === 'gold' || prLevel === 'silver' ? (
-              <Zap size={10} color={prColor} />
-            ) : (
-              <Flame size={10} color={prColor} />
-            )}
-            <Text style={[styles.prBadgeText, { color: prColor }]}>
-              {prLevel === 'gold' ? 'PR' : prLevel === 'silver' ? '2e' : '3e'}
-            </Text>
-          </View>
-        )}
-      </Animated.View>
+          <Text style={[styles.setRowLabel, { color: colors.textSecondary }]}>
+            Set {set.set_number}
+          </Text>
+          <Text
+            style={[styles.setRowValue, { color: colors.textPrimary }]}
+            numberOfLines={1}
+          >
+            {set.weight_kg > 0 ? `${set.weight_kg} kg × ${set.reps}` : `${set.reps} reps`}
+          </Text>
+          {prLevel !== null && (
+            <View style={[styles.prBadge, { borderColor: prColor }]}>
+              {prLevel === 'gold' || prLevel === 'silver' ? (
+                <Zap size={10} color={prColor} />
+              ) : (
+                <Flame size={10} color={prColor} />
+              )}
+              <Text style={[styles.prBadgeText, { color: prColor }]}>
+                {prLevel === 'gold' ? 'PR' : prLevel === 'silver' ? '2e' : '3e'}
+              </Text>
+            </View>
+          )}
+        </Animated.View>
+      </GestureDetector>
     </View>
   )
 }
@@ -335,27 +341,23 @@ interface ExerciseModalProps {
 }
 
 function ExerciseModal({ visible, onClose, onSelect, addedIds, colors }: ExerciseModalProps) {
-  const slideAnim = useRef(new Animated.Value(Dimensions.get('window').height)).current
+  const slideValue = useSharedValue(Dimensions.get('window').height)
   const [exercises, setExercises] = useState<ExerciseRow[]>([])
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const insets = useSafeAreaInsets()
 
+  const slideStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: slideValue.value }],
+  }))
+
   useEffect(() => {
     if (visible) {
-      Animated.spring(slideAnim, {
-        toValue: 0,
-        useNativeDriver: true,
-        ...spring.standard,
-      }).start()
+      slideValue.value = withSpring(0, spring.standard)
       fetchExercises()
     } else {
-      Animated.spring(slideAnim, {
-        toValue: Dimensions.get('window').height,
-        useNativeDriver: true,
-        ...spring.snappy,
-      }).start()
+      slideValue.value = withSpring(Dimensions.get('window').height, spring.snappy)
       setSearch('')
       setFilter(null)
     }
@@ -428,11 +430,8 @@ function ExerciseModal({ visible, onClose, onSelect, addedIds, colors }: Exercis
       <Animated.View
         style={[
           styles.modalSheet,
-          {
-            backgroundColor: colors.backgroundSecondary,
-            paddingBottom: insets.bottom,
-            transform: [{ translateY: slideAnim }],
-          },
+          { backgroundColor: colors.backgroundSecondary, paddingBottom: insets.bottom },
+          slideStyle,
         ]}
       >
         {/* Handle */}
@@ -570,29 +569,29 @@ interface PrFlashOverlayProps {
 }
 
 function PrFlashOverlay({ flash, onDismiss, colors }: PrFlashOverlayProps) {
-  const opacity = useRef(new Animated.Value(0)).current
-  const scale = useRef(new Animated.Value(0.85)).current
+  const opacityValue = useSharedValue(0)
+  const scaleValue = useSharedValue(0.85)
   const prevKey = useRef<string | null>(null)
 
   const flashKey = flash
     ? `${flash.prCharge}-${flash.prSerie}-${flash.weight}-${flash.reps}`
     : null
 
+  const overlayStyle = useAnimatedStyle(() => ({ opacity: opacityValue.value }))
+  const cardsStyle = useAnimatedStyle(() => ({ transform: [{ scale: scaleValue.value }] }))
+
   useEffect(() => {
     if (flash && flashKey !== prevKey.current) {
       prevKey.current = flashKey
-      opacity.setValue(0)
-      scale.setValue(0.85)
-      Animated.parallel([
-        Animated.spring(opacity, { toValue: 1, useNativeDriver: true, ...spring.bouncy }),
-        Animated.spring(scale, { toValue: 1, useNativeDriver: true, ...spring.bouncy }),
-      ]).start()
+      opacityValue.value = 0
+      scaleValue.value = 0.85
+      opacityValue.value = withSpring(1, spring.bouncy)
+      scaleValue.value = withSpring(1, spring.bouncy)
 
       const timer = setTimeout(() => {
-        Animated.parallel([
-          Animated.timing(opacity, { toValue: 0, duration: 250, useNativeDriver: true }),
-          Animated.spring(scale, { toValue: 0.9, useNativeDriver: true, ...spring.snappy }),
-        ]).start(() => onDismiss())
+        opacityValue.value = withTiming(0, { duration: 250, easing: Easing.out(Easing.quad) })
+        scaleValue.value = withSpring(0.9, spring.snappy)
+        setTimeout(onDismiss, 260)
       }, 2200)
       return () => clearTimeout(timer)
     }
@@ -607,7 +606,7 @@ function PrFlashOverlay({ flash, onDismiss, colors }: PrFlashOverlayProps) {
 
   return (
     <Animated.View
-      style={[styles.prOverlay, { opacity }]}
+      style={[styles.prOverlay, overlayStyle]}
       pointerEvents="box-none"
     >
       <TouchableOpacity
@@ -615,7 +614,7 @@ function PrFlashOverlay({ flash, onDismiss, colors }: PrFlashOverlayProps) {
         activeOpacity={1}
         onPress={onDismiss}
       />
-      <Animated.View style={[styles.prCardsContainer, { transform: [{ scale }] }]}>
+      <Animated.View style={[styles.prCardsContainer, cardsStyle]}>
         {/* Card 1 — PR Séance (gold) */}
         {hasSeancePr && (
           <View

@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useRef, useState } from 'react'
 import {
   AppState,
   AppStateStatus,
-  Animated,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -14,6 +13,14 @@ import { useRouter } from 'expo-router'
 import { SkipForward } from 'lucide-react-native'
 import Svg, { Circle } from 'react-native-svg'
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import Animated, {
+  useSharedValue,
+  withTiming,
+  withSequence,
+  withDelay,
+  useAnimatedStyle,
+  Easing,
+} from 'react-native-reanimated'
 import { useTheme } from '@/context/ThemeContext'
 import { spacing, radius, typography, font } from '@/constants/theme'
 
@@ -53,7 +60,10 @@ export default function TimerScreen() {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const appStateRef = useRef<AppStateStatus>(AppState.currentState)
 
-  const overlayOpacity = useRef(new Animated.Value(0)).current
+  const overlayOpacity = useSharedValue(0)
+  const overlayStyle = useAnimatedStyle(() => ({
+    opacity: overlayOpacity.value,
+  }))
 
   const clearTick = useCallback(() => {
     if (intervalRef.current !== null) {
@@ -67,16 +77,16 @@ export default function TimerScreen() {
     clearTick()
     setRemaining(0)
     try { Vibration.vibrate(400) } catch (_) {}
-    Animated.sequence([
-      Animated.timing(overlayOpacity, {
-        toValue: 1,
+    overlayOpacity.value = withSequence(
+      withTiming(1, {
         duration: 300,
-        useNativeDriver: true,
+        easing: Easing.out(Easing.quad),
       }),
-      Animated.delay(1200),
-    ]).start(() => {
+      withDelay(1200, withTiming(1, { duration: 0 }))
+    )
+    setTimeout(() => {
       router.back()
-    })
+    }, 1500)
   }, [clearTick, overlayOpacity, router])
 
   const startTick = useCallback((fromRemaining: number) => {
@@ -260,7 +270,8 @@ export default function TimerScreen() {
         <Animated.View
           style={[
             styles.overlay,
-            { backgroundColor: colors.background, opacity: overlayOpacity },
+            { backgroundColor: colors.background },
+            overlayStyle,
           ]}
           pointerEvents="none"
         >

@@ -38,7 +38,14 @@
       "Bash(node -e \"const fs = require\\('fs'\\); const code = fs.readFileSync\\('app/workout/session.tsx', 'utf8'\\); const imports = code.match\\(/^import .+/gm\\); console.log\\(imports.join\\('\\\\n'\\)\\)\")",
       "Bash(Get-Content \"C:\\\\Users\\\\SOFIAN~1\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-SofianeBESSILA-orava\\\\6f47af95-3b25-4802-b6b3-f39a6c738b1a\\\\tasks\\\\b19iwexft.output\" -Wait)",
       "Bash(Select-String --line-buffered \"added|error|npm warn|ERR\")",
-      "PowerShell(New-Item -ItemType Directory -Force -Path \"c:\\\\Users\\\\SofianeBESSILA\\\\orava\\\\mobile_app\\\\__tests__\")"
+      "PowerShell(New-Item -ItemType Directory -Force -Path \"c:\\\\Users\\\\SofianeBESSILA\\\\orava\\\\mobile_app\\\\__tests__\")",
+      "Bash(Get-ChildItem \"c:\\\\Users\\\\SofianeBESSILA\\\\orava\\\\design\\\\figma-export\\\\screens\" -ErrorAction SilentlyContinue)",
+      "Bash(Select-Object Name)",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\SofianeBESSILA\\\\orava\\\\design\" -Recurse -Include \"*.png\")",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\SofianeBESSILA\\\\orava\\\\design\" -Recurse -Filter \"*.png\")",
+      "Bash(Select-Object -First 20)",
+      "Bash(Select-String -Path \"c:\\\\Users\\\\SofianeBESSILA\\\\orava\\\\mobile_app\\\\app\\\\workout\\\\summary.tsx\" -Pattern \"Animated\\\\.Value|Animated\\\\.timing|Animated\\\\.stagger|sectionAnims|sectionStyle\")",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); deps={**d.get\\('dependencies',{}\\), **d.get\\('devDependencies',{}\\)}; [print\\(k\\) for k in deps if 'gesture' in k.lower\\(\\) or 'reanimated' in k.lower\\(\\)]\")"
     ],
     "additionalDirectories": [
       "c:\\Users\\SofianeBESSILA\\orava\\mobile_app\\app\\workout"

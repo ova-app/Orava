@@ -1,6 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  Animated,
   SectionList,
   StyleSheet,
   Text,
@@ -8,6 +7,13 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native'
+import Animated, {
+  useSharedValue,
+  withRepeat,
+  withTiming,
+  useAnimatedStyle,
+  Easing,
+} from 'react-native-reanimated'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { ChevronRight, Search } from 'lucide-react-native'
 import { useRouter } from 'expo-router'
@@ -60,19 +66,22 @@ function normalize(str: string): string {
 
 function SkeletonRow() {
   const { colors } = useTheme()
-  const anim = useRef(new Animated.Value(0.4)).current
+  const shimmer = useSharedValue(0.4)
 
   useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(anim, { toValue: 0.8, duration: 700, useNativeDriver: true }),
-        Animated.timing(anim, { toValue: 0.4, duration: 700, useNativeDriver: true }),
-      ])
-    ).start()
-  }, [anim])
+    shimmer.value = withRepeat(
+      withTiming(0.8, { duration: 700, easing: Easing.inOut(Easing.sin) }),
+      -1,
+      true
+    )
+  }, [])
+
+  const shimmerStyle = useAnimatedStyle(() => ({
+    opacity: shimmer.value,
+  }))
 
   return (
-    <Animated.View style={{ opacity: anim, height: 56, flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.s5, marginBottom: 2 }}>
+    <Animated.View style={[{ height: 56, flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.s5, marginBottom: 2 }, shimmerStyle]}>
       <View style={{ flex: 1 }}>
         <View style={{ width: '45%', height: 12, borderRadius: 4, backgroundColor: colors.backgroundSecondary }} />
         <View style={{ width: '30%', height: 10, borderRadius: 4, backgroundColor: colors.backgroundSecondary, marginTop: 6 }} />

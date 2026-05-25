@@ -1,12 +1,18 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
 import {
-  Animated,
   SectionList,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native'
+import Animated, {
+  useSharedValue,
+  withRepeat,
+  withTiming,
+  useAnimatedStyle,
+  Easing,
+} from 'react-native-reanimated'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { ChevronRight, Trophy } from 'lucide-react-native'
 import { useRouter } from 'expo-router'
@@ -77,16 +83,19 @@ function groupByMonth(rows: WorkoutRow[]): HistorySection[] {
 
 function SkeletonRow() {
   const { colors } = useTheme()
-  const anim = useRef(new Animated.Value(0.4)).current
+  const shimmer = useSharedValue(0.4)
 
   useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(anim, { toValue: 0.8, duration: 700, useNativeDriver: true }),
-        Animated.timing(anim, { toValue: 0.4, duration: 700, useNativeDriver: true }),
-      ])
-    ).start()
-  }, [anim])
+    shimmer.value = withRepeat(
+      withTiming(0.8, { duration: 700, easing: Easing.inOut(Easing.sin) }),
+      -1,
+      true
+    )
+  }, [])
+
+  const shimmerStyle = useAnimatedStyle(() => ({
+    opacity: shimmer.value,
+  }))
 
   return (
     <Animated.View
@@ -94,9 +103,9 @@ function SkeletonRow() {
         styles.card,
         {
           backgroundColor: colors.backgroundSecondary,
-          opacity: anim,
           marginBottom: spacing.s2,
         },
+        shimmerStyle,
       ]}
     >
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s4 }}>

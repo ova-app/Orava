@@ -1,8 +1,7 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import {
   ActivityIndicator,
   Alert,
-  Animated,
   ScrollView,
   StyleSheet,
   Switch,
@@ -10,12 +9,18 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native'
+import Animated, {
+  useSharedValue,
+  withSpring,
+  withDelay,
+  useAnimatedStyle,
+} from 'react-native-reanimated'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { Flame, Zap } from 'lucide-react-native'
 import * as ImagePicker from 'expo-image-picker'
 import { useTheme } from '@/context/ThemeContext'
-import { spacing, radius, typography, touchTarget } from '@/constants/theme'
+import { spacing, radius, typography, touchTarget, spring } from '@/constants/theme'
 import { useWorkout, computePodium, WorkoutExercise, PrLevel } from '@/context/WorkoutContext'
 import { saveMyoSignature } from '@/lib/myo'
 import { insertLocalSet, insertLocalSession } from '@/lib/db'
@@ -86,9 +91,33 @@ export default function SummaryScreen() {
   const [photoUri, setPhotoUri] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
-  const [sectionAnims] = useState(() =>
-    Array.from({ length: 5 }, () => new Animated.Value(0))
-  )
+
+  const anim0 = useSharedValue(0)
+  const anim1 = useSharedValue(0)
+  const anim2 = useSharedValue(0)
+  const anim3 = useSharedValue(0)
+  const anim4 = useSharedValue(0)
+
+  const style0 = useAnimatedStyle(() => ({
+    opacity: anim0.value,
+    transform: [{ translateY: (1 - anim0.value) * 12 }],
+  }))
+  const style1 = useAnimatedStyle(() => ({
+    opacity: anim1.value,
+    transform: [{ translateY: (1 - anim1.value) * 12 }],
+  }))
+  const style2 = useAnimatedStyle(() => ({
+    opacity: anim2.value,
+    transform: [{ translateY: (1 - anim2.value) * 12 }],
+  }))
+  const style3 = useAnimatedStyle(() => ({
+    opacity: anim3.value,
+    transform: [{ translateY: (1 - anim3.value) * 12 }],
+  }))
+  const style4 = useAnimatedStyle(() => ({
+    opacity: anim4.value,
+    transform: [{ translateY: (1 - anim4.value) * 12 }],
+  }))
 
   useEffect(() => {
     if (status !== 'done') {
@@ -96,15 +125,11 @@ export default function SummaryScreen() {
       return
     }
     setWorkoutName(generateWorkoutName(exercises, startedAt))
-    const animations = sectionAnims.map((anim, i) =>
-      Animated.timing(anim, {
-        toValue: 1,
-        duration: 300,
-        delay: i * 80,
-        useNativeDriver: true,
-      })
-    )
-    Animated.stagger(80, animations).start()
+    anim0.value = withDelay(0,   withSpring(1, spring.standard))
+    anim1.value = withDelay(80,  withSpring(1, spring.standard))
+    anim2.value = withDelay(160, withSpring(1, spring.standard))
+    anim3.value = withDelay(240, withSpring(1, spring.standard))
+    anim4.value = withDelay(320, withSpring(1, spring.standard))
   }, [])
 
   // ─── Métriques ───────────────────────────────────────────────────────────
@@ -556,13 +581,6 @@ export default function SummaryScreen() {
     }
   }
 
-  // ─── Animated style helper ───────────────────────────────────────────────
-
-  const sectionStyle = (i: number) => ({
-    opacity: sectionAnims[i],
-    transform: [{ translateY: sectionAnims[i].interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) }],
-  })
-
   // ─── Rendu ────────────────────────────────────────────────────────────────
 
   return (
@@ -574,7 +592,7 @@ export default function SummaryScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* ── Header: date + titre ── */}
-        <Animated.View style={sectionStyle(0)}>
+        <Animated.View style={style0}>
           <Text style={[styles.dateCaption, { color: colors.textTertiary }]}>
             {formatDate(startedAt)}
           </Text>
@@ -584,7 +602,7 @@ export default function SummaryScreen() {
         </Animated.View>
 
         {/* ── Volume total ── */}
-        <Animated.View style={[styles.section, sectionStyle(1)]}>
+        <Animated.View style={[styles.section, style1]}>
           <Text style={[styles.sectionLabel, { color: colors.textTertiary }]}>VOLUME TOTAL</Text>
           <View style={styles.heroRow}>
             <Text style={[styles.heroValue, { color: colors.accent }]} allowFontScaling={false}>
@@ -614,7 +632,7 @@ export default function SummaryScreen() {
 
         {/* ── PRs détectés ── */}
         {hasPrs && (
-          <Animated.View style={[styles.section, sectionStyle(2)]}>
+          <Animated.View style={[styles.section, style2]}>
             <Text style={[styles.sectionLabel, { color: colors.textTertiary }]}>PRs DÉTECTÉS</Text>
             {bestPrCharge !== null && (
               <View style={[styles.prRow, { backgroundColor: colors.backgroundSecondary }]}>
@@ -640,7 +658,7 @@ export default function SummaryScreen() {
 
         {/* ── Groupes musculaires ── */}
         {muscleEntries.length > 0 && (
-          <Animated.View style={[styles.section, sectionStyle(3)]}>
+          <Animated.View style={[styles.section, style3]}>
             <Text style={[styles.sectionLabel, { color: colors.textTertiary }]}>GROUPES MUSCULAIRES</Text>
             {/* Légende */}
             <View style={styles.legendRow}>
@@ -681,7 +699,7 @@ export default function SummaryScreen() {
         )}
 
         {/* ── Partager ── */}
-        <Animated.View style={[styles.section, sectionStyle(4)]}>
+        <Animated.View style={[styles.section, style4]}>
           <View style={[styles.shareRow, { backgroundColor: colors.backgroundSecondary }]}>
             <Text style={[styles.shareLabel, { color: colors.textPrimary }]}>Partager</Text>
             <Switch
