@@ -2,192 +2,495 @@ import React, { useCallback, useEffect, useState } from 'react'
 import {
   View,
   Text,
-  ScrollView,
+  FlatList,
   Pressable,
   StyleSheet,
-  ActivityIndicator,
+  StatusBar,
 } from 'react-native'
+import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
-import { ChevronLeft, Dumbbell, Flame, Trophy, Zap } from 'lucide-react-native'
+import { ChevronLeft, Zap, Flame, Shield } from 'lucide-react-native'
 import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/context/ThemeContext'
-import { spacing, radius, typography } from '@/constants/theme'
-import { prBadgeRecipe, type PrType } from '@/constants/recipes'
-
-// ─── PR Badge (unified) ──────────────────────────────────────────────────────
-
-const PR_ICON: Record<PrType, React.ComponentType<{ size?: number; color?: string }>> = {
-  charge:   Zap,
-  serie:    Flame,
-  exercice: Dumbbell,
-  seance:   Trophy,
-}
-
-function PrBadge({
-  level,
-  type,
-  label,
-  size = 14,
-}: {
-  level: 'gold' | 'silver' | 'bronze'
-  type: PrType
-  label: string
-  size?: number
-}) {
-  const { colors } = useTheme()
-  const r = prBadgeRecipe(level, type, colors)
-  const Icon = PR_ICON[type]
-  return (
-    <View style={r.container}>
-      <Icon size={size} color={r.iconColor} />
-      <Text style={r.label}>{label}</Text>
-    </View>
-  )
-}
+import { spacing, radius, typography, font, touchTarget } from '@/constants/theme'
+import { emptyStateRecipe } from '@/constants/recipes'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 type PrLevel = 'gold' | 'silver' | 'bronze'
-type FilterLevel = 'all' | PrLevel
 
-interface PodiumEntry {
+interface PodiumSlot {
   level: PrLevel
-  weightKg: number
+  weight_kg: number
   reps: number | null
-  date: string | null
 }
 
-interface ExercisePRCard {
+interface ExercisePR {
   exerciseId: string
-  exerciseName: string
-  bestLevel: PrLevel
-  podium: Partial<Record<PrLevel, PodiumEntry>>
+  nameFr: string
+  muscleGroup: string
+  podiumCharge: PodiumSlot[]    // top 3 pr_charge par poids, triés gold→silver→bronze
+  podiumSerie: PodiumSlot[]     // top 3 pr_serie, triés gold→silver→bronze
 }
 
-// ─── Constants ───────────────────────────────────────────────────────────────
+// ─── Raw DB row type ──────────────────────────────────────────────────────────
 
-const PODIUM_LEVELS: PrLevel[] = ['gold', 'silver', 'bronze']
-
-function podiumColors(colors: ReturnType<typeof useTheme>['colors']): Record<PrLevel, string> {
-  return { gold: colors.prGold, silver: colors.prSilver, bronze: colors.prBronze }
+interface RawSetRow {
+  weight_kg:  number | null
+  reps:       number | null
+  pr_charge:  string | null
+  pr_serie:   string | null
+  workout_exercises:
+    | {
+        exercise_id: string
+        exercises:
+          | { name_fr: string; muscle_group: string }[]
+          | { name_fr: string; muscle_group: string }
+      }[]
+    | {
+        exercise_id: string
+        exercises:
+          | { name_fr: string; muscle_group: string }[]
+          | { name_fr: string; muscle_group: string }
+      }
 }
-
-const PODIUM_LABELS: Record<PrLevel, string> = {
-  gold:   'OR',
-  silver: 'ARGENT',
-  bronze: 'BRONZE',
-}
-
-const FILTER_LABELS: Record<FilterLevel, string> = {
-  all:    'Tous',
-  gold:   'Or',
-  silver: 'Argent',
-  bronze: 'Bronze',
-}
-
-const LEVEL_ORDER: Record<PrLevel, number> = { gold: 0, silver: 1, bronze: 2 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function formatShortDate(iso: string | null): string {
-  if (!iso) return ''
-  const d = new Date(iso)
-  return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: '2-digit' })
+const LEVEL_ORDER: Record<PrLevel, number> = { gold: 0, silver: 1, bronze: 2 }
+
+const MUSCLE_LABELS: Record<string, string> = {
+  pectoraux:       'Pectoraux',
+  dos:             'Dos',
+  epaules:         'Épaules',
+  biceps:          'Biceps',
+  triceps:         'Triceps',
+  quadriceps:      'Quadriceps',
+  ischio_jambiers: 'Ischio-jambiers',
+  fessiers:        'Fessiers',
+  mollets:         'Mollets',
+  abdominaux:      'Abdominaux',
+  avant_bras:      'Avant-bras',
+}
+
+function muscleLabel(raw: string): string {
+  return MUSCLE_LABELS[raw] ?? raw.replace(/_/g, ' ')
+}
+
+function levelShortLabel(level: PrLevel): string {
+  return level === 'gold' ? 'OR' : level === 'silver' ? 'ARG' : 'BRZ'
+}
+
+function resolveWE(
+  raw: RawSetRow['workout_exercises'],
+): {
+  exercise_id: string
+  exercises: { name_fr: string; muscle_group: string }[] | { name_fr: string; muscle_group: string }
+} {
+  return Array.isArray(raw) ? raw[0] : raw
+}
+
+function resolveExercise(
+  raw: { name_fr: string; muscle_group: string }[] | { name_fr: string; muscle_group: string },
+): { name_fr: string; muscle_group: string } {
+  return Array.isArray(raw) ? raw[0] : raw
+}
+
+// ─── Build podiums from raw sets ──────────────────────────────────────────────
+
+function buildPodium(
+  entries: { weight_kg: number; reps: number | null; level: PrLevel }[],
+): PodiumSlot[] {
+  const byLevel = new Map<PrLevel, PodiumSlot>()
+  for (const e of entries) {
+    const existing = byLevel.get(e.level)
+    if (!existing || e.weight_kg > existing.weight_kg) {
+      byLevel.set(e.level, { level: e.level, weight_kg: e.weight_kg, reps: e.reps })
+    }
+  }
+  return ([...byLevel.values()] as PodiumSlot[]).sort(
+    (a, b) => LEVEL_ORDER[a.level] - LEVEL_ORDER[b.level],
+  )
+}
+
+function buildExercisePRs(rows: RawSetRow[]): ExercisePR[] {
+  type EntryBuf = { weight_kg: number; reps: number | null; level: PrLevel; nameFr: string; muscleGroup: string }
+
+  const chargeMap = new Map<string, EntryBuf[]>()
+  const serieMap  = new Map<string, EntryBuf[]>()
+
+  for (const row of rows) {
+    if (!row.workout_exercises) continue
+    const we = resolveWE(row.workout_exercises)
+    if (!we) continue
+    const ex = resolveExercise(we.exercises)
+    if (!ex) continue
+
+    const id          = we.exercise_id
+    const nameFr      = ex.name_fr
+    const muscleGroup = ex.muscle_group
+
+    if (row.pr_charge !== null) {
+      const level = row.pr_charge as PrLevel
+      const arr = chargeMap.get(id) ?? []
+      arr.push({ weight_kg: row.weight_kg ?? 0, reps: row.reps, level, nameFr, muscleGroup })
+      chargeMap.set(id, arr)
+    }
+
+    if (row.pr_serie !== null) {
+      const level = row.pr_serie as PrLevel
+      const arr = serieMap.get(id) ?? []
+      arr.push({ weight_kg: row.weight_kg ?? 0, reps: row.reps, level, nameFr, muscleGroup })
+      serieMap.set(id, arr)
+    }
+  }
+
+  const allIds = new Set([...chargeMap.keys(), ...serieMap.keys()])
+  const result: ExercisePR[] = []
+
+  for (const id of allIds) {
+    const chargeEntries = chargeMap.get(id) ?? []
+    const serieEntries  = serieMap.get(id)  ?? []
+    const anyEntry = chargeEntries[0] ?? serieEntries[0]
+    if (!anyEntry) continue
+
+    result.push({
+      exerciseId:    id,
+      nameFr:        anyEntry.nameFr,
+      muscleGroup:   anyEntry.muscleGroup,
+      podiumCharge:  buildPodium(chargeEntries),
+      podiumSerie:   buildPodium(serieEntries),
+    })
+  }
+
+  // Gold first, puis par poids max descendant
+  result.sort((a, b) => {
+    const aGold = a.podiumCharge.some(s => s.level === 'gold') ? 0 : 1
+    const bGold = b.podiumCharge.some(s => s.level === 'gold') ? 0 : 1
+    if (aGold !== bGold) return aGold - bGold
+    const aMax = a.podiumCharge[0]?.weight_kg ?? 0
+    const bMax = b.podiumCharge[0]?.weight_kg ?? 0
+    return bMax - aMax
+  })
+
+  return result
+}
+
+// ─── PodiumSlotView (inline) ──────────────────────────────────────────────────
+
+interface PodiumSlotViewProps {
+  slot: PodiumSlot
+  type: 'charge' | 'serie'
+  colors: ReturnType<typeof useTheme>['colors']
+}
+
+function PodiumSlotView({ slot, type, colors }: PodiumSlotViewProps): React.JSX.Element {
+  const levelColor =
+    slot.level === 'gold'   ? colors.prGold   :
+    slot.level === 'silver' ? colors.prSilver :
+    colors.prBronze
+
+  const iconColor = type === 'charge' ? colors.prGold : colors.accent
+
+  return (
+    <View style={slotSt.col}>
+      <View style={[slotSt.iconBadge, { backgroundColor: `${levelColor}18` }]}>
+        {type === 'charge'
+          ? <Zap   size={13} color={iconColor} fill={iconColor} strokeWidth={0} />
+          : <Flame size={13} color={iconColor} fill={iconColor} strokeWidth={0} />
+        }
+      </View>
+      <Text
+        style={[slotSt.weight, { color: levelColor }]}
+        accessibilityLabel={`${slot.weight_kg} kilogrammes`}
+      >
+        {slot.weight_kg}
+        <Text style={slotSt.unit}> kg</Text>
+      </Text>
+      {slot.reps !== null && slot.reps > 0 && (
+        <Text style={[slotSt.reps, { color: colors.textTertiary }]}>
+          {slot.reps} reps
+        </Text>
+      )}
+      <Text style={[slotSt.levelLabel, { color: levelColor }]}>
+        {levelShortLabel(slot.level)}
+      </Text>
+    </View>
+  )
+}
+
+const slotSt = StyleSheet.create({
+  col: {
+    flex: 1,
+    alignItems: 'center',
+    gap: spacing.s1,
+    paddingVertical: spacing.s2,
+  },
+  iconBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.s1,
+  },
+  weight: {
+    fontSize: 18,
+    fontFamily: font.bold,
+    letterSpacing: -0.3,
+    lineHeight: 22,
+    fontVariant: ['tabular-nums'],
+    textAlign: 'center',
+  },
+  unit: {
+    fontSize: 12,
+    fontFamily: font.regular,
+    letterSpacing: 0,
+  },
+  reps: {
+    ...typography.caption,
+    fontVariant: ['tabular-nums'],
+    textAlign: 'center',
+  },
+  levelLabel: {
+    fontSize: 10,
+    fontFamily: font.bold,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    textAlign: 'center',
+    lineHeight: 14,
+  },
+})
+
+// ─── ExerciseCard (inline) ────────────────────────────────────────────────────
+
+interface ExerciseCardProps {
+  item: ExercisePR
+  colors: ReturnType<typeof useTheme>['colors']
+}
+
+function ExerciseCard({ item, colors }: ExerciseCardProps): React.JSX.Element {
+  const hasCharge = item.podiumCharge.length > 0
+  const hasSerie  = item.podiumSerie.length > 0
+  const hasGold   = item.podiumCharge.some(s => s.level === 'gold')
+
+  return (
+    <View style={[cardSt.card, { backgroundColor: colors.backgroundSecondary }]}>
+
+      {/* En-tête exercice */}
+      <View style={cardSt.header}>
+        <View style={cardSt.headerText}>
+          <Text style={[cardSt.exerciseName, { color: colors.textPrimary }]} numberOfLines={1}>
+            {item.nameFr}
+          </Text>
+          <Text style={[cardSt.muscleGroup, { color: colors.textTertiary }]}>
+            {muscleLabel(item.muscleGroup).toUpperCase()}
+          </Text>
+        </View>
+
+        {hasGold && (
+          <View style={[cardSt.goldPill, { backgroundColor: `${colors.prGold}18` }]}>
+            <Zap size={11} color={colors.prGold} fill={colors.prGold} strokeWidth={0} />
+            <Text style={[cardSt.goldPillText, { color: colors.prGold }]}>OR</Text>
+          </View>
+        )}
+      </View>
+
+      {/* Section charge max */}
+      {hasCharge && (
+        <View style={cardSt.section}>
+          <View style={cardSt.sectionHeader}>
+            <Zap size={11} color={colors.prGold} fill={colors.prGold} strokeWidth={0} />
+            <Text style={[cardSt.sectionLabel, { color: colors.textTertiary }]}>
+              CHARGE MAX
+            </Text>
+          </View>
+          <View style={cardSt.podiumRow}>
+            {item.podiumCharge.map(slot => (
+              <PodiumSlotView key={slot.level} slot={slot} type="charge" colors={colors} />
+            ))}
+            {Array.from({ length: 3 - item.podiumCharge.length }).map((_, i) => (
+              <View key={`ec-${i}`} style={slotSt.col} />
+            ))}
+          </View>
+        </View>
+      )}
+
+      {/* Séparateur */}
+      {hasCharge && hasSerie && (
+        <View style={[cardSt.divider, { backgroundColor: colors.separator }]} />
+      )}
+
+      {/* Section meilleure série */}
+      {hasSerie && (
+        <View style={cardSt.section}>
+          <View style={cardSt.sectionHeader}>
+            <Flame size={11} color={colors.accent} fill={colors.accent} strokeWidth={0} />
+            <Text style={[cardSt.sectionLabel, { color: colors.textTertiary }]}>
+              MEILLEURE SÉRIE
+            </Text>
+          </View>
+          <View style={cardSt.podiumRow}>
+            {item.podiumSerie.map(slot => (
+              <PodiumSlotView key={slot.level} slot={slot} type="serie" colors={colors} />
+            ))}
+            {Array.from({ length: 3 - item.podiumSerie.length }).map((_, i) => (
+              <View key={`es-${i}`} style={slotSt.col} />
+            ))}
+          </View>
+        </View>
+      )}
+    </View>
+  )
+}
+
+const cardSt = StyleSheet.create({
+  card: {
+    borderRadius: radius.md,
+    paddingVertical: spacing.s4,
+    paddingHorizontal: spacing.s4,
+    marginHorizontal: spacing.s4,
+    marginBottom: spacing.s3,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.s4,
+  },
+  headerText: {
+    flex: 1,
+    gap: spacing.s1,
+    marginRight: spacing.s3,
+  },
+  exerciseName: {
+    fontSize: 15,
+    fontFamily: font.bold,
+    letterSpacing: 0,
+    lineHeight: 20,
+  },
+  muscleGroup: {
+    ...typography.caption,
+    textTransform: 'uppercase',
+  },
+  goldPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.s1,
+    paddingHorizontal: spacing.s2,
+    paddingVertical: spacing.s1,
+    borderRadius: radius.full,
+  },
+  goldPillText: {
+    fontSize: 10,
+    fontFamily: font.bold,
+    letterSpacing: 1,
+  },
+  section: {
+    gap: spacing.s3,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.s1,
+  },
+  sectionLabel: {
+    ...typography.caption,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+  },
+  podiumRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+  },
+  divider: {
+    height: 1,
+    marginVertical: spacing.s4,
+  },
+})
+
+// ─── Skeleton card ────────────────────────────────────────────────────────────
+
+function SkeletonCard({ colors }: { colors: ReturnType<typeof useTheme>['colors'] }): React.JSX.Element {
+  return (
+    <View style={[cardSt.card, { backgroundColor: colors.backgroundSecondary, gap: spacing.s4, marginBottom: spacing.s3 }]}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+        <View style={{ width: 160, height: 15, borderRadius: radius.sm, backgroundColor: colors.backgroundTertiary }} />
+        <View style={{ width: 36, height: 12, borderRadius: radius.sm, backgroundColor: colors.backgroundTertiary }} />
+      </View>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-around' }}>
+        {[0, 1, 2].map(i => (
+          <View key={i} style={{ alignItems: 'center', gap: spacing.s2 }}>
+            <View style={{ width: 28, height: 28, borderRadius: radius.full, backgroundColor: colors.backgroundTertiary }} />
+            <View style={{ width: 48, height: 18, borderRadius: radius.sm,  backgroundColor: colors.backgroundTertiary }} />
+            <View style={{ width: 24, height: 10, borderRadius: radius.sm,  backgroundColor: colors.backgroundTertiary }} />
+          </View>
+        ))}
+      </View>
+    </View>
+  )
 }
 
 // ─── Screen ──────────────────────────────────────────────────────────────────
 
 export default function PrsScreen(): React.JSX.Element {
   const { colors } = useTheme()
-  const router = useRouter()
+  const router     = useRouter()
 
-  const [cards, setCards] = useState<ExercisePRCard[]>([])
+  const [prs, setPrs]         = useState<ExercisePR[]>([])
   const [loading, setLoading] = useState<boolean>(true)
-  const [filter, setFilter] = useState<FilterLevel>('all')
+  const [hasError, setHasError] = useState<boolean>(false)
 
   const fetchPRs = useCallback(async (): Promise<void> => {
+    setLoading(true)
+    setHasError(false)
+
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) {
       router.replace('/auth/login')
       return
     }
 
-    // Récupérer tous les sets avec un pr_charge non null
-    const { data: setsData } = await supabase
-      .from('workout_sets')
-      .select(`
-        id, weight_kg, reps, pr_charge,
-        workout_exercises!inner(
-          exercise_id,
-          exercises!inner(name_fr),
-          workouts!inner(started_at, user_id)
-        )
-      `)
-      .eq('workout_exercises.workouts.user_id', user.id)
-      .not('pr_charge', 'is', null)
-      .order('weight_kg', { ascending: false })
+    const [chargeRes, serieRes] = await Promise.all([
+      supabase
+        .from('workout_sets')
+        .select(`
+          weight_kg, reps, pr_charge, pr_serie,
+          workout_exercises!inner(
+            exercise_id,
+            exercises!inner(name_fr, muscle_group)
+          )
+        `)
+        .eq('workout_exercises.workouts.user_id', user.id)
+        .not('pr_charge', 'is', null)
+        .order('weight_kg', { ascending: false }),
 
-    if (!setsData) {
+      supabase
+        .from('workout_sets')
+        .select(`
+          weight_kg, reps, pr_charge, pr_serie,
+          workout_exercises!inner(
+            exercise_id,
+            exercises!inner(name_fr, muscle_group)
+          )
+        `)
+        .eq('workout_exercises.workouts.user_id', user.id)
+        .not('pr_serie', 'is', null)
+        .order('weight_kg', { ascending: false }),
+    ])
+
+    if (chargeRes.error || serieRes.error) {
+      setHasError(true)
       setLoading(false)
       return
     }
 
-    // Agréger par exercice : garder meilleur set par niveau
-    const exerciseMap = new Map<string, ExercisePRCard>()
+    const allRows: RawSetRow[] = [
+      ...(chargeRes.data as RawSetRow[]),
+      ...(serieRes.data as RawSetRow[]),
+    ]
 
-    type WeType = {
-      exercise_id: string
-      exercises: { name_fr: string }[] | { name_fr: string }
-      workouts: { started_at: string; user_id: string }[] | { started_at: string; user_id: string }
-    }
-    type SetRow = typeof setsData[number] & { workout_exercises: WeType[] | WeType }
-
-    for (const set of setsData as SetRow[]) {
-      const weRaw = set.workout_exercises
-      const we = Array.isArray(weRaw) ? weRaw[0] : weRaw
-
-      const exerciseId = we.exercise_id
-      const exRaw = we.exercises
-      const exObj = Array.isArray(exRaw) ? exRaw[0] : exRaw
-      const exerciseName = exObj.name_fr
-      const workoutsRaw = we.workouts
-      const workoutsObj = Array.isArray(workoutsRaw) ? workoutsRaw[0] : workoutsRaw
-      const date = workoutsObj.started_at
-      const level = set.pr_charge as PrLevel
-
-      if (!exerciseMap.has(exerciseId)) {
-        exerciseMap.set(exerciseId, {
-          exerciseId,
-          exerciseName,
-          bestLevel: level,
-          podium: {},
-        })
-      }
-
-      const card = exerciseMap.get(exerciseId)!
-
-      // Pour chaque niveau, on garde l'entrée avec le poids le plus lourd
-      if (!card.podium[level] || (set.weight_kg ?? 0) > card.podium[level]!.weightKg) {
-        card.podium[level] = {
-          level,
-          weightKg: set.weight_kg ?? 0,
-          reps: set.reps ?? null,
-          date,
-        }
-      }
-
-      // Mettre à jour bestLevel (gold > silver > bronze)
-      if (LEVEL_ORDER[level] < LEVEL_ORDER[card.bestLevel]) {
-        card.bestLevel = level
-      }
-    }
-
-    // Trier : gold first, puis silver, puis bronze
-    const sorted = Array.from(exerciseMap.values()).sort((a, b) =>
-      LEVEL_ORDER[a.bestLevel] - LEVEL_ORDER[b.bestLevel]
-    )
-
-    setCards(sorted)
+    setPrs(buildExercisePRs(allRows))
     setLoading(false)
   }, [router])
 
@@ -195,141 +498,115 @@ export default function PrsScreen(): React.JSX.Element {
     void fetchPRs()
   }, [fetchPRs])
 
-  const s = buildStyles(colors)
-  const PC = podiumColors(colors)
+  const s     = buildStyles(colors)
+  const empty = emptyStateRecipe('history', colors)
 
-  // Filtrer les cards
-  const visibleCards = filter === 'all'
-    ? cards
-    : cards.filter(c => c.podium[filter] != null)
+  // ── Header partagé ────────────────────────────────────────────────────────
+
+  const Header = (
+    <View style={s.header}>
+      <Pressable
+        style={({ pressed }) => [s.backBtn, pressed && { opacity: 0.6 }]}
+        onPress={() => router.back()}
+        accessibilityRole="button"
+        accessibilityLabel="Retour"
+        hitSlop={8}
+      >
+        <ChevronLeft size={24} color={colors.textPrimary} strokeWidth={2} />
+      </Pressable>
+      <Text style={s.headerTitle}>ARMURERIE</Text>
+      <View style={s.headerSpacer} />
+    </View>
+  )
+
+  // ── Skeleton ──────────────────────────────────────────────────────────────
 
   if (loading) {
     return (
-      <View style={s.loader}>
-        <ActivityIndicator color={colors.accent} size="large" />
-      </View>
+      <SafeAreaView style={s.safeArea}>
+        <StatusBar barStyle="light-content" backgroundColor={colors.background} />
+        {Header}
+        <View style={s.skeletonList}>
+          {[0, 1, 2, 3].map(i => <SkeletonCard key={i} colors={colors} />)}
+        </View>
+      </SafeAreaView>
     )
   }
 
-  return (
-    <View style={s.container}>
-      <ScrollView
-        style={s.scroll}
-        contentContainerStyle={s.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* ── Header ── */}
-        <View style={s.header}>
+  // ── Erreur ────────────────────────────────────────────────────────────────
+
+  if (hasError) {
+    return (
+      <SafeAreaView style={s.safeArea}>
+        <StatusBar barStyle="light-content" backgroundColor={colors.background} />
+        {Header}
+        <View style={empty.container}>
+          <View style={empty.icon}>
+            <Shield size={28} color={colors.textTertiary} strokeWidth={1.5} />
+          </View>
+          <Text style={empty.title}>Erreur de chargement</Text>
+          <Text style={empty.subtitle}>Vérifie ta connexion et réessaie.</Text>
           <Pressable
-            style={({ pressed }) => [s.backBtn, pressed && { opacity: 0.6 }]}
-            onPress={() => router.back()}
+            style={({ pressed }) => [empty.cta, pressed && { opacity: 0.7 }]}
+            onPress={() => void fetchPRs()}
             accessibilityRole="button"
-            accessibilityLabel="Retour"
-            hitSlop={8}
+            accessibilityLabel="Réessayer"
           >
-            <ChevronLeft size={24} color={colors.textPrimary} />
+            <Text style={empty.ctaLabel}>Réessayer</Text>
           </Pressable>
-
-          <View style={s.headerTitles}>
-            <Text style={s.title}>Armurerie</Text>
-            <Text style={s.subtitle}>Tes records absolus</Text>
-          </View>
         </View>
+      </SafeAreaView>
+    )
+  }
 
-        {/* ── Filtres ── */}
-        <View style={s.filtersRow}>
-          {(['all', 'gold', 'silver', 'bronze'] as FilterLevel[]).map(f => {
-            const active = filter === f
-            const chipColor = f === 'all' ? null : PC[f as PrLevel]
+  // ── Empty ─────────────────────────────────────────────────────────────────
 
-            return (
-              <Pressable
-                key={f}
-                style={({ pressed }) => [
-                  s.filterChip,
-                  active && s.filterChipActive,
-                  pressed && { opacity: 0.7 },
-                ]}
-                onPress={() => setFilter(f)}
-                accessibilityRole="button"
-                accessibilityLabel={`Filtrer ${FILTER_LABELS[f]}`}
-                accessibilityState={{ selected: active }}
-              >
-                <Text style={[
-                  s.filterChipText,
-                  active && { color: chipColor ?? colors.textPrimary },
-                ]}>
-                  {FILTER_LABELS[f]}
-                </Text>
-              </Pressable>
-            )
-          })}
+  if (prs.length === 0) {
+    return (
+      <SafeAreaView style={s.safeArea}>
+        <StatusBar barStyle="light-content" backgroundColor={colors.background} />
+        {Header}
+        <View style={empty.container}>
+          <View style={empty.icon}>
+            <Zap size={28} color={colors.textTertiary} strokeWidth={1.5} />
+          </View>
+          <Text style={empty.title}>Aucun record pour l'instant</Text>
+          <Text style={empty.subtitle}>
+            Lance ta première séance — tes PRs s'afficheront ici.
+          </Text>
         </View>
+      </SafeAreaView>
+    )
+  }
 
-        {/* ── Cards ── */}
-        {visibleCards.length === 0 ? (
-          <View style={s.emptyState}>
-            <Text style={s.emptyText}>
-              {filter === 'all'
-                ? 'Aucun record encore. Lance ta première séance !'
-                : `Aucun record ${FILTER_LABELS[filter].toLowerCase()} pour l'instant.`}
-            </Text>
-          </View>
-        ) : (
-          <View style={s.cardsList}>
-            {visibleCards.map(card => (
-              <View key={card.exerciseId} style={s.exerciseCard}>
-                {/* Nom + trophy si gold */}
-                <View style={s.cardHeader}>
-                  <Text style={s.exerciseName} numberOfLines={2}>{card.exerciseName}</Text>
-                  {card.bestLevel === 'gold' && (
-                    <Trophy size={16} color={colors.prGold} style={s.trophyIcon} />
-                  )}
-                </View>
+  // ── Liste ─────────────────────────────────────────────────────────────────
 
-                {/* Podium 3 colonnes */}
-                <View style={s.podiumRow}>
-                  {PODIUM_LEVELS.map(level => {
-                    const entry = card.podium[level]
-                    const levelColor = PC[level]
-                    const isEmpty = !entry
+  return (
+    <SafeAreaView style={s.safeArea}>
+      <StatusBar barStyle="light-content" backgroundColor={colors.background} />
 
-                    return (
-                      <View key={level} style={s.podiumCol}>
-                        {/* Label niveau */}
-                        <Text style={[s.podiumLevelLabel, { color: isEmpty ? colors.textTertiary : levelColor }]}>
-                          {PODIUM_LABELS[level]}
-                        </Text>
-
-                        {/* Valeur */}
-                        {isEmpty ? (
-                          <Text style={s.podiumEmpty}>—</Text>
-                        ) : (
-                          <>
-                            <Text style={[s.podiumValue, { color: levelColor }]} accessibilityLabel={`${entry.weightKg} kilogrammes`}>
-                              {entry.weightKg}
-                              <Text style={s.podiumUnit}> kg</Text>
-                            </Text>
-                            {entry.reps != null && (
-                              <Text style={s.podiumReps} accessibilityLabel={`${entry.reps} répétitions`}>
-                                × {entry.reps}
-                              </Text>
-                            )}
-                            <Text style={s.podiumDate}>
-                              {formatShortDate(entry.date)}
-                            </Text>
-                          </>
-                        )}
-                      </View>
-                    )
-                  })}
-                </View>
-              </View>
-            ))}
-          </View>
-        )}
-      </ScrollView>
-    </View>
+      <FlatList
+        data={prs}
+        keyExtractor={item => item.exerciseId}
+        renderItem={({ item }) => <ExerciseCard item={item} colors={colors} />}
+        ListHeaderComponent={
+          <>
+            {Header}
+            <View style={s.countRow}>
+              <Text style={s.countValue}>{prs.length}</Text>
+              <Text style={s.countLabel}>
+                {prs.length === 1 ? ' exercice' : ' exercices'}
+              </Text>
+            </View>
+          </>
+        }
+        contentContainerStyle={s.listContent}
+        showsVerticalScrollIndicator={false}
+        initialNumToRender={8}
+        maxToRenderPerBatch={6}
+        windowSize={5}
+      />
+    </SafeAreaView>
   )
 }
 
@@ -337,159 +614,62 @@ export default function PrsScreen(): React.JSX.Element {
 
 function buildStyles(colors: ReturnType<typeof useTheme>['colors']) {
   return StyleSheet.create({
-    container: {
+    safeArea: {
       flex: 1,
       backgroundColor: colors.background,
     },
-    loader: {
-      flex: 1,
-      backgroundColor: colors.background,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    scroll: {
-      flex: 1,
-    },
-    scrollContent: {
-      paddingBottom: spacing.s12,
-    },
-
-    // Header
     header: {
       flexDirection: 'row',
-      alignItems: 'flex-start',
-      paddingTop: spacing.s12,
+      alignItems: 'center',
       paddingHorizontal: spacing.s4,
-      paddingBottom: spacing.s6,
-      gap: spacing.s3,
+      paddingTop: spacing.s4,
+      paddingBottom: spacing.s3,
+      minHeight: touchTarget.comfort,
     },
     backBtn: {
-      width: 44,
-      height: 44,
-      alignItems: 'center',
-      justifyContent: 'center',
-      marginTop: 2,
-    },
-    headerTitles: {
-      flex: 1,
-    },
-    title: {
-      ...typography.title,
-      color: colors.textPrimary,
-    },
-    subtitle: {
-      ...typography.body,
-      color: colors.textSecondary,
-      marginTop: spacing.s1,
-    },
-
-    // Filtres
-    filtersRow: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: spacing.s2,
-      paddingHorizontal: spacing.s4,
-      marginBottom: spacing.s6,
-    },
-    filterChip: {
-      height: 36,
-      paddingHorizontal: spacing.s4,
-      backgroundColor: colors.backgroundSecondary,
-      borderRadius: radius.full,
+      width: touchTarget.min,
+      height: touchTarget.min,
       alignItems: 'center',
       justifyContent: 'center',
     },
-    filterChipActive: {
-      backgroundColor: colors.backgroundTertiary,
-    },
-    filterChipText: {
-      ...typography.caption,
-      color: colors.textSecondary,
-      letterSpacing: 0.3,
-    },
-
-    // Empty state
-    emptyState: {
-      paddingHorizontal: spacing.s6,
-      paddingTop: spacing.s10,
-      alignItems: 'center',
-    },
-    emptyText: {
-      ...typography.body,
-      color: colors.textSecondary,
-      textAlign: 'center',
-    },
-
-    // Cards list
-    cardsList: {
-      paddingHorizontal: spacing.s4,
-      gap: spacing.s3,
-    },
-
-    // Exercise card
-    exerciseCard: {
-      backgroundColor: colors.backgroundSecondary,
-      borderRadius: radius.lg,
-      padding: spacing.s4,
-    },
-    cardHeader: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      marginBottom: spacing.s4,
-    },
-    exerciseName: {
-      ...typography.body,
-      fontFamily: 'Barlow_700Bold',
+    headerTitle: {
+      ...typography.subtitle,
+      fontFamily: font.bold,
       color: colors.textPrimary,
-      flex: 1,
-    },
-    trophyIcon: {
-      marginLeft: spacing.s2,
-    },
-
-    // Podium
-    podiumRow: {
-      flexDirection: 'row',
-      gap: spacing.s3,
-    },
-    podiumCol: {
-      flex: 1,
-      alignItems: 'center',
-    },
-    podiumLevelLabel: {
-      fontSize: 10,
-      fontFamily: 'Barlow_700Bold',
-      letterSpacing: 1,
+      letterSpacing: 1.5,
       textTransform: 'uppercase',
-      marginBottom: spacing.s2,
-    },
-    podiumEmpty: {
-      ...typography.body,
-      color: colors.textTertiary,
-      marginTop: spacing.s1,
-    },
-    podiumValue: {
-      fontSize: 24,
-      fontFamily: 'Barlow_800ExtraBold',
-      letterSpacing: -0.5,
-      fontVariant: ['tabular-nums'],
-    },
-    podiumUnit: {
-      fontSize: 12,
-      fontFamily: 'Barlow_400Regular',
-    },
-    podiumReps: {
-      ...typography.caption,
-      color: colors.textSecondary,
-      fontVariant: ['tabular-nums'],
-      marginTop: 2,
-    },
-    podiumDate: {
-      ...typography.caption,
-      color: colors.textTertiary,
-      marginTop: spacing.s1,
+      flex: 1,
       textAlign: 'center',
+    },
+    headerSpacer: {
+      width: touchTarget.min,
+    },
+    countRow: {
+      flexDirection: 'row',
+      alignItems: 'baseline',
+      paddingHorizontal: spacing.s4,
+      paddingBottom: spacing.s4,
+    },
+    countValue: {
+      fontSize: 22,
+      fontFamily: font.bold,
+      color: colors.textPrimary,
+      letterSpacing: -0.3,
+      lineHeight: 28,
+      fontVariant: ['tabular-nums'],
+    },
+    countLabel: {
+      fontSize: 15,
+      fontFamily: font.regular,
+      color: colors.textSecondary,
+      letterSpacing: 0,
+      lineHeight: 22,
+    },
+    listContent: {
+      paddingBottom: spacing.s12,
+    },
+    skeletonList: {
+      paddingTop: spacing.s2,
     },
   })
 }

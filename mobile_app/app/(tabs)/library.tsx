@@ -18,8 +18,8 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { ChevronRight, Search } from 'lucide-react-native'
 import { useRouter } from 'expo-router'
 import { useTheme } from '@/context/ThemeContext'
-import { spacing, radius, typography } from '@/constants/theme'
-import { emptyStateRecipe } from '@/constants/recipes'
+import { spacing, radius, typography, font, touchTarget } from '@/constants/theme'
+import { emptyStateRecipe, skeletonRecipe } from '@/constants/recipes'
 import { supabase } from '@/lib/supabase'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -67,6 +67,7 @@ function normalize(str: string): string {
 
 function SkeletonRow() {
   const { colors } = useTheme()
+  const sk = skeletonRecipe(colors)
   const shimmer = useSharedValue(0.4)
 
   useEffect(() => {
@@ -82,10 +83,10 @@ function SkeletonRow() {
   }))
 
   return (
-    <Animated.View style={[{ height: 56, flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.s5, marginBottom: 2 }, shimmerStyle]}>
-      <View style={{ flex: 1 }}>
-        <View style={{ width: '45%', height: 12, borderRadius: 4, backgroundColor: colors.backgroundSecondary }} />
-        <View style={{ width: '30%', height: 10, borderRadius: 4, backgroundColor: colors.backgroundSecondary, marginTop: 6 }} />
+    <Animated.View style={[{ minHeight: touchTarget.comfort, flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.s5, marginBottom: 2 }, shimmerStyle]}>
+      <View style={{ flex: 1, gap: spacing.s2 }}>
+        <View style={[sk.line, { width: '45%' }]} />
+        <View style={[sk.line, { width: '30%', height: 10 }]} />
       </View>
     </Animated.View>
   )
@@ -119,14 +120,14 @@ function ExerciseRow({ item, onPress }: ExerciseRowProps) {
       onPress={onPress}
       style={[styles.exerciseRow]}
     >
-      <View style={{ flex: 1 }}>
+      <View style={{ flex: 1, gap: spacing.s1 }}>
         <Text
-          style={[typography.body, { color: colors.textPrimary, fontFamily: 'Barlow_700Bold' }]}
+          style={[typography.body, { color: colors.textPrimary, fontFamily: font.bold }]}
           numberOfLines={1}
         >
           {item.name_fr}
         </Text>
-        <Text style={[typography.caption, { color: colors.textSecondary }]} numberOfLines={1}>
+        <Text style={[typography.caption, { color: colors.textTertiary }]} numberOfLines={1}>
           {subtitle}
         </Text>
       </View>
@@ -230,16 +231,29 @@ export default function LibraryScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-      <Text style={[typography.title, { color: colors.textPrimary, paddingHorizontal: spacing.s5, paddingTop: spacing.s12, paddingBottom: spacing.s4 }]}>
+      <Text
+        style={[
+          typography.caption,
+          {
+            color: colors.textPrimary,
+            fontFamily: font.bold,
+            textTransform: 'uppercase',
+            letterSpacing: 1,
+            paddingHorizontal: spacing.s5,
+            paddingTop: spacing.s10,
+            paddingBottom: spacing.s4,
+          },
+        ]}
+      >
         Bibliothèque
       </Text>
 
       {/* SearchBar */}
-      <View style={[styles.searchBar, { backgroundColor: colors.backgroundSecondary }]}>
+      <View style={[styles.searchBar, { backgroundColor: colors.inputBackground }]}>
         <Search size={16} color={colors.textTertiary} />
         <TextInput
           style={[
-            typography.caption,
+            typography.body,
             {
               flex: 1,
               color: colors.textPrimary,
@@ -247,7 +261,7 @@ export default function LibraryScreen() {
               paddingVertical: 0,
             },
           ]}
-          placeholder="Rechercher un exercice…"
+          placeholder="Rechercher..."
           placeholderTextColor={colors.textTertiary}
           value={query}
           onChangeText={setQuery}
@@ -330,10 +344,12 @@ export default function LibraryScreen() {
                 typography.caption,
                 {
                   color: colors.textTertiary,
+                  fontFamily: font.bold,
                   textTransform: 'uppercase',
+                  letterSpacing: 1,
                   paddingHorizontal: spacing.s5,
+                  paddingVertical: spacing.s2,
                   paddingTop: spacing.s6,
-                  paddingBottom: spacing.s2,
                   backgroundColor: colors.background,
                 },
               ]}
@@ -347,9 +363,7 @@ export default function LibraryScreen() {
               onPress={() => router.push(`/exercise/${item.id}` as const)}
             />
           )}
-          ItemSeparatorComponent={() => (
-            <View style={{ height: 1, backgroundColor: colors.separator, marginHorizontal: spacing.s5 }} />
-          )}
+          ItemSeparatorComponent={() => null}
           SectionSeparatorComponent={() => null}
           ListEmptyComponent={() =>
             query.length > 0 || activeGroup != null ? <LibraryEmptyState /> : null
@@ -380,21 +394,22 @@ const styles = StyleSheet.create({
   chipsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: spacing.s2,
     paddingHorizontal: spacing.s5,
     marginBottom: spacing.s3,
   },
   chip: {
     height: 32,
     borderRadius: radius.full,
-    paddingHorizontal: 12,
+    paddingHorizontal: spacing.s3,
     justifyContent: 'center',
     alignItems: 'center',
   },
   exerciseRow: {
-    height: 56,
+    minHeight: touchTarget.comfort,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: spacing.s5,
+    paddingVertical: spacing.s3,
   },
 })
