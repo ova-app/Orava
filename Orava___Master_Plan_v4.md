@@ -671,3 +671,146 @@ Le modèle doit afficher sa propre incertitude — jamais de fausse précision.
 | **Hallucinations Claude sur Reanimated / Three.js** | Haute | Moyen | Toujours coller la doc officielle dans le prompt. Partir de code existant (Spline, Shadertoy). |
 | **Concurrents copiant le Myo 3D** | Faible à terme | Élevé | ADN Athlétique (données accumulées, non exportables) = rempart long terme. Avancer vite. |
 | **Coûts Supabase sous-estimés** | Faible | Moyen | Monitorer Edge Function calls (génération ADN hebdomadaire). Compute dédié si > 10k MAU. |
+
+---
+
+## 15. Passage à 20/20 — Tâches Qualité Professionnelle
+
+Ces tâches n'ajoutent aucune feature visible. Elles comblent l'écart entre "ça marche" et "c'est pro". À intégrer en parallèle des phases, pas en bloc à la fin.
+
+---
+
+### 15.1. Architecture — 15/20 → 20/20 (6 tâches)
+
+**A1 — Système de migration SQLite**
+Ajouter `PRAGMA user_version` dans `lib/db.ts`. Chaque modification de schéma = nouvelle version + migration séquentielle.
+```typescript
+// lib/db.ts
+const SCHEMA_VERSION = 1
+async function runMigrations(db: SQLiteDatabase) {
+  const { user_version } = await db.getFirstAsync<{ user_version: number }>('PRAGMA user_version')
+  if (user_version < 1) {
+    // migration v0 → v1
+    await db.execAsync(`CREATE TABLE IF NOT EXISTS ...`)
+    await db.execAsync(`PRAGMA user_version = 1`)
+  }
+  // if (user_version < 2) { ... }
+}
+```
+Sans ça, toute modification de `local_sets` ou `local_sessions` casse les users existants.
+
+**A2 — Offline queue pour saves Supabase**
+Dans `lib/storage.ts`, ajouter une queue MMKV persistante. Si le save Supabase échoue dans `summary.tsx`, la séance est mise en queue et retentée au prochain mount de l'app.
+```typescript
+// Clé MMKV : 'pending_saves' → JSON array de payloads sérialisés
+// Au mount de _layout.tsx : drainer la queue, retry avec backoff exponentiel (1s, 2s, 4s, max 3 tentatives)
+// Supprimer de la queue uniquement après confirmation Supabase
+```
+
+**A3 — Découper WorkoutContext**
+`WorkoutContext.tsx` gère trop de responsabilités. Découper en 3 contextes :
+- `SessionContext` — machine d'état (idle/active/done), exercises, sets
+- `PRContext` — détection PR temps réel, top-3 chargés par exercice
+- `TimerContext` — elapsedSeconds, restTimer, AppState listener
+Chaque contexte dans son fichier. `WorkoutContext.tsx` devient un barrel qui les compose.
+
+**A4 — Types centralisés par domaine**
+`types/index.ts` reste vide par règle, mais créer des fichiers de types par domaine dans `lib/` :
+- `lib/types.workout.ts` — `Session`, `Exercise`, `WorkingSet`, `PRLevel`
+- `lib/types.myo.ts` — `MyoSignature`, `FamilyValues`, `DimConfig`
+- `lib/types.supabase.ts` — types dérivés du schéma DB (générés depuis Supabase si possible)
+Importer depuis ces fichiers, pas redéfinir inline dans chaque screen.
+
+**A5 — Error boundaries sur les screens critiques**
+Wrapper `session.tsx` et `summary.tsx` dans un ErrorBoundary React. Si une exception non catchée arrive pendant la séance, afficher un écran de récupération (pas un crash blanc) avec bouton "Reprendre la séance".
+
+**A6 — Retry et feedback sur save Supabase**
+Dans `summary.tsx`, le save actuel est best-effort silencieux. Ajouter :
+- Indicateur visuel pendant le save (spinner discret, pas bloquant)
+- Si échec → toast "Sauvegardé localement, sync en attente" (pas "Erreur")
+- Retry automatique via la queue A2
+- Jamais afficher "Erreur" à l'utilisateur — afficher l'état réel
+
+---
+
+### 15.2. Design System — 14/20 → 20/20 (4 tâches)
+
+**D1 — Designer et valider le light mode**
+Les tokens `light` dans `theme.ts` ne sont pas validés visuellement. Ouvrir Figma, créer les 5 screens principaux en light mode, valider les contrastes (WCAG AA minimum). Mettre à jour `theme.ts` uniquement après validation visuelle.
+Priorité basse (dark mode = 100% des users Phase 1-2), mais ne pas livrer des valeurs inventées.
+
+**D2 — ESLint règle anti-hardcode couleur**
+Ajouter une règle ESLint custom (ou `eslint-plugin-react-native`) qui rejette toute valeur de couleur hexadécimale ou rgba hardcodée dans les fichiers `app/`. Forcer l'usage de `colors.xxx` via `useTheme()`.
+```json
+// .eslintrc.js — règle no-restricted-syntax
+// détecter les strings matchant /#[0-9A-Fa-f]{3,8}/ ou /rgba?\(/ dans StyleSheet.create
+```
+Sans cette règle, un dev (ou toi à 2h du matin) hardcode `#FF0000` et le light mode casse.
+
+**D3 — Documenter les use cases dans theme.ts**
+Ajouter un commentaire d'une ligne par token indiquant le contexte d'usage exact :
+```typescript
+accent: '#FFDD00',      // CTA primaire, PR actif, métrique hero — 1 fois max par screen
+prGold: '#FAC775',      // podium or uniquement — jamais décoratif
+textSecondary: '#7A7A8C', // labels, metadata — jamais sur fond backgroundTertiary (contraste insuffisant)
+```
+Un nouveau contributeur doit savoir sans lire les règles pourquoi un token existe.
+
+**D4 — Audit de conformité design system**
+Passer en revue chaque screen et vérifier mécaniquement :
+- Aucune valeur de couleur hardcodée
+- Aucune valeur de fontSize inline (utiliser les tokens typo)
+- Aucune valeur de spacing arbitraire (utiliser la grille 8pt)
+- Aucun `linear` easing dans les animations
+Créer une checklist dans `rules/ui.md` et la cocher screen par screen. Documenter les exceptions justifiées.
+
+---
+
+### 15.3. Tests — 13/20 → 20/20 (5 tâches)
+
+**T1 — Tests d'intégration SQLite (non mockée)**
+Ajouter des tests qui tournent contre une vraie instance `expo-sqlite` (in-memory). Tester les flows complets :
+- `initDB()` → `insertLocalSet()` → `getGhostReference()` → résultat correct
+- Migration v0→v1 correcte sans perte de données
+- Comportement si `local_sets` est vide (retourne null, pas exception)
+Sans ces tests, un bug dans les requêtes SQLite passera jusqu'en prod.
+
+**T2 — Tests des chemins d'erreur**
+Pour chaque fonction critique, tester le cas où ça plante :
+```typescript
+// summary.tsx — Supabase timeout
+// ghost.ts — SQLite inaccessible
+// myo.ts — exercise_muscles vide
+// WorkoutContext — MMKV plein / corrompu
+```
+Objectif : s'assurer que chaque erreur est catchée et produit un comportement défini, pas un crash.
+
+**T3 — Tests E2E avec Maestro**
+Installer Maestro CLI. Écrire 3 flows critiques en `.yaml` :
+```
+flow_1 : Login → Démarrer séance → Logger 1 set → Valider → Summary → Save
+flow_2 : Login → Historique → Ouvrir séance → Vérifier données
+flow_3 : Login → Library → Chercher exercice → Ajouter à séance
+```
+Intégrer dans CI : `maestro test flows/` sur simulateur iOS. Ces tests catchent les régressions visuelles et de navigation que Jest ne voit pas.
+
+**T4 — Seuil de couverture en CI**
+Ajouter dans `package.json` :
+```json
+"jest": {
+  "coverageThreshold": {
+    "global": { "lines": 70 },
+    "./lib/": { "lines": 85 },
+    "./context/": { "lines": 80 }
+  }
+}
+```
+CI échoue si la couverture descend sous ces seuils. Empêche la dette de test de s'accumuler silencieusement.
+
+**T5 — Benchmark performance documenté**
+Créer `__tests__/perf/benchmark.md`. Pour chaque release, documenter :
+- FPS Myo 3D sur Pixel 6a (via `react-native-fps-monitor` ou Flipper)
+- Temps de génération summary complet (du tap TERMINER au rendu complet)
+- Temps de calcul `saveMyoSignature()`
+- Taille du bundle JS
+Seuils d'alerte : Myo < 30 FPS → blocker. Summary > 3s → blocker. Pas de CI automatique sur les perfs (trop instable en émulateur), mais une vérification manuelle documentée à chaque merge sur `main`.
