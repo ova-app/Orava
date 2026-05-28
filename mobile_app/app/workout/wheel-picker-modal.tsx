@@ -10,7 +10,9 @@ import {
 import Animated, {
   useSharedValue,
   withSpring,
+  withTiming,
   useAnimatedStyle,
+  Easing,
 } from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { X } from 'lucide-react-native'
@@ -22,10 +24,9 @@ import { spacing, radius, typography, touchTarget, spring } from '@/constants/th
 interface WheelPickerModalProps {
   isVisible: boolean
   onClose: () => void
-  onValidate: (weight: number, reps: number, rpe: number) => void
+  onValidate: (weight: number, reps: number) => void
   currentWeight?: number
   currentReps?: number
-  currentRpe?: number
   equipmentType: string | null
   ghostValue?: number
   ghostBeaten?: boolean
@@ -34,7 +35,6 @@ interface WheelPickerModalProps {
 interface WheelState {
   weight: number
   reps: number
-  rpe: number
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────
@@ -44,7 +44,6 @@ const VISIBLE_ITEMS = 3
 const CENTER_ITEM_INDEX = Math.floor(VISIBLE_ITEMS / 2)
 
 const REPS_VALUES = Array.from({ length: 50 }, (_, i) => i + 1)
-const RPE_VALUES = Array.from({ length: 10 }, (_, i) => i + 1)
 
 function getWeightValues(equipType: string | null): number[] {
   if (equipType === 'bodyweight') return []
@@ -66,6 +65,8 @@ interface SingleWheelProps {
   isEmpty?: boolean
 }
 
+const WHEEL_HEIGHT = ITEM_HEIGHT * VISIBLE_ITEMS // 240px, hauteur fixe de la zone scroll
+
 function SingleWheel({ values, selectedValue, onValueChange, label, isEmpty }: SingleWheelProps) {
   const { colors } = useTheme()
   const scrollRef = useRef<FlatList<number>>(null)
@@ -74,42 +75,33 @@ function SingleWheel({ values, selectedValue, onValueChange, label, isEmpty }: S
 
   useEffect(() => {
     if (scrollRef.current && values.length > 0) {
-      setTimeout(() => {
-        scrollRef.current?.scrollToIndex({
-          index: Math.max(0, currentIndex - CENTER_ITEM_INDEX),
+      const t = setTimeout(() => {
+        scrollRef.current?.scrollToOffset({
+          offset: currentIndex * ITEM_HEIGHT,
           animated: false,
-          viewPosition: CENTER_ITEM_INDEX / VISIBLE_ITEMS,
         })
-      }, 50)
+      }, 80)
+      return () => clearTimeout(t)
     }
-  }, [currentIndex, values.length])
+  // currentIndex exclu intentionnellement : ne jamais interrompre un scroll utilisateur en cours
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [values.length])
 
   function handleMomentumScrollEnd(e: { nativeEvent: { contentOffset: { y: number } } }) {
     if (values.length === 0) return
     const idx = Math.round(e.nativeEvent.contentOffset.y / ITEM_HEIGHT)
-    const clamped = Math.max(0, Math.min(idx, Math.max(0, values.length - 1)))
-    if (clamped < values.length) {
-      onValueChange(values[clamped])
-    }
-  }
-
-  function handleScrollEndDrag(e: { nativeEvent: { contentOffset: { y: number } } }) {
-    if (values.length === 0) return
-    const idx = Math.round(e.nativeEvent.contentOffset.y / ITEM_HEIGHT)
-    const clamped = Math.max(0, Math.min(idx, Math.max(0, values.length - 1)))
-    if (clamped < values.length) {
-      onValueChange(values[clamped])
-    }
+    const clamped = Math.max(0, Math.min(idx, values.length - 1))
+    onValueChange(values[clamped])
   }
 
   if (isEmpty || values.length === 0) {
     return (
       <View style={styles.wheelContainer}>
-        <View style={styles.wheelCenterHighlight}>
-          <View style={[styles.wheelCenterBox, { backgroundColor: colors.backgroundTertiary }]} />
-        </View>
-        <View style={styles.wheelContent}>
+        <View style={[styles.wheelScroll, { height: WHEEL_HEIGHT, justifyContent: 'center', alignItems: 'center' }]}>
           <Text style={[styles.wheelEmptyText, { color: colors.textTertiary }]}>—</Text>
+        </View>
+        <View style={[styles.wheelCenterHighlight, { top: ITEM_HEIGHT * CENTER_ITEM_INDEX }]} pointerEvents="none">
+          <View style={styles.wheelCenterBox} />
         </View>
         <Text style={[styles.wheelLabel, { color: colors.textSecondary }]}>{label}</Text>
       </View>
@@ -118,16 +110,17 @@ function SingleWheel({ values, selectedValue, onValueChange, label, isEmpty }: S
 
   return (
     <View style={styles.wheelContainer}>
-      {/* Center highlight */}
-      <View style={styles.wheelCenterHighlight}>
-        <View style={[styles.wheelCenterBox, { backgroundColor: colors.backgroundTertiary }]} />
-      </View>
-
       {/* FlatList wheel */}
       <FlatList
         ref={scrollRef}
         data={values}
+        style={styles.wheelScroll}
         keyExtractor={(item, idx) => `${item}-${idx}`}
+        getItemLayout={(_, index) => ({
+          length: ITEM_HEIGHT,
+          offset: ITEM_HEIGHT * CENTER_ITEM_INDEX + ITEM_HEIGHT * index,
+          index,
+        })}
         renderItem={({ item: val, index: idx }) => {
           const distFromCenter = Math.abs(idx - currentIndex)
           const isSelected = distFromCenter === 0
@@ -153,17 +146,18 @@ function SingleWheel({ values, selectedValue, onValueChange, label, isEmpty }: S
           )
         }}
         onMomentumScrollEnd={handleMomentumScrollEnd}
-        onScrollEndDrag={handleScrollEndDrag}
         scrollEventThrottle={16}
-        snapToAlignment="center"
-        snapToOffsets={values.map((_, i) => Math.max(0, i * ITEM_HEIGHT - ITEM_HEIGHT * CENTER_ITEM_INDEX))}
+        snapToInterval={ITEM_HEIGHT}
         decelerationRate="fast"
-        contentContainerStyle={{
-          paddingVertical: ITEM_HEIGHT * CENTER_ITEM_INDEX,
-        }}
+        contentContainerStyle={{ paddingVertical: ITEM_HEIGHT * CENTER_ITEM_INDEX }}
         showsVerticalScrollIndicator={false}
         nestedScrollEnabled
       />
+
+      {/* Center highlight — au-dessus de la liste, transparent avec bordures uniquement */}
+      <View style={[styles.wheelCenterHighlight, { top: ITEM_HEIGHT * CENTER_ITEM_INDEX }]} pointerEvents="none">
+        <View style={styles.wheelCenterBox} />
+      </View>
 
       {/* Label at bottom */}
       <Text style={[styles.wheelLabel, { color: colors.textSecondary }]}>{label}</Text>
@@ -179,7 +173,6 @@ export default function WheelPickerModal({
   onValidate,
   currentWeight = 20,
   currentReps = 5,
-  currentRpe = 6,
   equipmentType,
   ghostValue,
   ghostBeaten = false,
@@ -187,11 +180,12 @@ export default function WheelPickerModal({
   const { colors } = useTheme()
   const insets = useSafeAreaInsets()
   const slideValue = useSharedValue(Dimensions.get('window').height)
+  const backdropOpacity = useSharedValue(0)
+  const [mounted, setMounted] = React.useState(isVisible)
 
   const [state, setState] = React.useState<WheelState>({
     weight: currentWeight,
     reps: currentReps,
-    rpe: currentRpe,
   })
 
   const weightValues = useMemo(() => getWeightValues(equipmentType), [equipmentType])
@@ -199,33 +193,43 @@ export default function WheelPickerModal({
   const slideStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: slideValue.value }],
   }))
+  const backdropStyle = useAnimatedStyle(() => ({
+    opacity: backdropOpacity.value,
+  }))
 
   useEffect(() => {
     if (isVisible) {
-      slideValue.value = withSpring(0, spring.bouncy)
+      setMounted(true)
+      slideValue.value = withSpring(0, spring.standard)
+      backdropOpacity.value = withTiming(1, { duration: 200 })
     } else {
       slideValue.value = withSpring(Dimensions.get('window').height, spring.snappy)
+      backdropOpacity.value = withTiming(0, { duration: 180, easing: Easing.out(Easing.quad) })
+      const t = setTimeout(() => setMounted(false), 360)
+      return () => clearTimeout(t)
     }
-  }, [isVisible, slideValue])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isVisible])
 
   function handleValidate() {
-    onValidate(state.weight, state.reps, state.rpe)
+    onValidate(state.weight, state.reps)
     onClose()
   }
 
-  if (!isVisible) return null
+  if (!mounted) return null
 
   // Current ghost status: weight beats ghost
   const ghostBeatenCurrent = ghostBeaten && state.weight > (ghostValue ?? 0)
 
   return (
     <View style={StyleSheet.absoluteFillObject} pointerEvents="box-none">
-      {/* Overlay backdrop */}
-      <TouchableOpacity
-        style={[styles.modalOverlay]}
-        activeOpacity={1}
-        onPress={onClose}
-      />
+      {/* Overlay backdrop — animé */}
+      <Animated.View
+        style={[styles.modalOverlay, backdropStyle]}
+        pointerEvents={isVisible ? 'auto' : 'none'}
+      >
+        <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={onClose} />
+      </Animated.View>
 
       {/* Modal sheet (80% height) */}
       <Animated.View
@@ -274,12 +278,6 @@ export default function WheelPickerModal({
             selectedValue={state.reps}
             onValueChange={(r) => setState(s => ({ ...s, reps: r }))}
             label="REPS"
-          />
-          <SingleWheel
-            values={RPE_VALUES}
-            selectedValue={state.rpe}
-            onValueChange={(rpe) => setState(s => ({ ...s, rpe }))}
-            label="RPE"
           />
         </View>
 
@@ -399,26 +397,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.s2,
   },
+  wheelScroll: {
+    height: WHEEL_HEIGHT,
+    width: '100%',
+  },
   wheelCenterHighlight: {
     position: 'absolute',
-    top: '50%',
-    left: 0,
-    right: 0,
-    transform: [{ translateY: -ITEM_HEIGHT / 2 }],
+    left: spacing.s2,
+    right: spacing.s2,
     height: ITEM_HEIGHT,
-    zIndex: 10,
     pointerEvents: 'none',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.s2,
   },
   wheelCenterBox: {
     flex: 1,
     borderRadius: radius.md,
-  },
-  wheelContent: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: 'transparent',
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
   },
   wheelItem: {
     alignItems: 'center',

@@ -248,6 +248,8 @@ interface ExerciseModalProps {
 
 function ExerciseModal({ visible, onClose, onSelect, addedIds, colors }: ExerciseModalProps) {
   const slideValue = useSharedValue(Dimensions.get('window').height)
+  const backdropOpacity = useSharedValue(0)
+  const [mounted, setMounted] = useState(visible)
   const [exercises, setExercises] = useState<ExerciseRow[]>([])
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<string | null>(null)
@@ -257,15 +259,25 @@ function ExerciseModal({ visible, onClose, onSelect, addedIds, colors }: Exercis
   const slideStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: slideValue.value }],
   }))
+  const backdropStyle = useAnimatedStyle(() => ({
+    opacity: backdropOpacity.value,
+  }))
 
   useEffect(() => {
     if (visible) {
+      setMounted(true)
       slideValue.value = withSpring(0, spring.standard)
+      backdropOpacity.value = withTiming(1, { duration: 200 })
       fetchExercises()
     } else {
       slideValue.value = withSpring(Dimensions.get('window').height, spring.snappy)
-      setSearch('')
-      setFilter(null)
+      backdropOpacity.value = withTiming(0, { duration: 180, easing: Easing.out(Easing.quad) })
+      const t = setTimeout(() => {
+        setMounted(false)
+        setSearch('')
+        setFilter(null)
+      }, 360)
+      return () => clearTimeout(t)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible])
@@ -321,15 +333,16 @@ function ExerciseModal({ visible, onClose, onSelect, addedIds, colors }: Exercis
     return result
   }, [sections])
 
-  if (!visible) return null
+  if (!mounted) return null
 
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
-      <TouchableOpacity
-        style={[styles.modalOverlay]}
-        activeOpacity={1}
-        onPress={onClose}
-      />
+      <Animated.View
+        style={[styles.modalOverlay, backdropStyle]}
+        pointerEvents={visible ? 'auto' : 'none'}
+      >
+        <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={onClose} />
+      </Animated.View>
       <Animated.View
         style={[
           styles.modalSheet,
@@ -1054,15 +1067,13 @@ export default function SessionScreen() {
       <WheelPickerModal
         isVisible={wheelPickerVisible}
         onClose={() => setWheelPickerVisible(false)}
-        onValidate={(weight, reps, rpe) => {
+        onValidate={(weight, reps) => {
           handleWeightChange(weight)
           handleRepsChange(reps)
-          // RPE stored for future use (summary.tsx)
           setWheelPickerVisible(false)
         }}
         currentWeight={draftWeight}
         currentReps={draftReps}
-        currentRpe={6}
         equipmentType={currentExercise?.equipment_type ?? null}
         ghostValue={ghostRef && ghostEnabled ? ghostRef.weight_kg : undefined}
         ghostBeaten={ghostBeaten}

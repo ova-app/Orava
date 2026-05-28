@@ -158,8 +158,8 @@ export default function TimerScreen() {
     clearTick()
     setFinished(false)
     setRemaining(next)
-    totalRef.current = next
-    pausedElapsedRef.current = 0
+    // totalRef.current intentionally unchanged — gauge = next / original_total
+    pausedElapsedRef.current = totalRef.current - next
     if (!paused) startTick(next)
   }, [finished, remaining, paused, clearTick, startTick])
 

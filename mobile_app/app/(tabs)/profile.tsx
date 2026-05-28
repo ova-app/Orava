@@ -210,39 +210,37 @@ function HistoryRowInProfile({ item, onPress, colors }: HistoryRowProps) {
 
         {/* Right : icône PR + volume + chevron */}
         <View style={styles.rightCol}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            {item.pr_seance === 'gold' && (
-              <Trophy size={14} color={colors.prGold} />
-            )}
-            {item.pr_seance === 'silver' && (
-              <Trophy size={14} color={colors.prSilver} />
-            )}
-            {item.pr_seance === 'bronze' && (
-              <Trophy size={14} color={colors.prBronze} />
-            )}
+          {item.pr_seance === 'gold' && (
+            <Trophy size={14} color={colors.prGold} />
+          )}
+          {item.pr_seance === 'silver' && (
+            <Trophy size={14} color={colors.prSilver} />
+          )}
+          {item.pr_seance === 'bronze' && (
+            <Trophy size={14} color={colors.prBronze} />
+          )}
+          <Text
+            style={[
+              typography.body,
+              {
+                color: colors.textPrimary,
+                fontFamily: font.bold,
+                fontVariant: ['tabular-nums'],
+                fontSize: 14,
+              },
+            ]}
+          >
+            {volumeStr}{' '}
             <Text
-              style={[
-                typography.body,
-                {
-                  color: colors.textPrimary,
-                  fontFamily: font.bold,
-                  fontVariant: ['tabular-nums'],
-                  fontSize: 14,
-                },
-              ]}
+              style={{
+                fontFamily: font.regular,
+                color: colors.textSecondary,
+                fontSize: 12,
+              }}
             >
-              {volumeStr}{' '}
-              <Text
-                style={{
-                  fontFamily: font.regular,
-                  color: colors.textSecondary,
-                  fontSize: 12,
-                }}
-              >
-                kg
-              </Text>
+              kg
             </Text>
-          </View>
+          </Text>
           <ChevronRight size={14} color={colors.textTertiary} style={{ marginTop: 2 }} />
         </View>
       </View>
@@ -503,19 +501,21 @@ export default function ProfileScreen(): React.JSX.Element {
 
             {/* Stats row */}
             <View style={s.statsCard}>
-              <View style={s.statCol}>
-                <Text style={s.statValueSide}>{stats.seances}</Text>
-                <Text style={s.statLabel}>SÉANCES</Text>
-              </View>
-              <View style={s.statSep} />
-              <View style={s.statColCenter}>
+              <View style={s.statHeroRow}>
                 <Text style={s.statValueHero}>{formatVolume(stats.volumeKg)}</Text>
                 <Text style={[s.statLabel, s.statLabelAccent]}>KG CE MOIS</Text>
               </View>
-              <View style={s.statSep} />
-              <View style={s.statCol}>
-                <Text style={s.statValueSide}>{stats.streakSemaines}</Text>
-                <Text style={s.statLabel}>STREAK SEM.</Text>
+              <View style={s.statSepH} />
+              <View style={s.statSecondaryRow}>
+                <View style={s.statCol}>
+                  <Text style={s.statValueSide}>{stats.seances}</Text>
+                  <Text style={s.statLabel}>SÉANCES</Text>
+                </View>
+                <View style={s.statSep} />
+                <View style={s.statCol}>
+                  <Text style={s.statValueSide}>{stats.streakSemaines}</Text>
+                  <Text style={s.statLabel}>STREAK SEM.</Text>
+                </View>
               </View>
             </View>
 
@@ -718,12 +718,25 @@ function buildStyles(colors: ReturnType<typeof useTheme>['colors']) {
 
     // ── Stats card ──
     statsCard: {
-      flexDirection: 'row',
+      flexDirection: 'column',
       backgroundColor: colors.backgroundSecondary,
       borderRadius: radius.lg,
       paddingVertical: spacing.s5,
       paddingHorizontal: spacing.s4,
       marginBottom: spacing.s6,
+    },
+    statHeroRow: {
+      alignItems: 'center',
+      paddingBottom: spacing.s4,
+    },
+    statSepH: {
+      height: 1,
+      backgroundColor: colors.separator,
+      marginHorizontal: spacing.s4,
+      marginBottom: spacing.s4,
+    },
+    statSecondaryRow: {
+      flexDirection: 'row',
       alignItems: 'center',
     },
     statCol: {
@@ -736,7 +749,7 @@ function buildStyles(colors: ReturnType<typeof useTheme>['colors']) {
     },
     statSep: {
       width: 1,
-      height: 48,
+      height: 40,
       backgroundColor: colors.separator,
     },
     statValueSide: {

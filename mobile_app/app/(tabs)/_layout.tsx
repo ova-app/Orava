@@ -1,8 +1,8 @@
 import React from 'react'
-import { View, StyleSheet, Image } from 'react-native'
+import { View, StyleSheet } from 'react-native'
 import { Tabs } from 'expo-router'
-import { Plus, BookOpen } from 'lucide-react-native'
-import { dark, spacing, radius } from '@/constants/theme'
+import { Dumbbell, BookOpen, Zap } from 'lucide-react-native'
+import { dark, radius } from '@/constants/theme'
 
 export default function TabLayout() {
   return (
@@ -12,6 +12,10 @@ export default function TabLayout() {
         tabBarStyle: styles.tabBar,
         tabBarActiveTintColor: dark.accent,
         tabBarInactiveTintColor: dark.textSecondary,
+        tabBarBackground: () => null,
+        tabBarActiveBackgroundColor: 'transparent',
+        tabBarInactiveBackgroundColor: 'transparent',
+        tabBarItemStyle: { backgroundColor: 'transparent' },
       }}
     >
       <Tabs.Screen
@@ -19,25 +23,20 @@ export default function TabLayout() {
         options={{
           title: '',
           tabBarIcon: ({ color }) => (
-            <View style={styles.logoContainer}>
-              <View
-                style={[
-                  styles.logoBg,
-                  { borderColor: color === dark.accent ? dark.accent : dark.textSecondary },
-                ]}
-              >
-                <View style={styles.logoInnerRing}>
-                  <View style={styles.logoCenterDot} />
-                </View>
-              </View>
+            <View style={styles.sideIcon}>
+              <Zap size={22} color={color} strokeWidth={1.5} />
             </View>
           ),
           tabBarLabel: () => null,
+          tabBarItemStyle: { backgroundColor: 'transparent', alignItems: 'flex-end', paddingRight: 8 },
         }}
-        listeners={({ navigation }) => ({
+        listeners={({ navigation, route }) => ({
           tabPress: (e) => {
+            const state = navigation.getState()
+            const isOnFeed = state.routes[state.index]?.name === route.name
+            if (isOnFeed) return
             e.preventDefault()
-            navigation.navigate('/(tabs)/feed')
+            navigation.navigate('feed')
           },
         })}
       />
@@ -47,8 +46,8 @@ export default function TabLayout() {
         options={{
           title: '',
           tabBarIcon: () => (
-            <View style={styles.fabContainer}>
-              <Plus size={32} color={dark.background} strokeWidth={2.5} />
+            <View style={styles.fab}>
+              <Dumbbell size={26} color={dark.background} strokeWidth={2} />
             </View>
           ),
           tabBarLabel: () => null,
@@ -66,65 +65,51 @@ export default function TabLayout() {
         options={{
           title: '',
           tabBarIcon: ({ color }) => (
-            <BookOpen size={24} color={color} strokeWidth={1.5} />
+            <View style={styles.sideIcon}>
+              <BookOpen size={22} color={color} strokeWidth={1.5} />
+            </View>
           ),
           tabBarLabel: () => null,
+          tabBarItemStyle: { backgroundColor: 'transparent', alignItems: 'flex-start', paddingLeft: 8 },
         }}
       />
+
+      <Tabs.Screen name="history" options={{ href: null }} />
+      <Tabs.Screen name="profile" options={{ href: null }} />
     </Tabs>
   )
 }
 
 const styles = StyleSheet.create({
   tabBar: {
-    backgroundColor: dark.backgroundSecondary,
-    borderTopColor: dark.separator,
-    borderTopWidth: 1,
-    height: 64,
-    paddingBottom: spacing.s2,
-    paddingTop: spacing.s2,
-    justifyContent: 'space-around',
-    alignItems: 'center',
+    position: 'absolute',
+    bottom: 28,
+    left: 32,
+    right: 32,
+    height: 68,
+    backgroundColor: 'transparent',
+    borderTopWidth: 0,
+    elevation: 0,
+    shadowOpacity: 0,
   },
-  logoContainer: {
+sideIcon: {
+    width: 44,
+    height: 44,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  logoBg: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: dark.accent,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-  },
-  logoInnerRing: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: dark.background,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  logoCenterDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: dark.accent,
-  },
-  fabContainer: {
-    width: 64,
-    height: 64,
+  fab: {
+    width: 56,
+    height: 56,
     borderRadius: radius.full,
     backgroundColor: dark.accent,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: spacing.s3,
+    marginBottom: 18,
     shadowColor: dark.accent,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 8,
+    shadowOpacity: 0.55,
+    shadowRadius: 16,
+    elevation: 14,
   },
 })
