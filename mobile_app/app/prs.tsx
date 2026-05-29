@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   View,
   Text,
@@ -6,6 +6,7 @@ import {
   Pressable,
   StyleSheet,
   StatusBar,
+  ScrollView,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
@@ -437,9 +438,23 @@ export default function PrsScreen(): React.JSX.Element {
   const { colors } = useTheme()
   const router     = useRouter()
 
-  const [prs, setPrs]         = useState<ExercisePR[]>([])
-  const [loading, setLoading] = useState<boolean>(true)
-  const [hasError, setHasError] = useState<boolean>(false)
+  const [prs, setPrs]               = useState<ExercisePR[]>([])
+  const [loading, setLoading]       = useState<boolean>(true)
+  const [hasError, setHasError]     = useState<boolean>(false)
+  const [selectedMuscle, setSelectedMuscle] = useState<string | null>(null)
+
+  const muscleGroups = useMemo((): string[] => {
+    const seen = new Set<string>()
+    for (const pr of prs) if (pr.muscleGroup) seen.add(pr.muscleGroup)
+    return [...seen].sort((a, b) =>
+      muscleLabel(a).localeCompare(muscleLabel(b), 'fr')
+    )
+  }, [prs])
+
+  const filteredPrs = useMemo((): ExercisePR[] => {
+    if (!selectedMuscle) return prs
+    return prs.filter(pr => pr.muscleGroup === selectedMuscle)
+  }, [prs, selectedMuscle])
 
   const fetchPRs = useCallback(async (): Promise<void> => {
     setLoading(true)
@@ -451,45 +466,111 @@ export default function PrsScreen(): React.JSX.Element {
       return
     }
 
-    const { data, error } = await supabase
+    // Step 1 : workout IDs de l'user
+    const { data: workoutsData, error: wErr } = await supabase
       .from('workouts')
-      .select(`
-        workout_exercises (
-          exercise_id,
-          exercises (name_fr, muscle_group),
-          workout_sets (weight_kg, reps, pr_charge, pr_serie)
-        )
-      `)
+      .select('id')
       .eq('user_id', user.id)
-      .limit(10000)
 
-    if (error || !data) {
+    if (wErr || !workoutsData) {
+      console.error('[prs] workouts query error:', wErr)
+      setHasError(true)
+      setLoading(false)
+      return
+    }
+    if (workoutsData.length === 0) {
+      setPrs([])
+      setLoading(false)
+      return
+    }
+
+    const workoutIds = workoutsData.map(w => (w as any).id as string)
+
+    // Step 2 : workout_exercises (pas de join — FK non déclaré en DB)
+    const { data: weRows, error: weError } = await supabase
+      .from('workout_exercises')
+      .select('id, exercise_id')
+      .in('workout_id', workoutIds)
+
+    if (weError || !weRows) {
+      console.error('[prs] workout_exercises query error:', weError)
+      setHasError(true)
+      setLoading(false)
+      return
+    }
+    if (weRows.length === 0) {
+      setPrs([])
+      setLoading(false)
+      return
+    }
+
+    // Step 3 : infos exercice (query séparée — FK exercise_id non contrainte)
+    const exerciseIds = [...new Set(weRows.map(w => (w as any).exercise_id as string))]
+    const { data: exRows, error: exError } = await supabase
+      .from('exercises')
+      .select('id, name_fr, muscle_group')
+      .in('id', exerciseIds)
+
+    if (exError || !exRows) {
+      console.error('[prs] exercises query error:', exError)
       setHasError(true)
       setLoading(false)
       return
     }
 
-    // Flatten all sets from all workouts with their exercise info
-    const allRows: RawSetRow[] = []
-    for (const workout of data as any[]) {
-      for (const we of workout.workout_exercises || []) {
-        const ex = Array.isArray(we.exercises) ? we.exercises[0] : we.exercises
-        if (!ex) continue
-        for (const set of we.workout_sets || []) {
-          if (set.pr_charge || set.pr_serie) {
-            allRows.push({
-              weight_kg: set.weight_kg,
-              reps: set.reps,
-              pr_charge: set.pr_charge,
-              pr_serie: set.pr_serie,
-              workout_exercises: {
-                exercise_id: we.exercise_id,
-                exercises: ex,
-              },
-            } as RawSetRow)
-          }
-        }
+    const exMap = new Map<string, { name_fr: string; muscle_group: string }>()
+    for (const ex of exRows as any[]) {
+      exMap.set(String(ex.id), { name_fr: ex.name_fr, muscle_group: ex.muscle_group })
+    }
+
+    type WeInfo = { exercise_id: string; name_fr: string; muscle_group: string }
+    const weMap = new Map<string, WeInfo>()
+    for (const we of weRows as any[]) {
+      const exInfo = exMap.get(String(we.exercise_id))
+      if (exInfo && we.id && we.exercise_id) {
+        weMap.set(String(we.id), {
+          exercise_id: String(we.exercise_id),
+          name_fr: exInfo.name_fr,
+          muscle_group: exInfo.muscle_group,
+        })
       }
+    }
+
+    const weIds = [...weMap.keys()]
+    if (weIds.length === 0) {
+      setPrs([])
+      setLoading(false)
+      return
+    }
+
+    // Step 4 : sets de ces workout_exercises
+    const { data: sets, error: setsError } = await supabase
+      .from('workout_sets')
+      .select('weight_kg, reps, pr_charge, pr_serie, workout_exercise_id')
+      .in('workout_exercise_id', weIds)
+
+    if (setsError || !sets) {
+      console.error('[prs] workout_sets query error:', setsError)
+      setHasError(true)
+      setLoading(false)
+      return
+    }
+
+    const allRows: RawSetRow[] = []
+    for (const set of sets as any[]) {
+      if (!set.pr_charge && !set.pr_serie) continue
+      const info = weMap.get(String(set.workout_exercise_id))
+      if (!info) continue
+      allRows.push({
+        weight_kg: set.weight_kg,
+        reps: set.reps,
+        pr_charge: set.pr_charge,
+        pr_serie: set.pr_serie,
+        workout_exercises: {
+          exercise_id: info.exercise_id,
+          exercises: { name_fr: info.name_fr, muscle_group: info.muscle_group },
+        },
+      })
     }
 
     setPrs(buildExercisePRs(allRows))
@@ -588,16 +669,62 @@ export default function PrsScreen(): React.JSX.Element {
       <StatusBar barStyle="light-content" backgroundColor={colors.background} />
 
       <FlatList
-        data={prs}
+        data={filteredPrs}
         keyExtractor={item => item.exerciseId}
         renderItem={({ item }) => <ExerciseCard item={item} colors={colors} />}
         ListHeaderComponent={
           <>
             {Header}
+
+            {/* Chips filtres groupe musculaire */}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={s.chipsContainer}
+            >
+              <Pressable
+                style={({ pressed }) => [
+                  s.chip,
+                  !selectedMuscle && s.chipActive,
+                  { backgroundColor: !selectedMuscle ? colors.accent : colors.backgroundSecondary },
+                  pressed && { opacity: 0.7 },
+                ]}
+                onPress={() => setSelectedMuscle(null)}
+                accessibilityRole="button"
+                accessibilityLabel="Tous les groupes musculaires"
+              >
+                <Text style={[s.chipLabel, { color: !selectedMuscle ? colors.background : colors.textSecondary }]}>
+                  TOUS
+                </Text>
+              </Pressable>
+
+              {muscleGroups.map(group => {
+                const active = selectedMuscle === group
+                return (
+                  <Pressable
+                    key={group}
+                    style={({ pressed }) => [
+                      s.chip,
+                      active && s.chipActive,
+                      { backgroundColor: active ? colors.accent : colors.backgroundSecondary },
+                      pressed && { opacity: 0.7 },
+                    ]}
+                    onPress={() => setSelectedMuscle(active ? null : group)}
+                    accessibilityRole="button"
+                    accessibilityLabel={muscleLabel(group)}
+                  >
+                    <Text style={[s.chipLabel, { color: active ? colors.background : colors.textSecondary }]}>
+                      {muscleLabel(group).toUpperCase()}
+                    </Text>
+                  </Pressable>
+                )
+              })}
+            </ScrollView>
+
             <View style={s.countRow}>
-              <Text style={s.countValue}>{prs.length}</Text>
+              <Text style={s.countValue}>{filteredPrs.length}</Text>
               <Text style={s.countLabel}>
-                {prs.length === 1 ? ' exercice' : ' exercices'}
+                {filteredPrs.length === 1 ? ' exercice' : ' exercices'}
               </Text>
             </View>
           </>
@@ -672,6 +799,23 @@ function buildStyles(colors: ReturnType<typeof useTheme>['colors']) {
     },
     skeletonList: {
       paddingTop: spacing.s2,
+    },
+    chipsContainer: {
+      paddingHorizontal: spacing.s4,
+      paddingBottom: spacing.s3,
+      gap: spacing.s2,
+      flexDirection: 'row',
+    },
+    chip: {
+      paddingHorizontal: spacing.s3,
+      paddingVertical: spacing.s2,
+      borderRadius: radius.full,
+    },
+    chipActive: {},
+    chipLabel: {
+      fontSize: 11,
+      fontFamily: font.bold,
+      letterSpacing: 0.8,
     },
   })
 }

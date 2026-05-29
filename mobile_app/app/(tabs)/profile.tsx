@@ -9,17 +9,23 @@ import {
   SectionList,
   TouchableOpacity,
 } from 'react-native'
-import {
+import Animated, {
   useSharedValue,
   useAnimatedReaction,
+  useAnimatedStyle,
+  useAnimatedProps,
+  cancelAnimation,
   runOnJS,
   withTiming,
+  withSequence,
+  withSpring,
   withDelay,
   Easing,
 } from 'react-native-reanimated'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
-import { Zap, Flame, Trophy, ChevronRight } from 'lucide-react-native'
+import { Zap, Flame, Trophy, ChevronRight, Shield, TrendingUp, Settings, Users, UserPlus } from 'lucide-react-native'
+import Svg, { Circle as SvgCircle } from 'react-native-svg'
 import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/context/ThemeContext'
 import { spacing, radius, typography, font } from '@/constants/theme'
@@ -298,6 +304,178 @@ function AnimatedCounter({
   return <Text style={style}>{displayValue}</Text>
 }
 
+// ─── Spark helpers ────────────────────────────────────────────────────────────
+
+const CIRC = 2 * Math.PI * 21        // ≈ 131.9 px (périmètre r=21)
+const SPARK_LEN = 9                   // longueur du trait en px
+const AnimatedSvgCircle = Animated.createAnimatedComponent(SvgCircle)
+
+function useSpark(sparkDelay: number) {
+  const dashOffset = useSharedValue(0)
+  const sparkOpacity = useSharedValue(0)
+
+  function triggerSpark() {
+    cancelAnimation(dashOffset)
+    cancelAnimation(sparkOpacity)
+    dashOffset.value = 0
+    sparkOpacity.value = 0
+    // Trait glisse sur la moitié du rebord (12h → 6h) en 2.2s, vitesse constante
+    dashOffset.value = withTiming(-(CIRC / 2), { duration: 2200, easing: Easing.linear })
+    // Apparaît doucement puis s'efface avant d'arriver
+    sparkOpacity.value = withSequence(
+      withTiming(0.3, { duration: 400 }),
+      withTiming(0.3, { duration: 1100 }),
+      withTiming(0, { duration: 700 })
+    )
+  }
+
+  useEffect(() => {
+    const initial = setTimeout(() => triggerSpark(), sparkDelay)
+    const interval = setInterval(() => triggerSpark(), 5000)
+    return () => { clearTimeout(initial); clearInterval(interval) }
+  }, [])
+
+  const sparkContainerStyle = useAnimatedStyle(() => ({ opacity: sparkOpacity.value }))
+  const animatedCircleProps = useAnimatedProps(() => ({ strokeDashoffset: dashOffset.value }))
+
+  return { sparkContainerStyle, animatedCircleProps }
+}
+
+function SparkOverlay({ colors, sparkContainerStyle, animatedCircleProps }: {
+  colors: ReturnType<typeof useTheme>['colors']
+  sparkContainerStyle: ReturnType<typeof useAnimatedStyle>
+  animatedCircleProps: ReturnType<typeof useAnimatedProps>
+}) {
+  return (
+    <Animated.View style={[StyleSheet.absoluteFill, sparkContainerStyle]} pointerEvents="none">
+      <Svg width={44} height={44}>
+        <AnimatedSvgCircle
+          cx={22}
+          cy={22}
+          r={21}
+          fill="none"
+          stroke={colors.accent}
+          strokeWidth={1.5}
+          strokeDasharray={`${SPARK_LEN} ${CIRC - SPARK_LEN}`}
+          strokeLinecap="round"
+          rotation={-90}
+          origin="22, 22"
+          animatedProps={animatedCircleProps}
+        />
+      </Svg>
+    </Animated.View>
+  )
+}
+
+// ─── Follow stat button ───────────────────────────────────────────────────────
+
+function FollowStatButton({
+  icon: Icon,
+  count,
+  label,
+  delay,
+  colors,
+  sparkDelay,
+}: {
+  icon: React.ComponentType<{ size: number; color: string; strokeWidth?: number }>
+  count: number
+  label: string
+  delay: number
+  colors: ReturnType<typeof useTheme>['colors']
+  sparkDelay: number
+}) {
+  const scale = useSharedValue(1)
+  const mountOpacity = useSharedValue(0)
+  const translateX = useSharedValue(-18)
+  const { sparkContainerStyle, animatedCircleProps } = useSpark(sparkDelay)
+
+  useEffect(() => {
+    mountOpacity.value = withDelay(delay, withTiming(1, { duration: 350, easing: Easing.out(Easing.cubic) }))
+    translateX.value = withDelay(delay, withSpring(0, { damping: 20, stiffness: 300 }))
+  }, [delay])
+
+  const containerStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }, { translateX: translateX.value }],
+    opacity: mountOpacity.value,
+    alignItems: 'center',
+  }))
+
+  return (
+    <Animated.View style={containerStyle}>
+      <Pressable
+        accessibilityLabel={label}
+        onPressIn={() => { scale.value = withSpring(0.78, { damping: 20, stiffness: 600 }) }}
+        onPressOut={() => { scale.value = withSpring(1, { damping: 12, stiffness: 200 }) }}
+        style={{
+          width: 44, height: 44, borderRadius: 9999,
+          backgroundColor: colors.backgroundSecondary,
+          alignItems: 'center', justifyContent: 'center',
+          borderWidth: 1, borderColor: colors.border,
+        }}
+      >
+        <Icon size={18} color={colors.textSecondary} strokeWidth={1.5} />
+      </Pressable>
+      <SparkOverlay colors={colors} sparkContainerStyle={sparkContainerStyle} animatedCircleProps={animatedCircleProps} />
+      <Text style={{ fontSize: 11, fontVariant: ['tabular-nums'], color: colors.textSecondary, marginTop: 4, letterSpacing: 0.2 }}>
+        {count}
+      </Text>
+    </Animated.View>
+  )
+}
+
+// ─── Quick action button ──────────────────────────────────────────────────────
+
+function QuickActionButton({
+  icon: Icon,
+  label,
+  onPress,
+  delay,
+  colors,
+  sparkDelay,
+}: {
+  icon: React.ComponentType<{ size: number; color: string; strokeWidth?: number }>
+  label: string
+  onPress: () => void
+  delay: number
+  colors: ReturnType<typeof useTheme>['colors']
+  sparkDelay: number
+}) {
+  const scale = useSharedValue(1)
+  const mountOpacity = useSharedValue(0)
+  const translateX = useSharedValue(18)
+  const { sparkContainerStyle, animatedCircleProps } = useSpark(sparkDelay)
+
+  useEffect(() => {
+    mountOpacity.value = withDelay(delay, withTiming(1, { duration: 350, easing: Easing.out(Easing.cubic) }))
+    translateX.value = withDelay(delay, withSpring(0, { damping: 20, stiffness: 300 }))
+  }, [delay])
+
+  const containerStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }, { translateX: translateX.value }],
+    opacity: mountOpacity.value,
+  }))
+
+  return (
+    <Animated.View style={containerStyle}>
+      <Pressable
+        accessibilityLabel={label}
+        onPressIn={() => { scale.value = withSpring(0.78, { damping: 20, stiffness: 600 }) }}
+        onPressOut={() => { scale.value = withSpring(1, { damping: 12, stiffness: 200 }) }}
+        onPress={onPress}
+        style={{
+          width: 44, height: 44, borderRadius: radius.full,
+          backgroundColor: colors.backgroundSecondary,
+          alignItems: 'center', justifyContent: 'center',
+          borderWidth: 1, borderColor: colors.border,
+        }}
+      >
+        <Icon size={18} color={colors.textSecondary} strokeWidth={1.5} />
+      </Pressable>
+      <SparkOverlay colors={colors} sparkContainerStyle={sparkContainerStyle} animatedCircleProps={animatedCircleProps} />
+    </Animated.View>
+  )
+}
+
 // ─── Screen ──────────────────────────────────────────────────────────────────
 
 export default function ProfileScreen(): React.JSX.Element {
@@ -465,26 +643,74 @@ export default function ProfileScreen(): React.JSX.Element {
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={() => (
           <View style={s.headerContainer}>
-            {/* Avatar + Nom */}
+            {/* Avatar + Nom + Quick actions */}
             <View style={s.headerSection}>
-              <View style={s.avatarCircle}>
-                <Text style={s.avatarLetter}>{initiale}</Text>
+              {/* Gauche : followers + following */}
+              <View style={s.leftActionsCol}>
+                <FollowStatButton
+                  icon={Users}
+                  count={followers}
+                  label="Followers"
+                  delay={100}
+                  sparkDelay={2200}
+                  colors={colors}
+                />
+                <FollowStatButton
+                  icon={UserPlus}
+                  count={follows}
+                  label="Follows"
+                  delay={180}
+                  sparkDelay={3500}
+                  colors={colors}
+                />
               </View>
 
-              <Text style={s.username}>{displayName}</Text>
-
-              {isPro && (
-                <View style={s.proBadge}>
-                  <Text style={s.proBadgeText}>PRO</Text>
+              {/* Centre : avatar + identité */}
+              <View style={s.avatarBlock}>
+                <View style={s.avatarCircle}>
+                  <Text style={s.avatarLetter}>{initiale}</Text>
                 </View>
-              )}
+                <Text style={s.username}>{displayName}</Text>
+                {isPro && (
+                  <View style={s.proBadge}>
+                    <Text style={s.proBadgeText}>PRO</Text>
+                  </View>
+                )}
+                <Pressable
+                  style={({ pressed }) => [s.editBtn, pressed && { opacity: 0.7 }]}
+                  onPress={() => router.push('/edit-profile')}
+                >
+                  <Text style={s.editBtnText}>Modifier</Text>
+                </Pressable>
+              </View>
 
-              <Pressable
-                style={({ pressed }) => [s.editBtn, pressed && { opacity: 0.7 }]}
-                onPress={() => router.push('/edit-profile')}
-              >
-                <Text style={s.editBtnText}>Modifier</Text>
-              </Pressable>
+              {/* Droite : 3 icônes actions rapides */}
+              <View style={s.quickActionsCol}>
+                <QuickActionButton
+                  icon={Shield}
+                  label="Armurerie"
+                  onPress={() => router.push('/prs')}
+                  delay={100}
+                  sparkDelay={1800}
+                  colors={colors}
+                />
+                <QuickActionButton
+                  icon={TrendingUp}
+                  label="Analytics"
+                  onPress={() => router.push('/analytics')}
+                  delay={180}
+                  sparkDelay={3100}
+                  colors={colors}
+                />
+                <QuickActionButton
+                  icon={Settings}
+                  label="Paramètres"
+                  onPress={() => router.push('/settings')}
+                  delay={260}
+                  sparkDelay={4400}
+                  colors={colors}
+                />
+              </View>
             </View>
 
             {/* Stats row */}
@@ -513,22 +739,19 @@ export default function ProfileScreen(): React.JSX.Element {
               </View>
             </View>
 
-            {/* Followers */}
-            <View style={s.followersRow}>
-              <Pressable style={s.followerCol}>
-                <AnimatedCounter target={followers} duration={800} delay={240} style={s.followerValue} />
-                <Text style={s.followerLabel}>FOLLOWERS</Text>
-              </Pressable>
-              <Pressable style={s.followerCol}>
-                <AnimatedCounter target={follows} duration={800} delay={240} style={s.followerValue} />
-                <Text style={s.followerLabel}>FOLLOWS</Text>
-              </Pressable>
-            </View>
-
             {/* Sparkline */}
             <View style={s.sparklineSection}>
               <Text style={s.sparklineTitle}>8 DERNIÈRES SÉANCES</Text>
               <SparklineRow data={sparklineData} colors={colors} />
+            </View>
+
+            {/* Muscle Map */}
+            <View style={s.muscleMappingSection}>
+              <Text style={s.muscleMappingTitle}>CARTE MUSCULAIRE</Text>
+              <View style={s.muscleMappingPlaceholder}>
+                <View style={s.muscleMappingBody} />
+                <Text style={s.muscleMappingHint}>Visualisation corps bientôt disponible</Text>
+              </View>
             </View>
 
             {/* PRs */}
@@ -567,28 +790,6 @@ export default function ProfileScreen(): React.JSX.Element {
                 onPress={() => router.push('/prs')}
               >
                 <Text style={s.armurerieBtnText}>Voir l'Armurerie →</Text>
-              </Pressable>
-            </View>
-
-            {/* Menus footer */}
-            <View style={s.footerMenus}>
-              <Pressable
-                style={({ pressed }) => [s.menuItem, pressed && { opacity: 0.7 }]}
-                onPress={() => router.push('/prs')}
-              >
-                <Text style={s.menuItemText}>Armurerie</Text>
-              </Pressable>
-              <Pressable
-                style={({ pressed }) => [s.menuItem, pressed && { opacity: 0.7 }]}
-                onPress={() => router.push('/analytics')}
-              >
-                <Text style={s.menuItemText}>Analytics</Text>
-              </Pressable>
-              <Pressable
-                style={({ pressed }) => [s.menuItem, pressed && { opacity: 0.7 }]}
-                onPress={() => router.push('/settings')}
-              >
-                <Text style={s.menuItemText}>Paramètres</Text>
               </Pressable>
             </View>
 
@@ -659,8 +860,25 @@ function buildStyles(colors: ReturnType<typeof useTheme>['colors']) {
 
     // ── Avatar section ──
     headerSection: {
+      flexDirection: 'row',
       alignItems: 'center',
       marginBottom: spacing.s6,
+    },
+    avatarBlock: {
+      flex: 1,
+      alignItems: 'center',
+    },
+    leftActionsCol: {
+      gap: spacing.s3,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingRight: spacing.s4,
+    },
+    quickActionsCol: {
+      gap: spacing.s3,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingLeft: spacing.s4,
     },
     avatarCircle: {
       width: 80,
@@ -806,6 +1024,39 @@ function buildStyles(colors: ReturnType<typeof useTheme>['colors']) {
       marginBottom: spacing.s3,
     },
 
+    // ── Muscle Mapping ──
+    muscleMappingSection: {
+      marginBottom: spacing.s6,
+    },
+    muscleMappingTitle: {
+      ...typography.caption,
+      color: colors.textTertiary,
+      textTransform: 'uppercase',
+      letterSpacing: 1,
+      marginBottom: spacing.s3,
+    },
+    muscleMappingPlaceholder: {
+      backgroundColor: colors.backgroundSecondary,
+      borderRadius: radius.lg,
+      paddingVertical: spacing.s8,
+      paddingHorizontal: spacing.s5,
+      alignItems: 'center',
+      gap: spacing.s4,
+    },
+    muscleMappingBody: {
+      width: 80,
+      height: 160,
+      borderRadius: radius.md,
+      backgroundColor: colors.backgroundTertiary,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    muscleMappingHint: {
+      ...typography.caption,
+      color: colors.textTertiary,
+      textAlign: 'center',
+    },
+
     // ── PRs ──
     prsSection: {
       marginBottom: spacing.s6,
@@ -865,26 +1116,6 @@ function buildStyles(colors: ReturnType<typeof useTheme>['colors']) {
     armurerieBtnText: {
       ...typography.body,
       color: colors.accent,
-    },
-
-    // ── Footer menus ──
-    footerMenus: {
-      flexDirection: 'row',
-      gap: spacing.s3,
-      marginTop: spacing.s6,
-      marginBottom: spacing.s6,
-    },
-    menuItem: {
-      flex: 1,
-      alignItems: 'center',
-      paddingVertical: spacing.s3,
-      minHeight: 44,
-      justifyContent: 'center',
-    },
-    menuItemText: {
-      ...typography.body,
-      color: colors.textSecondary,
-      fontSize: 13,
     },
 
     // ── Historique ──

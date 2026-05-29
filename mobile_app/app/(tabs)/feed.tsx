@@ -1,7 +1,12 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import {
+  Animated as RNAnimated,
   Dimensions,
   FlatList,
+  KeyboardAvoidingView,
+  PanResponder,
+  Platform,
+  Pressable,
   RefreshControl,
   StyleSheet,
   Text,
@@ -23,10 +28,13 @@ import Animated, {
   Easing,
   cancelAnimation,
 } from 'react-native-reanimated'
-import Svg, { Path, Circle } from 'react-native-svg'
+import Svg, { Path, Circle, Rect } from 'react-native-svg'
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle)
-import { SafeAreaView } from 'react-native-safe-area-context'
+const AnimatedPath = Animated.createAnimatedComponent(Path)
+const RNAnimatedSvgPath = RNAnimated.createAnimatedComponent(Path)
+const AnimatedRect = Animated.createAnimatedComponent(Rect)
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Heart, MessageCircle, RefreshCw, MapPin, X } from 'lucide-react-native'
 import { useTheme } from '@/context/ThemeContext'
 import { useRouter } from 'expo-router'
@@ -54,6 +62,11 @@ interface FeedWorkout {
   likes_count: number
   comments_count: number
   user_has_liked: boolean
+  first_comment: {
+    content: string
+    username: string | null
+    user_id: string
+  } | null
 }
 
 interface LikeUser {
@@ -82,6 +95,8 @@ interface Comment {
   created_at: string
   user_id: string
   users: CommentUser | null
+  likes_count: number
+  user_has_liked: boolean
 }
 
 // ─── Avatar colors (stable par user id) ──────────────────────────────────────
@@ -312,7 +327,12 @@ interface CommentsModalProps {
   currentUserId: string | null
   onClose: () => void
   onCommentAdded: () => void
+  onCommentLike: (commentId: string, hasLiked: boolean) => void
 }
+
+const SCREEN_HEIGHT = Dimensions.get('window').height
+const SHEET_HALF = SCREEN_HEIGHT * 0.5
+const SHEET_FULL = SCREEN_HEIGHT * 0.9
 
 function CommentsModal({
   visible,
@@ -321,10 +341,64 @@ function CommentsModal({
   currentUserId,
   onClose,
   onCommentAdded,
+  onCommentLike,
 }: CommentsModalProps) {
   const { colors } = useTheme()
+  const insets = useSafeAreaInsets()
   const [text, setText] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const expandedRef = useRef(false)
+  const sheetHeight = useRef(new RNAnimated.Value(SHEET_HALF)).current
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
+
+  React.useEffect(() => {
+    if (visible) {
+      expandedRef.current = false
+      sheetHeight.setValue(0)
+      RNAnimated.spring(sheetHeight, {
+        toValue: SHEET_HALF,
+        damping: 20,
+        stiffness: 300,
+        useNativeDriver: false,
+      }).start()
+    }
+  }, [visible])
+
+  const expandSheet = () => {
+    expandedRef.current = true
+    RNAnimated.spring(sheetHeight, {
+      toValue: SHEET_FULL,
+      damping: 20,
+      stiffness: 300,
+      useNativeDriver: false,
+    }).start()
+  }
+
+  const collapseSheet = () => {
+    expandedRef.current = false
+    RNAnimated.spring(sheetHeight, {
+      toValue: SHEET_HALF,
+      damping: 20,
+      stiffness: 300,
+      useNativeDriver: false,
+    }).start()
+  }
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderRelease: (_, gs) => {
+        if (gs.dy < -40) {
+          expandSheet()
+        } else if (gs.dy > 60) {
+          if (expandedRef.current) collapseSheet()
+          else onCloseRef.current()
+        }
+      },
+    })
+  ).current
 
   const handlePostComment = async () => {
     if (!text.trim() || !currentUserId) return
@@ -359,106 +433,227 @@ function CommentsModal({
     <Modal
       visible={visible}
       transparent
-      animationType="slide"
+      animationType="none"
       onRequestClose={onClose}
     >
-      <SafeAreaView style={[styles.modalContainer, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
-        {/* Header */}
-        <View style={[styles.modalHeader, { borderBottomColor: colors.separator }]}>
-          <Text style={[typography.subtitle, { color: colors.textPrimary, fontFamily: 'Barlow_700Bold' }]}>
-            Commentaires
-          </Text>
-          <TouchableOpacity onPress={onClose}>
-            <X size={24} color={colors.textPrimary} />
-          </TouchableOpacity>
-        </View>
+      <KeyboardAvoidingView
+        style={{ flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)' }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <Pressable style={{ flex: 1 }} onPress={onClose} />
+        <RNAnimated.View
+          style={[
+            styles.commentsSheetContent,
+            { backgroundColor: colors.backgroundSecondary, height: sheetHeight },
+          ]}
+        >
+          {/* Drag handle — zone swipe dédiée (séparée du header pour ne pas bloquer le X) */}
+          <View style={styles.dragHandleArea} {...panResponder.panHandlers}>
+            <View style={[styles.dragHandle, { backgroundColor: colors.textTertiary }]} />
+          </View>
 
-        {/* Comments list */}
-        <FlatList
-          data={comments}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => {
-            const user = item.users
-            const displayName = user?.username ?? user?.full_name ?? '?'
-            const bgColor = avatarColor(user?.id || '')
-            const isOwner = currentUserId === user?.id
-            return (
-              <View style={[styles.commentRow, { borderBottomColor: colors.separator }]}>
-                <View style={[styles.avatarSmall, { backgroundColor: bgColor }]}>
-                  <Text style={[styles.avatarInitialsSmall, { color: colors.textPrimary }]}>
-                    {displayName.split(' ').slice(0, 2).map((p: string) => p.charAt(0).toUpperCase()).join('')}
-                  </Text>
-                </View>
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s2 }}>
-                    <Text style={[typography.body, { color: colors.textPrimary, fontFamily: 'Barlow_600SemiBold' }]}>
-                      {displayName}
-                    </Text>
-                    <Text style={[typography.caption, { color: colors.textTertiary }]}>
-                      {timeAgo(item.created_at)}
+          {/* Header — hors du pan responder */}
+          <View style={[styles.modalHeader, { borderBottomColor: colors.separator }]}>
+            <Text style={[typography.subtitle, { color: colors.textPrimary, fontFamily: 'Barlow_700Bold' }]}>
+              Commentaires
+            </Text>
+            <TouchableOpacity onPress={onClose} hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}>
+              <X size={24} color={colors.textPrimary} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Comments list */}
+          <FlatList
+            data={comments}
+            keyExtractor={(item) => item.id}
+            keyboardShouldPersistTaps="handled"
+            renderItem={({ item }) => {
+              const user = item.users
+              const displayName = user?.username ?? user?.full_name ?? '?'
+              const bgColor = avatarColor(user?.id || '')
+              const isOwner = currentUserId === user?.id
+              return (
+                <View style={[styles.commentRow, { borderBottomColor: colors.separator }]}>
+                  <View style={[styles.avatarSmall, { backgroundColor: bgColor }]}>
+                    <Text style={[styles.avatarInitialsSmall, { color: colors.textPrimary }]}>
+                      {displayName.split(' ').slice(0, 2).map((p: string) => p.charAt(0).toUpperCase()).join('')}
                     </Text>
                   </View>
-                  <Text
-                    style={[typography.body, { color: colors.textSecondary, marginTop: spacing.s1 }]}
-                    numberOfLines={3}
-                  >
-                    {item.content}
-                  </Text>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s2 }}>
+                      <Text style={[typography.body, { color: colors.textPrimary, fontFamily: 'Barlow_600SemiBold' }]}>
+                        {displayName}
+                      </Text>
+                      <Text style={[typography.caption, { color: colors.textTertiary }]}>
+                        {timeAgo(item.created_at)}
+                      </Text>
+                    </View>
+                    <Text
+                      style={[typography.body, { color: colors.textSecondary, marginTop: spacing.s1 }]}
+                      numberOfLines={3}
+                    >
+                      {item.content}
+                    </Text>
+                  </View>
+                  <View style={{ alignItems: 'center', gap: spacing.s1 }}>
+                    <TouchableOpacity
+                      onPress={() => onCommentLike(item.id, item.user_has_liked)}
+                      hitSlop={{ top: 8, right: 8, bottom: 4, left: 8 }}
+                    >
+                      <Heart
+                        size={14}
+                        color={item.user_has_liked ? colors.error : colors.textTertiary}
+                        fill={item.user_has_liked ? colors.error : 'transparent'}
+                      />
+                    </TouchableOpacity>
+                    {item.likes_count > 0 && (
+                      <Text style={[typography.caption, { color: colors.textTertiary, fontSize: 10 }]}>
+                        {item.likes_count}
+                      </Text>
+                    )}
+                    {isOwner && (
+                      <TouchableOpacity onPress={() => handleDeleteComment(item.id)} hitSlop={{ top: 4, right: 8, bottom: 8, left: 8 }}>
+                        <X size={14} color={colors.textTertiary} />
+                      </TouchableOpacity>
+                    )}
+                  </View>
                 </View>
-                {isOwner && (
-                  <TouchableOpacity onPress={() => handleDeleteComment(item.id)}>
-                    <X size={16} color={colors.textTertiary} />
-                  </TouchableOpacity>
-                )}
+              )
+            }}
+            contentContainerStyle={{ paddingHorizontal: spacing.s4 }}
+            ListEmptyComponent={
+              <View style={{ paddingVertical: spacing.s8, alignItems: 'center' }}>
+                <Text style={[typography.body, { color: colors.textTertiary }]}>
+                  Aucun commentaire
+                </Text>
               </View>
-            )
-          }}
-          contentContainerStyle={{ paddingHorizontal: spacing.s4 }}
-          ListEmptyComponent={
-            <View style={{ paddingVertical: spacing.s8, alignItems: 'center' }}>
-              <Text style={[typography.body, { color: colors.textTertiary }]}>
-                Aucun commentaire
-              </Text>
-            </View>
-          }
-        />
-
-        {/* Input footer */}
-        <View style={[styles.commentInputContainer, { borderTopColor: colors.separator, backgroundColor: colors.backgroundSecondary }]}>
-          <TextInput
-            placeholder="Commenter..."
-            placeholderTextColor={colors.textTertiary}
-            value={text}
-            onChangeText={setText}
-            editable={!submitting}
-            style={[
-              styles.commentInput,
-              {
-                color: colors.textPrimary,
-                borderColor: colors.border,
-                backgroundColor: colors.background,
-              },
-            ]}
-            multiline
+            }
           />
-          <TouchableOpacity
-            onPress={handlePostComment}
-            disabled={!text.trim() || submitting}
-            style={[
-              styles.commentButton,
-              {
-                backgroundColor: text.trim() ? colors.accent : colors.backgroundTertiary,
-                opacity: text.trim() ? 1 : 0.5,
-              },
-            ]}
-          >
-            <Text style={[typography.caption, { color: colors.background, fontFamily: 'Barlow_700Bold' }]}>
-              Envoyer
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
+
+          {/* Input footer */}
+          <View style={[styles.commentInputContainer, { borderTopColor: colors.separator, backgroundColor: colors.backgroundSecondary, paddingBottom: Math.max(insets.bottom, spacing.s3) }]}>
+            <TextInput
+              placeholder="Commenter..."
+              placeholderTextColor={colors.textTertiary}
+              value={text}
+              onChangeText={setText}
+              editable={!submitting}
+              style={[
+                styles.commentInput,
+                {
+                  color: colors.textPrimary,
+                  borderColor: colors.border,
+                  backgroundColor: colors.background,
+                },
+              ]}
+              multiline
+            />
+            <TouchableOpacity
+              onPress={handlePostComment}
+              disabled={!text.trim() || submitting}
+              style={[
+                styles.commentButton,
+                {
+                  backgroundColor: text.trim() ? colors.accent : colors.backgroundTertiary,
+                  opacity: text.trim() ? 1 : 0.5,
+                },
+              ]}
+            >
+              <Text style={[typography.caption, { color: colors.background, fontFamily: 'Barlow_700Bold' }]}>
+                Envoyer
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </RNAnimated.View>
+      </KeyboardAvoidingView>
     </Modal>
+  )
+}
+
+// ─── Spark Border ────────────────────────────────────────────────────────────
+// Deux étincelles opposées : coin haut-droit → bas-gauche et coin bas-gauche → haut-droit
+
+function SparkBorder({ width, height }: { width: number; height: number }) {
+  const { colors } = useTheme()
+  const R = 12  // = radius.md
+  // Perimeter du rect arrondi : côtés droits + 4 quarts de cercle = 4*(π/2*R) = 2πR
+  const perimeter = 2 * (width + height) + (2 * Math.PI - 8) * R
+  const SPARK_LEN = 16
+  // Chemin SVG d'un Rect rx=R : démarre à (x+R, y) haut-gauche, sens horaire.
+  // Segment haut = W-2R, arc HR = πR/2, segment droit = H-2R, arc BR = πR/2, etc.
+  const W = width - 2   // dimensions internes (x=1, y=1)
+  const H = height - 2
+  // Coin haut-droit = fin du segment haut (avant l'arc)
+  const posCoinHR = W - 2 * R
+  // Coin bas-gauche = après segment haut + arc HR + segment droit + arc BR + segment bas + arc BG
+  const posCoinBL = (W - 2 * R) + (Math.PI * R / 2) + (H - 2 * R) + (Math.PI * R / 2) + (W - 2 * R)
+
+  // Étincelle 1 : part du coin haut-droit, avance en sens horaire
+  // Étincelle 2 : part du coin bas-gauche, avance en sens horaire
+  // Chacune parcourt la moitié du périmètre et s'arrête au coin opposé
+  const offset1 = useSharedValue(-posCoinHR)
+  const opacity1 = useSharedValue(0)
+  const offset2 = useSharedValue(-posCoinBL)
+  const opacity2 = useSharedValue(0)
+
+  useEffect(() => {
+    function triggerSpark() {
+      cancelAnimation(offset1)
+      cancelAnimation(offset2)
+      cancelAnimation(opacity1)
+      cancelAnimation(opacity2)
+
+      offset1.value = -posCoinHR
+      offset2.value = -posCoinBL
+      opacity1.value = 0
+      opacity2.value = 0
+
+      offset1.value = withTiming(-(posCoinHR + perimeter / 2), { duration: 3000, easing: Easing.linear })
+      offset2.value = withTiming(-(posCoinBL + perimeter / 2), { duration: 3000, easing: Easing.linear })
+
+      const fade = withSequence(
+        withTiming(0.25, { duration: 300 }),
+        withTiming(0.25, { duration: 800 }),
+        withTiming(0, { duration: 300 })
+      )
+      opacity1.value = fade
+      opacity2.value = fade
+    }
+
+    const initial = setTimeout(triggerSpark, 900)
+    const interval = setInterval(triggerSpark, 6000)
+    return () => { clearTimeout(initial); clearInterval(interval) }
+  }, [perimeter, posCoinHR, posCoinBL])
+
+  const animProps1 = useAnimatedProps(() => ({ strokeDashoffset: offset1.value }))
+  const animProps2 = useAnimatedProps(() => ({ strokeDashoffset: offset2.value }))
+  const style1 = useAnimatedStyle(() => ({ opacity: opacity1.value }))
+  const style2 = useAnimatedStyle(() => ({ opacity: opacity2.value }))
+
+  const rectProps = {
+    x: 1, y: 1,
+    width: width - 2, height: height - 2,
+    rx: R, ry: R,
+    fill: 'none' as const,
+    stroke: colors.accent,
+    strokeWidth: 1.5,
+    strokeDasharray: `${SPARK_LEN} ${perimeter - SPARK_LEN}`,
+    strokeLinecap: 'round' as const,
+  }
+
+  return (
+    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+      <Animated.View style={[StyleSheet.absoluteFill, style1]}>
+        <Svg width={width} height={height}>
+          <AnimatedRect {...rectProps} animatedProps={animProps1} />
+        </Svg>
+      </Animated.View>
+      <Animated.View style={[StyleSheet.absoluteFill, style2]}>
+        <Svg width={width} height={height}>
+          <AnimatedRect {...rectProps} animatedProps={animProps2} />
+        </Svg>
+      </Animated.View>
+    </View>
   )
 }
 
@@ -473,6 +668,7 @@ interface FeedItemProps {
 
 function FeedItem({ item, currentUserId, onLike, onNavigateDetail }: FeedItemProps) {
   const { colors } = useTheme()
+  const [cardLayout, setCardLayout] = useState<{ width: number; height: number } | null>(null)
   const [likesModalVisible, setLikesModalVisible] = useState(false)
   const [commentsModalVisible, setCommentsModalVisible] = useState(false)
   const [likes, setLikes] = useState<Like[]>([])
@@ -516,13 +712,33 @@ function FeedItem({ item, currentUserId, onLike, onNavigateDetail }: FeedItemPro
 
   const fetchComments = async () => {
     try {
+      const { data: authData } = await supabase.auth.getUser()
+      const uid = authData.user?.id
+
       const { data, error } = await supabase
         .from('comments')
         .select(`id, content, created_at, user_id, users:user_id(id, username, full_name, avatar_url)`)
         .eq('workout_id', item.id)
         .order('created_at', { ascending: false })
       if (!error && data) {
-        // Supabase returns users as array, convert to single object
+        const commentIds = (data as unknown as Array<{ id: string }>).map(c => c.id)
+
+        const [likesRes, userLikesRes] = await Promise.all([
+          supabase.from('comment_likes').select('comment_id').in('comment_id', commentIds),
+          uid
+            ? supabase.from('comment_likes').select('comment_id').eq('user_id', uid).in('comment_id', commentIds)
+            : Promise.resolve({ data: [] }),
+        ])
+
+        const likesCount = new Map<string, number>()
+        for (const r of likesRes.data ?? []) {
+          const cid = (r as { comment_id: string }).comment_id
+          likesCount.set(cid, (likesCount.get(cid) ?? 0) + 1)
+        }
+        const likedSet = new Set(
+          ((userLikesRes as { data: Array<{ comment_id: string }> | null }).data ?? []).map(l => l.comment_id)
+        )
+
         const mapped = (data as unknown as Array<{
           id: string
           content: string
@@ -535,11 +751,41 @@ function FeedItem({ item, currentUserId, onLike, onNavigateDetail }: FeedItemPro
           created_at: comment.created_at,
           user_id: comment.user_id,
           users: comment.users?.[0] ?? null,
+          likes_count: likesCount.get(comment.id) ?? 0,
+          user_has_liked: likedSet.has(comment.id),
         }))
         setComments(mapped)
       }
     } catch (err) {
       console.error('Failed to fetch comments:', err)
+    }
+  }
+
+  const handleCommentLike = async (commentId: string, hasLiked: boolean) => {
+    if (!currentUserId) return
+
+    setComments(prev =>
+      prev.map(c =>
+        c.id === commentId
+          ? {
+              ...c,
+              user_has_liked: !hasLiked,
+              likes_count: hasLiked ? c.likes_count - 1 : c.likes_count + 1,
+            }
+          : c
+      )
+    )
+
+    if (hasLiked) {
+      await supabase
+        .from('comment_likes')
+        .delete()
+        .eq('user_id', currentUserId)
+        .eq('comment_id', commentId)
+    } else {
+      await supabase
+        .from('comment_likes')
+        .insert({ user_id: currentUserId, comment_id: commentId })
     }
   }
 
@@ -568,10 +814,14 @@ function FeedItem({ item, currentUserId, onLike, onNavigateDetail }: FeedItemPro
 
   return (
     <>
+      <View
+        style={{ marginBottom: spacing.s3 }}
+        onLayout={(e) => setCardLayout({ width: e.nativeEvent.layout.width, height: e.nativeEvent.layout.height })}
+      >
       <TouchableOpacity
         activeOpacity={0.7}
         onPress={() => onNavigateDetail(item.id)}
-        style={[styles.feedItem, { backgroundColor: colors.backgroundSecondary }]}
+        style={[styles.feedItem, { backgroundColor: colors.backgroundSecondary, marginBottom: 0 }]}
       >
         {/* Row 1 — Avatar + Meta */}
         <View style={styles.row1}>
@@ -661,7 +911,7 @@ function FeedItem({ item, currentUserId, onLike, onNavigateDetail }: FeedItemPro
           </View>
         </View>
 
-        {/* Row 6 — Actions */}
+        {/* Row 6 — Actions + premier commentaire */}
         <View style={[styles.actionsRow, { borderTopColor: colors.separator }]}>
           <TouchableOpacity
             onPress={() => onLike(item.id, item.user_has_liked)}
@@ -678,8 +928,6 @@ function FeedItem({ item, currentUserId, onLike, onNavigateDetail }: FeedItemPro
             </Text>
           </TouchableOpacity>
 
-          <View style={{ flex: 1 }} />
-
           <TouchableOpacity
             onPress={openCommentsModal}
             onLongPress={openCommentsModal}
@@ -690,9 +938,29 @@ function FeedItem({ item, currentUserId, onLike, onNavigateDetail }: FeedItemPro
               {item.comments_count}
             </Text>
           </TouchableOpacity>
+
+          {item.first_comment && (
+            <View style={styles.firstCommentInline}>
+              <View style={[styles.firstCommentAvatar, { backgroundColor: avatarColor(item.first_comment.user_id) }]}>
+                <Text style={{ fontSize: 9, fontFamily: 'Barlow_700Bold', color: '#fff' }}>
+                  {(item.first_comment.username ?? '·').charAt(0).toUpperCase()}
+                </Text>
+              </View>
+              <View style={styles.firstCommentText}>
+                <Text style={[typography.caption, { color: colors.textSecondary }]} numberOfLines={1}>
+                  <Text style={{ fontFamily: 'Barlow_700Bold', color: colors.textPrimary }}>
+                    {item.first_comment.username ?? '·'}{' '}
+                  </Text>
+                  {item.first_comment.content}
+                </Text>
+              </View>
+            </View>
+          )}
         </View>
 
       </TouchableOpacity>
+      {cardLayout && <SparkBorder width={cardLayout.width} height={cardLayout.height} />}
+      </View>
 
       {/* Modals */}
       <LikesModal
@@ -707,6 +975,7 @@ function FeedItem({ item, currentUserId, onLike, onNavigateDetail }: FeedItemPro
         currentUserId={currentUserId}
         onClose={() => setCommentsModalVisible(false)}
         onCommentAdded={fetchComments}
+        onCommentLike={handleCommentLike}
       />
     </>
   )
@@ -717,8 +986,6 @@ function FeedItem({ item, currentUserId, onLike, onNavigateDetail }: FeedItemPro
 // TrendArrow — reproduit exactement TrendingUp/TrendingDown Lucide (viewBox 0 0 24 24)
 // 3 paths séparés tracés en séquence : polyligne → branche H → branche V
 // Longueurs mesurées : polyligne ≈ 30, branche H = 6, branche V = 6
-const AnimatedPath = Animated.createAnimatedComponent(Path)
-
 function TrendArrow({ color, up, drawProgress }: {
   color: string
   up: boolean
@@ -1049,6 +1316,8 @@ export default function FeedScreen() {
   const drawDumbbell = useSharedValue(1)
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const kpiTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const kpiIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const kpiDelayRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const isFirstFocus = useRef(true)
   const firstNameRef = useRef('')
 
@@ -1057,10 +1326,10 @@ export default function FeedScreen() {
     firstNameRef.current = currentUserFirstName
   }, [currentUserFirstName])
 
-  // ─── Interval unique monté une fois — logo + greeting synchronisés ───────────
+  // ─── Groupe 1 : logo + icône profil + greeting — immédiat puis toutes les 5s ─
 
   useEffect(() => {
-    const tick = () => {
+    const tickHeader = () => {
       logoScale.value = withSequence(
         withSpring(1.22, { damping: 5, stiffness: 500 }),
         withSpring(1.0, { damping: 10, stiffness: 300 }),
@@ -1068,27 +1337,6 @@ export default function FeedScreen() {
         withSpring(1.0, { damping: 14, stiffness: 260 })
       )
 
-      scaleSeances.value = 1
-      scaleSeances.value = withSequence(
-        withTiming(1.18, { duration: 120, easing: Easing.bezier(0.34, 1.56, 0.64, 1) }),
-        withTiming(1.0, { duration: 200, easing: Easing.bezier(0.37, 0, 0.63, 1) })
-      )
-      drawMapPin.value = 0
-      drawMapPin.value = withTiming(1, { duration: 1100, easing: Easing.bezier(0.37, 0, 0.63, 1) })
-      drawDumbbell.value = 0
-      drawDumbbell.value = withTiming(1, { duration: 1100, easing: Easing.bezier(0.37, 0, 0.63, 1) })
-      drawArrow.value = 0
-      drawArrow.value = withTiming(1, { duration: 1100, easing: Easing.bezier(0.37, 0, 0.63, 1) })
-      if (kpiTimerRef.current) clearTimeout(kpiTimerRef.current)
-      kpiTimerRef.current = setTimeout(() => {
-        scaleTrend.value = 1
-        scaleTrend.value = withSequence(
-          withTiming(1.18, { duration: 120, easing: Easing.bezier(0.34, 1.56, 0.64, 1) }),
-          withTiming(1.0, { duration: 200, easing: Easing.bezier(0.37, 0, 0.63, 1) })
-        )
-      }, 150)
-
-      // Point qui fait le tour du cercle avatar en 1s
       dotAngle.value = 0
       dotAngle.value = withTiming(2 * Math.PI, {
         duration: 1000,
@@ -1109,22 +1357,58 @@ export default function FeedScreen() {
       }, 4000)
     }
 
-    tick()
-    const id = setInterval(tick, 5000)
+    tickHeader()
+    const id1 = setInterval(tickHeader, 5000)
 
     return () => {
-      clearInterval(id)
+      clearInterval(id1)
       if (hideTimerRef.current) clearTimeout(hideTimerRef.current)
       cancelAnimation(logoScale)
       cancelAnimation(greetingOpacity)
       cancelAnimation(greetingTranslate)
       cancelAnimation(dotAngle)
+    }
+  }, [])
+
+  // ─── Groupe 2 : 3 KPI cards — décalé de 2.5s puis toutes les 5s ─────────────
+
+  useEffect(() => {
+    const tickKPI = () => {
+      scaleSeances.value = 1
+      scaleSeances.value = withSequence(
+        withTiming(1.18, { duration: 120, easing: Easing.bezier(0.34, 1.56, 0.64, 1) }),
+        withTiming(1.0, { duration: 200, easing: Easing.bezier(0.37, 0, 0.63, 1) })
+      )
+      drawMapPin.value = 0
+      drawMapPin.value = withTiming(1, { duration: 1100, easing: Easing.bezier(0.37, 0, 0.63, 1) })
+      drawDumbbell.value = 0
+      drawDumbbell.value = withTiming(1, { duration: 1100, easing: Easing.bezier(0.37, 0, 0.63, 1) })
+      drawArrow.value = 0
+      drawArrow.value = withTiming(1, { duration: 1100, easing: Easing.bezier(0.37, 0, 0.63, 1) })
+      if (kpiTimerRef.current) clearTimeout(kpiTimerRef.current)
+      kpiTimerRef.current = setTimeout(() => {
+        scaleTrend.value = 1
+        scaleTrend.value = withSequence(
+          withTiming(1.18, { duration: 120, easing: Easing.bezier(0.34, 1.56, 0.64, 1) }),
+          withTiming(1.0, { duration: 200, easing: Easing.bezier(0.37, 0, 0.63, 1) })
+        )
+      }, 150)
+    }
+
+    kpiDelayRef.current = setTimeout(() => {
+      tickKPI()
+      kpiIntervalRef.current = setInterval(tickKPI, 5000)
+    }, 2500)
+
+    return () => {
+      if (kpiDelayRef.current) clearTimeout(kpiDelayRef.current)
+      if (kpiIntervalRef.current) clearInterval(kpiIntervalRef.current)
+      if (kpiTimerRef.current) clearTimeout(kpiTimerRef.current)
       cancelAnimation(scaleSeances)
       cancelAnimation(scaleTrend)
       cancelAnimation(drawArrow)
       cancelAnimation(drawMapPin)
       cancelAnimation(drawDumbbell)
-      if (kpiTimerRef.current) clearTimeout(kpiTimerRef.current)
     }
   }, [])
 
@@ -1274,11 +1558,16 @@ export default function FeedScreen() {
 
     const workoutIds = (data as unknown as RawWorkout[]).map(w => w.id)
 
-    // Counts likes + comments par workout
-    const [likesRes, commentsRes, userLikesRes] = await Promise.all([
+    // Counts likes + comments par workout + premier commentaire
+    const [likesRes, commentsRes, userLikesRes, firstCommentsRes] = await Promise.all([
       supabase.from('likes').select('workout_id').in('workout_id', workoutIds),
       supabase.from('comments').select('workout_id').in('workout_id', workoutIds),
       supabase.from('likes').select('workout_id').eq('user_id', uid).in('workout_id', workoutIds),
+      supabase
+        .from('comments')
+        .select('workout_id, content, user_id, users:user_id(username, full_name)')
+        .in('workout_id', workoutIds)
+        .order('created_at', { ascending: true }),
     ])
 
     const likesCount = new Map<string, number>()
@@ -1295,6 +1584,24 @@ export default function FeedScreen() {
       (userLikesRes.data ?? []).map((l: { workout_id: string }) => l.workout_id)
     )
 
+    type RawFirstComment = {
+      workout_id: string
+      content: string
+      user_id: string
+      users: Array<{ username: string | null; full_name: string | null }> | null
+    }
+    const firstCommentMap = new Map<string, { content: string; username: string | null; user_id: string }>()
+    for (const r of (firstCommentsRes.data ?? []) as unknown as RawFirstComment[]) {
+      if (!firstCommentMap.has(r.workout_id)) {
+        const u = r.users?.[0]
+        firstCommentMap.set(r.workout_id, {
+          content: r.content,
+          username: u?.username ?? u?.full_name ?? null,
+          user_id: r.user_id,
+        })
+      }
+    }
+
     const mapped: FeedWorkout[] = (data as unknown as RawWorkout[]).map(w => ({
       id: w.id,
       title: w.title ?? '—',
@@ -1308,6 +1615,7 @@ export default function FeedScreen() {
       likes_count: likesCount.get(w.id) ?? 0,
       comments_count: commentsCount.get(w.id) ?? 0,
       user_has_liked: likedSet.has(w.id),
+      first_comment: firstCommentMap.get(w.id) ?? null,
     }))
 
     setWorkouts(mapped)
@@ -1554,7 +1862,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.s3,
     borderRadius: radius.md,
     marginBottom: spacing.s3,
-    overflow: 'hidden',
+    shadowColor: '#FFDD00',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.4,
+    shadowRadius: 2,
+    elevation: 2,
   },
   row1: {
     flexDirection: 'row',
@@ -1613,6 +1925,26 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  firstCommentInline: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.s2,
+    marginLeft: spacing.s6,
+    minWidth: 0,
+  },
+  firstCommentAvatar: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  firstCommentText: {
+    flex: 1,
+    minWidth: 0,
   },
   actionsRow: {
     flexDirection: 'row',
@@ -1707,6 +2039,21 @@ const styles = StyleSheet.create({
     maxHeight: '70%',
     borderRadius: radius.lg,
     overflow: 'hidden',
+  },
+  commentsSheetContent: {
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
+    overflow: 'hidden',
+  },
+  dragHandleArea: {
+    alignItems: 'center',
+    paddingVertical: spacing.s5,
+  },
+  dragHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: radius.full,
+    opacity: 0.4,
   },
   likesModalHeader: {
     flexDirection: 'row',
