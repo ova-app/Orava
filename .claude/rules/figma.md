@@ -142,7 +142,10 @@ Lire le PNG du composant avant d'écrire son code inline dans le screen.
 | `8.png` | `app/auth/login.tsx` + `register.tsx` | Standard | ✅ Implémenté |
 | — | `app/prs.tsx` | Standard | ✅ Implémenté |
 | — | `app/onboarding/` | Zen | ✅ Implémenté (Phase 1) |
-| — | `app/feed/[id].tsx` | Riche | ✅ Créé (25/05) — Myo 80% + photos + recap + comments |
+| — | `app/feed/[id].tsx` | Riche | ✅ Refait (01/06) — MyoChart Skia + 8-family selector + lightbox + comments |
+| — | `app/workout/myo-chart.tsx` | Riche | ✅ Créé (01/06) — Chart 2D Skia, 8 familles, utilisé dans feed/[id] |
+| — | `app/myo-glossary.tsx` | Standard | ✅ Créé (01/06) — Glossaire 8 familles + dims, accessible via settings |
+| — | `app/analytics.tsx` | Dense | ✅ Créé (01/06) — stats complètes + prédictions |
 | — | `app/chat.tsx` | Zen | ✅ Placeholder (Phase 2 design à faire) |
 
 ---

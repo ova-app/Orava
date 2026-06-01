@@ -6,6 +6,8 @@
 - Auth storage : expo-secure-store — adaptateur custom chunks 1800 bytes (JWT > 2048b)
 - Icônes : Lucide React Native
 - 3D Myo : `three` 0.184 + `@types/three` + `expo-gl` 16 (installés via `--legacy-peer-deps`)
+- **Skia (Phase 2 ✅)** : `@shopify/react-native-skia 2.2.12` — Charts 2D MyoChart, Canvas radial
+- **Fonts (Phase 2 ✅)** : `@expo-google-fonts/barlow` + `@expo-google-fonts/barlow-condensed` + `@expo-google-fonts/jetbrains-mono` (chargés via `useFonts` dans `_layout.tsx`)
 - Git : `main` stable · `dev` travail · `feat/xxx` par feature
 
 ## Tests (installé 24/05/2026)
@@ -20,15 +22,15 @@
 Toujours lancer avec `--legacy-peer-deps` dans `mobile_app/`.
 
 ```bash
-# Phase 0 — fondations
+# Phase 0 — fondations ✅
 npx expo install react-native-mmkv expo-sqlite
 npx expo install react-native-reanimated posthog-react-native --legacy-peer-deps
 
-# Phase 1
+# Phase 1 ✅
 npx expo install expo-haptics
 
-# Phase 2
-npx expo install @shopify/react-native-skia react-native-purchases --legacy-peer-deps
+# Phase 2 — Skia + fonts installés ✅, reste à installer :
+npx expo install react-native-purchases --legacy-peer-deps
 npx expo install rive-react-native expo-notifications expo-av --legacy-peer-deps
 ```
 

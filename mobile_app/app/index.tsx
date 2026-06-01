@@ -4,9 +4,10 @@ import {
   Text,
   StyleSheet,
   StatusBar,
+  Image,
 } from 'react-native'
 import { useRouter } from 'expo-router'
-import Svg, { Path, Circle } from 'react-native-svg'
+import Svg, { Path } from 'react-native-svg'
 import Animated, {
   useSharedValue,
   withRepeat,
@@ -23,11 +24,11 @@ import { spacing, font } from '@/constants/theme'
 
 function LogoOrava(): React.JSX.Element {
   return (
-    <Svg width={72} height={72} viewBox="0 0 100 100">
-      <Circle cx="50" cy="50" r="42" stroke="#FFDD00" strokeWidth="6" fill="none" />
-      <Circle cx="50" cy="50" r="28" stroke="#FFDD00" strokeWidth="6" fill="none" />
-      <Circle cx="50" cy="50" r="6" fill="#FFDD00" />
-    </Svg>
+    <Image
+      source={require('@/assets/orava_logo.png')}
+      style={{ width: 72, height: 72 }}
+      resizeMode="contain"
+    />
   )
 }
 

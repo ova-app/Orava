@@ -48,8 +48,11 @@ app/
 │   ├── summary.tsx          — résumé + nom auto + PRs + is_public + photo + géoloc + save Supabase
 │   │                          + computeAndSaveMetrics() → workout_metrics (best-effort)
 │   │                          + animation volume kg défilant (0→final, 500ms, easeOutExpo)
-│   └── myo-orb.tsx          — Myo 3D : Three.js + expo-gl, IcosahedronGeometry, MeshPhongMaterial
-├── feed/[id].tsx            — détail activité feed : Myo géant + 8-family selector + photos lightbox
+│   │                          + computePrediction() post-save (non bloquant)
+│   ├── myo-orb.tsx          — Myo 3D : Three.js + expo-gl, IcosahedronGeometry, MeshPhongMaterial
+│   └── myo-chart.tsx        — Chart Myo 2D Skia : 8 familles selector + radar/bar Skia Canvas
+├── myo-glossary.tsx         — Glossaire Myo : 8 familles × dims, accessible via settings
+├── feed/[id].tsx            — détail activité feed : MyoChart (Skia) + 8-family selector + photos lightbox
 │                              + recap collapsible + commentaires + like sticky
 ├── history/[id].tsx         — détail séance + photo_url + barres muscles + badges PR
 ├── exercise/[id].tsx        — fiche exercice + barres musculaires (primary/secondary/stabilizer)
@@ -68,12 +71,15 @@ lib/
 ├── db.ts                    — SQLite local : initDB(), insertLocalSet(), insertLocalSession()
 ├── storage.ts               — AsyncStorage + cache mémoire in-process (API type MMKV)
 ├── analytics.ts             — PostHog EU + Events const (22 événements taxonomie)
+├── ghost.ts                 — getGhostReference(exerciseId, limitDays) → SQLite
+├── predictor.ts             — computePrediction(exerciseId) → régression linéaire pondérée on-device
 └── utils.ts                 — formatVolume(n) → "12 450" (espace milliers)
 
 constants/theme.ts           — source couleurs dark/light
 constants/Colors.ts          — VIDE — ne pas utiliser
 types/index.ts               — VIDE — types inline dans chaque fichier
-components/                  — VIDE — ne pas peupler
+components/
+└── RulerPicker.tsx          — Ruler horizontal scroll pour poids/taille (edit-profile.tsx)
 
 __tests__/                   — tests unitaires Jest (logique pure uniquement, pas d'UI)
 ├── computePodium.test.ts    — 16 tests computePodium gold/silver/bronze/null
@@ -96,7 +102,9 @@ __tests__/                   — tests unitaires Jest (logique pure uniquement, 
 | `app/workout/wheel-picker-modal.tsx` | Phase 1 | Modal full-screen 3 roues (poids/reps/RPE) | ✅ Créé |
 | `app/chat.tsx` | Phase 1 | Placeholder chatbot accessible via logo Orava | ✅ Créé |
 | `app/feed/[id].tsx` | Phase 1 | Détail activité feed (Myo + photos + recap + comments) | ✅ Créé |
-| `lib/predictor.ts` | Phase 2 | Régression linéaire pondérée on-device → SQLite | ⏳ À faire |
+| `lib/predictor.ts` | Phase 2 | Régression linéaire pondérée on-device → SQLite | ✅ Créé |
+| `app/workout/myo-chart.tsx` | Phase 2 | Chart Myo 2D Skia : 8 familles + radar/bar Canvas | ✅ Créé |
+| `app/myo-glossary.tsx` | Phase 2 | Glossaire 8 familles Myo, accessible via settings | ✅ Créé |
 | `app/onboarding/` | Phase 1 | 2 écrans max, < 60s à la 1re série | ✅ Créé |
 | `app/paywall.tsx` | Phase 2 | Paywall Pro — RevenueCat, A/B PostHog | ⏳ À faire |
 | `app/athletic-dna.tsx` | Phase 3 | ADN Athlétique — Skia, 6 dimensions | ⏳ À faire |

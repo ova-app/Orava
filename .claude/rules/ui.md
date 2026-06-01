@@ -315,30 +315,28 @@ sessionSave()    → NotificationFeedbackType.Success
 
 ## Logo Orava — directives
 
-**Design validé (01/06/2026)** : 3 anneaux jaunes concentriques + point central. PNG source : `design/system/orava_logo.png`. Asset intégré : `mobile_app/assets/orava_logo.png`.
+**Design validé (01/06/2026)** : arche en U avec encoche V inversée au bas (forme fortune cookie). Fond jaune (#FFDD00) pour l'app icon. PNG source : `design/system/orava_logo.png`. App icon : `mobile_app/assets/icon.png` (fond jaune + arche blanche + "RAVA").
 
-Implémentation code (utilisée partout) :
+Implémentation code (SVG inline — partout) :
 ```tsx
-// Toujours utiliser l'Image PNG — jamais recoder le logo en SVG/View
-import { Image } from 'react-native'
+import Svg, { Path } from 'react-native-svg'
 
-<Image
-  source={require('../../assets/orava_logo.png')}
-  style={{ width: 48, height: 48 }}
-  resizeMode="contain"
-/>
-// Adapter le chemin require() selon la profondeur du fichier :
-// app/index.tsx       → require('../assets/orava_logo.png')
-// app/(tabs)/*.tsx    → require('../../assets/orava_logo.png')
-// app/auth/*.tsx      → require('../../assets/orava_logo.png')
-// app/workout/*.tsx   → require('../../assets/orava_logo.png')
+// Tailles : 40px (feed header), 48px (auth/session), 72px (splash)
+function LogoOrava({ size = 48 }: { size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 100 100">
+      <Path d="M 15,70 A 40,40 0 1 1 85,70 L 50,56 Z" fill="#FFDD00" />
+    </Svg>
+  )
+}
 ```
 
 Règles d'usage :
-- App icon : symbole seul sur fond `#0A0A0F`, sans texte
-- Wordmark : symbole + "ORAVA" en typo bold condensed
+- Toujours SVG Path — jamais Image PNG en in-app (qualité vectorielle à toutes tailles)
+- Couleur : `#FFDD00` sur fond sombre — jamais sur fond clair
 - Interactif dans header feed → `/chat` (tap)
 - Non-cliquable pendant séance active
+- Wordmark : arche + "ORAVA" typo bold condensed (le O = implicite dans le symbole)
 
 ---
 

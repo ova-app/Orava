@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import {
   FlatList,
+  Image,
   Keyboard,
   ScrollView,
   StyleSheet,
@@ -25,7 +26,7 @@ import { useRouter } from 'expo-router'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import * as Haptics from 'expo-haptics'
 import { Plus, Trash2, X, Search, Zap, Flame, Trophy, Dumbbell, Check, ChevronLeft } from 'lucide-react-native'
-import Svg, { Circle } from 'react-native-svg'
+import Svg, { Path as SvgPath } from 'react-native-svg'
 import { Canvas, Path, Skia, LinearGradient as SkiaLinearGradient, vec } from '@shopify/react-native-skia'
 import { useTheme } from '@/context/ThemeContext'
 import { spacing, radius, typography, touchTarget, spring, font } from '@/constants/theme'
@@ -214,11 +215,11 @@ function normalizeNFD(s: string): string {
 
 function LogoOrava() {
   return (
-    <Svg width={48} height={48} viewBox="0 0 100 100">
-      <Circle cx="50" cy="50" r="42" stroke="#FFDD00" strokeWidth="6" fill="none" />
-      <Circle cx="50" cy="50" r="28" stroke="#FFDD00" strokeWidth="6" fill="none" />
-      <Circle cx="50" cy="50" r="6" fill="#FFDD00" />
-    </Svg>
+    <Image
+      source={require('@/assets/orava_logo.png')}
+      style={{ width: 48, height: 48 }}
+      resizeMode="contain"
+    />
   )
 }
 

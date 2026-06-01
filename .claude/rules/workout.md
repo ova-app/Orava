@@ -101,7 +101,7 @@ Requête : meilleur set (max volume, puis max weight à volume égal) pour cet e
 
 ---
 
-## Moteur Prédictif v1.0 (`lib/predictor.ts`) — Phase 2
+## Moteur Prédictif v1.0 (`lib/predictor.ts`) — Phase 2 ✅ Créé
 
 Régression linéaire pondérée on-device. Données SQLite uniquement.
 

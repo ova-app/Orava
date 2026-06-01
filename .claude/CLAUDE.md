@@ -46,12 +46,16 @@ React Native 0.81.5 + Expo 54 + Expo Router 6 · Supabase JS 2.x · Three.js 0.1
 **Phase 1 installée (25/05/2026) :**
 `expo-haptics ~15.0.8`
 
+**Phase 2 partielle installée (01/06/2026) :**
+`@shopify/react-native-skia 2.2.12` · `@expo-google-fonts/barlow` · `@expo-google-fonts/barlow-condensed` · `@expo-google-fonts/jetbrains-mono`
+
 **Tooling installé :** ESLint 8 + Prettier + Husky (pre-commit lint-staged) · EAS Build configuré · CI/CD `.github/workflows/eas-build.yml`
 
 ## Stack v4 à installer (phases suivantes)
 | Package | Rôle | Phase |
 |---|---|---|
-| `@shopify/react-native-skia` | Charts 2D + ADN Athlétique | Phase 2 |
+| `@shopify/react-native-skia` | Charts 2D + ADN Athlétique | ✅ Phase 2 |
+| `@expo-google-fonts/*` | Barlow + Barlow Condensed + JetBrains Mono | ✅ Phase 2 |
 | `react-native-purchases` | RevenueCat abonnements Pro/Coach | Phase 2 |
 | `rive-react-native` | Animations Podium PR (.riv) | Phase 2 |
 | `expo-notifications` | Push notifications prédictions | Phase 2 |
@@ -67,7 +71,7 @@ React Native 0.81.5 + Expo 54 + Expo Router 6 · Supabase JS 2.x · Three.js 0.1
 5. **`is_public` DEFAULT false** — toggle démarre à `false`
 6. **SQLite avant Supabase** — données locales vérifiées avant tout appel réseau
 7. **Charts 2D** : View RN + StyleSheet OU Skia — jamais Victory Native
-8. **Pas de `components/` ni `hooks/`** — UI inline, state via Context
+8. **`components/` réservé composants réutilisables purs** — pas de hooks, pas de Context. Exception validée : `RulerPicker.tsx`. UI inline dans les screens.
 9. **Interface français** + anglicismes (Sets, Reps, PR, Timer, Streak, Ghost)
 10. **TypeScript strict** — pas de `any`, pas de `as unknown`
 11. **60 FPS** sur toutes animations — benchmarker Pixel 6a + iPhone 12
