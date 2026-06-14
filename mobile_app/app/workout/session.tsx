@@ -20,28 +20,53 @@ import Animated, {
   runOnJS,
   Easing,
 } from 'react-native-reanimated'
-import { Gesture, GestureDetector, type PanGestureHandlerEventPayload, type GestureStateChangeEvent, type GestureUpdateEvent } from 'react-native-gesture-handler'
+import {
+  Gesture,
+  GestureDetector,
+  type PanGestureHandlerEventPayload,
+  type GestureStateChangeEvent,
+  type GestureUpdateEvent,
+} from 'react-native-gesture-handler'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import * as Haptics from 'expo-haptics'
-import { Plus, Trash2, X, Search, Zap, Flame, Trophy, Dumbbell, Check, ChevronLeft } from 'lucide-react-native'
+import {
+  Plus,
+  Trash2,
+  X,
+  Search,
+  Zap,
+  Flame,
+  Trophy,
+  Dumbbell,
+  Check,
+  ChevronLeft,
+} from 'lucide-react-native'
 import Svg, { Path as SvgPath } from 'react-native-svg'
-import { Canvas, Path, Skia, LinearGradient as SkiaLinearGradient, vec } from '@shopify/react-native-skia'
+import {
+  Canvas,
+  Path,
+  Skia,
+  LinearGradient as SkiaLinearGradient,
+  vec,
+} from '@shopify/react-native-skia'
 import { useTheme } from '@/context/ThemeContext'
 import { spacing, radius, typography, touchTarget, spring, font } from '@/constants/theme'
+import { useWorkout, WorkoutExercise, WorkoutSet, PrLevel } from '@/context/WorkoutContext'
 import {
-  useWorkout,
-  WorkoutExercise,
-  WorkoutSet,
-  PrLevel,
-} from '@/context/WorkoutContext'
-import { prOverlayRecipe, prBadgeRecipe, type PrLevel as PrLevelStrict, type PrType } from '@/constants/recipes'
+  prOverlayRecipe,
+  prBadgeRecipe,
+  type PrLevel as PrLevelStrict,
+  type PrType,
+} from '@/constants/recipes'
 import { storage } from '@/lib/storage'
-import { supabase } from '@/lib/supabase'
 import { getGhostReference, type GhostSet } from '@/lib/ghost'
+import { useExerciseLibrary, MUSCLE_LABELS, type ExerciseRow } from '@/lib/hooks/useExerciseLibrary'
 import { getLastLocalSet } from '@/lib/db'
+import { REPS_VALUES, getWeightValues } from '@/lib/weights'
 import WheelPickerModal from './wheel-picker-modal'
+import oravaLogo from '@/assets/orava_logo.png'
 
 const { width: SCREEN_W } = Dimensions.get('window')
 
@@ -56,11 +81,11 @@ function GhostCompareBar({
   currentWeight: number
   ghostBeaten: boolean
 }) {
-  const W      = SCREEN_W - spacing.s4 * 2
-  const H      = 4
-  const maxW   = Math.max(ghostWeight, currentWeight, 1)
+  const W = SCREEN_W - spacing.s4 * 2
+  const H = 4
+  const maxW = Math.max(ghostWeight, currentWeight, 1)
   const ghostPx = Math.min((ghostWeight / maxW) * W, W)
-  const currPx  = Math.min((currentWeight / maxW) * W, W)
+  const currPx = Math.min((currentWeight / maxW) * W, W)
 
   const barProg = useSharedValue(0)
   useEffect(() => {
@@ -74,27 +99,42 @@ function GhostCompareBar({
 
   const trackPath = useMemo(() => {
     const p = Skia.Path.Make()
-    p.moveTo(0, 0); p.lineTo(W, 0); p.lineTo(W, H); p.lineTo(0, H); p.close()
+    p.moveTo(0, 0)
+    p.lineTo(W, 0)
+    p.lineTo(W, H)
+    p.lineTo(0, H)
+    p.close()
     return p
   }, [W])
 
-  const delta  = Math.round((currentWeight - ghostWeight) * 10) / 10
+  const delta = Math.round((currentWeight - ghostWeight) * 10) / 10
   const beaten = ghostBeaten
 
   return (
-    <View style={{ paddingHorizontal: spacing.s4, paddingTop: spacing.s1, paddingBottom: spacing.s2 }}>
+    <View
+      style={{ paddingHorizontal: spacing.s4, paddingTop: spacing.s1, paddingBottom: spacing.s2 }}
+    >
       {/* Barre */}
-      <View style={{ height: H, borderRadius: H / 2, overflow: 'hidden', backgroundColor: 'rgba(255,255,255,0.06)' }}>
+      <View
+        style={{
+          height: H,
+          borderRadius: H / 2,
+          overflow: 'hidden',
+          backgroundColor: 'rgba(255,255,255,0.06)',
+        }}
+      >
         {/* Marqueur fantôme */}
-        <View style={{
-          position: 'absolute',
-          left: ghostPx - 1,
-          top: -1,
-          width: 2,
-          height: H + 2,
-          backgroundColor: 'rgba(255,255,255,0.30)',
-          borderRadius: 1,
-        }} />
+        <View
+          style={{
+            position: 'absolute',
+            left: ghostPx - 1,
+            top: -1,
+            width: 2,
+            height: H + 2,
+            backgroundColor: 'rgba(255,255,255,0.30)',
+            borderRadius: 1,
+          }}
+        />
         {/* Barre courante */}
         <Animated.View style={[{ height: H, borderRadius: H / 2, overflow: 'hidden' }, currStyle]}>
           <Canvas style={{ width: W, height: H }}>
@@ -102,30 +142,34 @@ function GhostCompareBar({
               <SkiaLinearGradient
                 start={vec(0, 0)}
                 end={vec(W, 0)}
-                colors={beaten
-                  ? ['rgba(0,230,115,0.45)', '#00E673']
-                  : delta < 0
-                  ? ['rgba(255,59,48,0.35)', 'rgba(255,59,48,0.70)']
-                  : ['rgba(255,255,255,0.22)', 'rgba(255,255,255,0.50)']}
+                colors={
+                  beaten
+                    ? ['rgba(0,230,115,0.45)', '#00E673']
+                    : delta < 0
+                      ? ['rgba(255,59,48,0.35)', 'rgba(255,59,48,0.70)']
+                      : ['rgba(255,255,255,0.22)', 'rgba(255,255,255,0.50)']
+                }
               />
             </Path>
           </Canvas>
         </Animated.View>
       </View>
       {/* Label delta */}
-      <Text style={{
-        color: beaten ? '#00E673' : delta < 0 ? 'rgba(255,59,48,0.80)' : 'rgba(255,255,255,0.32)',
-        fontSize: 11,
-        fontFamily: font.medium,
-        marginTop: spacing.s1,
-        letterSpacing: 0.3,
-        fontVariant: ['tabular-nums'],
-      }}>
+      <Text
+        style={{
+          color: beaten ? '#00E673' : delta < 0 ? 'rgba(255,59,48,0.80)' : 'rgba(255,255,255,0.32)',
+          fontSize: 11,
+          fontFamily: font.medium,
+          marginTop: spacing.s1,
+          letterSpacing: 0.3,
+          fontVariant: ['tabular-nums'],
+        }}
+      >
         {delta > 0
           ? `↑ +${delta} kg vs fantôme`
           : delta < 0
-          ? `↓ ${Math.abs(delta)} kg vs fantôme`
-          : `= fantôme · ${ghostWeight} kg`}
+            ? `↓ ${Math.abs(delta)} kg vs fantôme`
+            : `= fantôme · ${ghostWeight} kg`}
       </Text>
     </View>
   )
@@ -133,37 +177,15 @@ function GhostCompareBar({
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-interface ExerciseRow {
-  id: string
-  name_fr: string
-  muscle_group: string | null
-  equipment_type: string | null
-}
-
 interface PrEvent {
   type: PrType
   level: PrLevelStrict
-  title: string       // "RECORD CHARGE" etc.
-  value: string       // "120 kg" / "1 240 kg" / "120 × 8"
-  subtitle: string    // "+5 kg vs ancien record" or "Nouveau sommet"
+  title: string // "RECORD CHARGE" etc.
+  value: string // "120 kg" / "1 240 kg" / "120 × 8"
+  subtitle: string // "+5 kg vs ancien record" or "Nouveau sommet"
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-
-const REPS_VALUES = Array.from({ length: 50 }, (_, i) => i + 1)
-
-const MUSCLE_LABELS: Record<string, string> = {
-  pectoraux: 'Pectoraux',
-  dos: 'Dos',
-  epaules: 'Épaules',
-  biceps: 'Bras',
-  triceps: 'Bras',
-  quadriceps: 'Jambes',
-  ischio_jambiers: 'Jambes',
-  fessiers: 'Jambes',
-  mollets: 'Jambes',
-  abdominaux: 'Core',
-}
 
 const CHIP_GROUPS = [
   { key: null, label: 'Tous' },
@@ -174,24 +196,14 @@ const CHIP_GROUPS = [
   { key: 'quadriceps', label: 'Jambes' },
 ]
 
-function getWeightValues(equipType: string | null): number[] {
-  if (equipType === 'bodyweight') return []
-  if (equipType === 'dumbbell') return Array.from({ length: 30 }, (_, i) => (i + 1) * 2)
-  if (equipType === 'barbell') {
-    return [20, 40, 50, 60, 65, 70, 75, 80, 85, 90, 95, 100, 105, 110, 115, 120, 125, 130, 140, 150, 160, 170, 180, 190, 200, 210, 220]
-  }
-  if (equipType === 'kettlebell') return Array.from({ length: 12 }, (_, i) => (i + 1) * 4)
-  return Array.from({ length: 80 }, (_, i) => (i + 1) * 2.5)
-}
-
 function snapshotToMMKV(
   exercises: WorkoutExercise[],
   currentIndex: number,
-  startedAt: Date | null,
+  startedAt: Date | null
 ): void {
   storage.set(
     'workout_session_draft',
-    JSON.stringify({ exercises, currentIndex, startedAt: startedAt?.toISOString() ?? null }),
+    JSON.stringify({ exercises, currentIndex, startedAt: startedAt?.toISOString() ?? null })
   )
 }
 
@@ -207,20 +219,10 @@ function bestPrLevel(a: PrLevel, b: PrLevel): PrLevel {
   return rank(a) >= rank(b) ? a : b
 }
 
-function normalizeNFD(s: string): string {
-  return s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
-}
-
 // ─── LogoOrava ───────────────────────────────────────────────────────────────
 
 function LogoOrava() {
-  return (
-    <Image
-      source={require('@/assets/orava_logo.png')}
-      style={{ width: 48, height: 48 }}
-      resizeMode="contain"
-    />
-  )
+  return <Image source={oravaLogo} style={{ width: 48, height: 48 }} resizeMode="contain" />
 }
 
 // ─── SetRow (swipe delete) ────────────────────────────────────────────────────
@@ -260,10 +262,14 @@ function SetRow({ set, onDelete, colors, ghostVolume }: SetRowProps) {
 
   function handleDeleteConfirm() {
     rowOpacity.value = withTiming(0, { duration: 180, easing: Easing.out(Easing.quad) })
-    rowHeight.value = withTiming(0, { duration: 260, easing: Easing.bezier(0.16, 1, 0.3, 1) }, (finished) => {
-      'worklet'
-      if (finished) runOnJS(onDelete)()
-    })
+    rowHeight.value = withTiming(
+      0,
+      { duration: 260, easing: Easing.bezier(0.16, 1, 0.3, 1) },
+      (finished) => {
+        'worklet'
+        if (finished) runOnJS(onDelete)()
+      }
+    )
   }
 
   const animStyle = useAnimatedStyle(() => ({
@@ -298,10 +304,7 @@ function SetRow({ set, onDelete, colors, ghostVolume }: SetRowProps) {
           <Text style={[styles.setRowLabel, { color: colors.textSecondary }]}>
             Set {set.set_number}
           </Text>
-          <Text
-            style={[styles.setRowValue, { color: colors.textPrimary }]}
-            numberOfLines={1}
-          >
+          <Text style={[styles.setRowValue, { color: colors.textPrimary }]} numberOfLines={1}>
             {set.weight_kg > 0 ? `${set.weight_kg} kg × ${set.reps}` : `${set.reps} reps`}
           </Text>
           {prLevel !== null && (
@@ -322,10 +325,10 @@ function SetRow({ set, onDelete, colors, ghostVolume }: SetRowProps) {
                 style={[
                   styles.setVolumeFill,
                   {
-                    width: `${Math.min((set.weight_kg * set.reps / ghostVolume) * 100, 100)}%` as `${number}%`,
-                    backgroundColor: set.weight_kg * set.reps >= ghostVolume
-                      ? '#00E673'
-                      : 'rgba(255,59,48,0.55)',
+                    width:
+                      `${Math.min(((set.weight_kg * set.reps) / ghostVolume) * 100, 100)}%` as `${number}%`,
+                    backgroundColor:
+                      set.weight_kg * set.reps >= ghostVolume ? '#00E673' : 'rgba(255,59,48,0.55)',
                   },
                 ]}
               />
@@ -351,10 +354,9 @@ function ExerciseModal({ visible, onClose, onSelect, addedIds, colors }: Exercis
   const slideValue = useSharedValue(Dimensions.get('window').height)
   const backdropOpacity = useSharedValue(0)
   const [mounted, setMounted] = useState(visible)
-  const [exercises, setExercises] = useState<ExerciseRow[]>([])
-  const [search, setSearch] = useState('')
-  const [filter, setFilter] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
+  // Couche data extraite — ORA-034 (bibliothèque + recherche/filtre + sections)
+  const { loading, search, setSearch, filter, setFilter, flatData, reset } =
+    useExerciseLibrary(visible)
   const insets = useSafeAreaInsets()
 
   const slideStyle = useAnimatedStyle(() => ({
@@ -369,70 +371,17 @@ function ExerciseModal({ visible, onClose, onSelect, addedIds, colors }: Exercis
       setMounted(true)
       slideValue.value = withTiming(0, { duration: 320, easing: Easing.bezier(0.16, 1, 0.3, 1) })
       backdropOpacity.value = withTiming(1, { duration: 200 })
-      fetchExercises()
     } else {
       slideValue.value = withSpring(Dimensions.get('window').height, spring.snappy)
       backdropOpacity.value = withTiming(0, { duration: 180, easing: Easing.out(Easing.quad) })
       const t = setTimeout(() => {
         setMounted(false)
-        setSearch('')
-        setFilter(null)
+        reset()
       }, 360)
       return () => clearTimeout(t)
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible])
-
-  async function fetchExercises() {
-    setLoading(true)
-    try {
-      const { data } = await supabase
-        .from('exercises')
-        .select('id, name_fr, muscle_group, equipment_type')
-        .order('name_fr')
-      if (data) setExercises(data as ExerciseRow[])
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  // Group filtered exercises by muscle section
-  const filtered = useMemo(() => {
-    let list = exercises
-    if (filter) list = list.filter(e => e.muscle_group === filter)
-    if (search.trim()) {
-      const q = normalizeNFD(search.trim())
-      list = list.filter(e => normalizeNFD(e.name_fr).includes(q))
-    }
-    return list
-  }, [exercises, search, filter])
-
-  // Build section list grouped by display label (multiple muscle_groups can share the same label)
-  const sections = useMemo(() => {
-    const map = new Map<string, ExerciseRow[]>()
-    for (const ex of filtered) {
-      const label = (MUSCLE_LABELS[ex.muscle_group ?? ''] ?? ex.muscle_group ?? 'autre').toUpperCase()
-      if (!map.has(label)) map.set(label, [])
-      map.get(label)!.push(ex)
-    }
-    return Array.from(map.entries()).map(([title, data]) => ({ title, data }))
-  }, [filtered])
-
-  // Flatten for FlatList with section headers
-  type ListItem =
-    | { type: 'header'; title: string }
-    | { type: 'exercise'; item: ExerciseRow }
-
-  const flatData: ListItem[] = useMemo(() => {
-    const result: ListItem[] = []
-    for (const section of sections) {
-      result.push({ type: 'header', title: section.title })
-      for (const ex of section.data) {
-        result.push({ type: 'exercise', item: ex })
-      }
-    }
-    return result
-  }, [sections])
 
   if (!mounted) return null
 
@@ -524,12 +473,7 @@ function ExerciseModal({ visible, onClose, onSelect, addedIds, colors }: Exercis
           renderItem={({ item }) => {
             if (item.type === 'header') {
               return (
-                <Text
-                  style={[
-                    styles.sectionHeader,
-                    { color: colors.textTertiary },
-                  ]}
-                >
+                <Text style={[styles.sectionHeader, { color: colors.textTertiary }]}>
                   {item.title}
                 </Text>
               )
@@ -549,13 +493,14 @@ function ExerciseModal({ visible, onClose, onSelect, addedIds, colors }: Exercis
                 activeOpacity={0.7}
               >
                 <View style={styles.exerciseRowInfo}>
-                  <Text style={[styles.exerciseName, { color: colors.textPrimary }]} numberOfLines={1}>
+                  <Text
+                    style={[styles.exerciseName, { color: colors.textPrimary }]}
+                    numberOfLines={1}
+                  >
                     {ex.name_fr}
                   </Text>
                   {sub ? (
-                    <Text style={[styles.exerciseSub, { color: colors.textSecondary }]}>
-                      {sub}
-                    </Text>
+                    <Text style={[styles.exerciseSub, { color: colors.textSecondary }]}>{sub}</Text>
                   ) : null}
                 </View>
                 {isAdded ? (
@@ -592,10 +537,10 @@ const FADE_OUT_MS = 260
 
 // Map PR type → lucide icon component (kept as ref, not JSX, to allow reuse)
 const PR_TYPE_ICON: Record<PrType, typeof Zap> = {
-  charge:   Zap,
-  serie:    Flame,
+  charge: Zap,
+  serie: Flame,
   exercice: Dumbbell,
-  seance:   Trophy,
+  seance: Trophy,
 }
 
 function PrFlashOverlay({ events, onDismiss }: PrFlashOverlayProps) {
@@ -606,10 +551,18 @@ function PrFlashOverlay({ events, onDismiss }: PrFlashOverlayProps) {
   const fadeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Pre-allocate sharedValues for up to MAX_PR_CARDS — hooks order stable
-  const op0 = useSharedValue(0); const ty0 = useSharedValue(20); const sc0 = useSharedValue(0.9)
-  const op1 = useSharedValue(0); const ty1 = useSharedValue(20); const sc1 = useSharedValue(0.9)
-  const op2 = useSharedValue(0); const ty2 = useSharedValue(20); const sc2 = useSharedValue(0.9)
-  const op3 = useSharedValue(0); const ty3 = useSharedValue(20); const sc3 = useSharedValue(0.9)
+  const op0 = useSharedValue(0)
+  const ty0 = useSharedValue(20)
+  const sc0 = useSharedValue(0.9)
+  const op1 = useSharedValue(0)
+  const ty1 = useSharedValue(20)
+  const sc1 = useSharedValue(0.9)
+  const op2 = useSharedValue(0)
+  const ty2 = useSharedValue(20)
+  const sc2 = useSharedValue(0.9)
+  const op3 = useSharedValue(0)
+  const ty3 = useSharedValue(20)
+  const sc3 = useSharedValue(0.9)
 
   const cardOps = [op0, op1, op2, op3]
   const cardTys = [ty0, ty1, ty2, ty3]
@@ -635,18 +588,28 @@ function PrFlashOverlay({ events, onDismiss }: PrFlashOverlayProps) {
   const cardStyles = [card0Style, card1Style, card2Style, card3Style]
 
   // Unique key per events batch to retrigger animations
-  const eventsKey = events && events.length > 0
-    ? events.map(e => `${e.type}:${e.level}:${e.value}`).join('|')
-    : null
+  const eventsKey =
+    events && events.length > 0
+      ? events.map((e) => `${e.type}:${e.level}:${e.value}`).join('|')
+      : null
 
   function clearTimers() {
-    if (dismissTimerRef.current) { clearTimeout(dismissTimerRef.current); dismissTimerRef.current = null }
-    if (fadeTimerRef.current) { clearTimeout(fadeTimerRef.current); fadeTimerRef.current = null }
+    if (dismissTimerRef.current) {
+      clearTimeout(dismissTimerRef.current)
+      dismissTimerRef.current = null
+    }
+    if (fadeTimerRef.current) {
+      clearTimeout(fadeTimerRef.current)
+      fadeTimerRef.current = null
+    }
   }
 
   function dismiss() {
     clearTimers()
-    backdropOpacity.value = withTiming(0, { duration: FADE_OUT_MS, easing: Easing.out(Easing.quad) })
+    backdropOpacity.value = withTiming(0, {
+      duration: FADE_OUT_MS,
+      easing: Easing.out(Easing.quad),
+    })
     for (let i = 0; i < MAX_PR_CARDS; i++) {
       cardOps[i].value = withTiming(0, { duration: FADE_OUT_MS, easing: Easing.out(Easing.quad) })
     }
@@ -684,7 +647,7 @@ function PrFlashOverlay({ events, onDismiss }: PrFlashOverlayProps) {
       dismissTimerRef.current = setTimeout(dismiss, AUTO_DISMISS_MS)
       return clearTimers
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventsKey])
 
   if (!events || events.length === 0) return null
@@ -729,9 +692,7 @@ function formatKg(n: number): string {
 
 function levelSubtitle(level: PrLevelStrict, kind: 'charge' | 'serie' | 'exercice'): string {
   const ordinal =
-    level === 'gold'   ? 'Nouveau sommet' :
-    level === 'silver' ? '2e meilleure' :
-                         '3e meilleure'
+    level === 'gold' ? 'Nouveau sommet' : level === 'silver' ? '2e meilleure' : '3e meilleure'
   if (level === 'gold') return ordinal
   const suffix = kind === 'charge' ? 'charge' : kind === 'serie' ? 'série' : 'performance'
   return `${ordinal} ${suffix}`
@@ -741,7 +702,7 @@ function buildPrEvents(
   prCharge: PrLevel,
   prSerie: PrLevel,
   weight: number,
-  reps: number,
+  reps: number
 ): PrEvent[] {
   const out: PrEvent[] = []
   if (prCharge !== null) {
@@ -825,7 +786,7 @@ export default function SessionScreen() {
     if (status === 'done') {
       router.replace('/workout/summary')
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status])
 
   // ── Snapshot after exercises change ──
@@ -853,31 +814,32 @@ export default function SessionScreen() {
     idleTranslateX.value = withTiming(
       W,
       { duration: 280, easing: Easing.bezier(0.16, 1, 0.3, 1) },
-      (finished) => { if (finished) runOnJS(router.replace)('/(tabs)/feed') },
+      (finished) => {
+        if (finished) runOnJS(router.replace)('/(tabs)/feed')
+      }
     )
   }
 
   const currentExercise: WorkoutExercise | undefined = exercises[currentIndex]
-  const draftSet: WorkoutSet | undefined = currentExercise?.sets.find(s => !s.validated)
-  const validatedSets: WorkoutSet[] = currentExercise?.sets.filter(s => s.validated) ?? []
+  const draftSet: WorkoutSet | undefined = currentExercise?.sets.find((s) => !s.validated)
+  const validatedSets: WorkoutSet[] = currentExercise?.sets.filter((s) => s.validated) ?? []
 
   const weightValues = useMemo(
     () => getWeightValues(currentExercise?.equipment_type ?? null),
-    [currentExercise?.equipment_type],
+    [currentExercise?.equipment_type]
   )
 
-  const draftWeight = draftSet?.weight_kg ?? (weightValues[0] ?? 0)
+  const draftWeight = draftSet?.weight_kg ?? weightValues[0] ?? 0
   const draftReps = draftSet?.reps ?? 1
 
   // Set number being prepared
   const nextSetNumber = validatedSets.length + 1
 
-
   // Ghost beaten: current draft weight beats ghost reference
   const ghostBeaten = ghostEnabled && ghostRef !== null && draftWeight > ghostRef.weight_kg
 
   // Added exercise IDs for checkmarks in modal
-  const addedIds = useMemo(() => new Set(exercises.map(e => e.exercise_id)), [exercises])
+  const addedIds = useMemo(() => new Set(exercises.map((e) => e.exercise_id)), [exercises])
 
   // ── Haptic: ghost beaten (double pulse sur transition false→true) ──
   useEffect(() => {
@@ -893,7 +855,8 @@ export default function SessionScreen() {
   useEffect(() => {
     if (!prFlash || prFlash.length === 0 || !vibrationEnabled) return
     const bestLevel = prFlash.reduce<PrLevelStrict | null>((acc, ev) => {
-      const rank = (l: PrLevelStrict | null) => l === 'gold' ? 3 : l === 'silver' ? 2 : l === 'bronze' ? 1 : 0
+      const rank = (l: PrLevelStrict | null) =>
+        l === 'gold' ? 3 : l === 'silver' ? 2 : l === 'bronze' ? 1 : 0
       return rank(ev.level) > rank(acc) ? ev.level : acc
     }, null)
     const t = setTimeout(() => {
@@ -971,7 +934,9 @@ export default function SessionScreen() {
         >
           <ChevronLeft size={24} color={colors.textSecondary} strokeWidth={2} />
         </TouchableOpacity>
-        <View style={[styles.idleContainer, { paddingBottom: insets.bottom, paddingTop: insets.top }]}>
+        <View
+          style={[styles.idleContainer, { paddingBottom: insets.bottom, paddingTop: insets.top }]}
+        >
           <Text style={[styles.idleTitle, { color: colors.textPrimary }]}>Orava</Text>
           <Text style={[styles.idleSubtitle, { color: colors.textSecondary }]}>
             Prêt à sentraîner ?
@@ -981,7 +946,9 @@ export default function SessionScreen() {
             onPress={startWorkout}
             activeOpacity={0.85}
           >
-            <Text style={[styles.startButtonText, { color: colors.background }]}>DÉMARRER UNE SÉANCE</Text>
+            <Text style={[styles.startButtonText, { color: colors.background }]}>
+              DÉMARRER UNE SÉANCE
+            </Text>
           </TouchableOpacity>
         </View>
       </Animated.View>
@@ -999,7 +966,10 @@ export default function SessionScreen() {
           {exercises.length === 0 ? (
             <TouchableOpacity
               style={styles.backButton}
-              onPress={() => { resetWorkout(); router.replace('/(tabs)/feed') }}
+              onPress={() => {
+                resetWorkout()
+                router.replace('/(tabs)/feed')
+              }}
               activeOpacity={0.7}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
@@ -1030,7 +1000,10 @@ export default function SessionScreen() {
           </View>
           {exercises.length > 0 && (
             <TouchableOpacity
-              style={[styles.finishButton, { backgroundColor: colors.backgroundSecondary, borderColor: colors.border }]}
+              style={[
+                styles.finishButton,
+                { backgroundColor: colors.backgroundSecondary, borderColor: colors.border },
+              ]}
               onPress={finishWorkout}
               activeOpacity={0.85}
             >
@@ -1107,7 +1080,10 @@ export default function SessionScreen() {
         <View style={styles.flex}>
           {/* Exercise name + set label */}
           <View style={styles.exerciseHeaderZen}>
-            <Text style={[styles.exerciseTitleZen, { color: colors.textPrimary }]} numberOfLines={2}>
+            <Text
+              style={[styles.exerciseTitleZen, { color: colors.textPrimary }]}
+              numberOfLines={2}
+            >
               {currentExercise.name}
             </Text>
             <View style={styles.setLabelRow}>
@@ -1164,7 +1140,9 @@ export default function SessionScreen() {
                 <Text style={[styles.pickerButtonValue, { color: colors.textPrimary }]}>
                   {draftReps}
                 </Text>
-                <Text style={[styles.pickerButtonLabel, { color: colors.textSecondary }]}>REPS</Text>
+                <Text style={[styles.pickerButtonLabel, { color: colors.textSecondary }]}>
+                  REPS
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1179,7 +1157,9 @@ export default function SessionScreen() {
           )}
 
           {/* LOG SET button — sticky at bottom */}
-          <View style={[styles.logSetWrapper, { paddingBottom: Math.max(insets.bottom, spacing.s4) }]}>
+          <View
+            style={[styles.logSetWrapper, { paddingBottom: Math.max(insets.bottom, spacing.s4) }]}
+          >
             <TouchableOpacity
               style={[styles.logSetButton, { backgroundColor: colors.accent }]}
               onPress={handleValidate}
@@ -1192,10 +1172,7 @@ export default function SessionScreen() {
       ) : null}
 
       {/* PR Flash overlay */}
-      <PrFlashOverlay
-        events={prFlash}
-        onDismiss={() => setPrFlash(null)}
-      />
+      <PrFlashOverlay events={prFlash} onDismiss={() => setPrFlash(null)} />
 
       {/* Exercise modal */}
       <ExerciseModal

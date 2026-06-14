@@ -16,17 +16,52 @@ import {
   ActionSheetIOS,
   Alert,
 } from 'react-native'
-import Animated, { useSharedValue, useAnimatedStyle, useAnimatedReaction, runOnJS, withRepeat, withSequence, withTiming, withDelay, Easing, cancelAnimation } from 'react-native-reanimated'
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  useAnimatedReaction,
+  runOnJS,
+  withRepeat,
+  withSequence,
+  withTiming,
+  withDelay,
+  Easing,
+  cancelAnimation,
+} from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { ChevronLeft, Share2, MoreVertical, Heart, MessageCircle, X, Send, HelpCircle } from 'lucide-react-native'
+import {
+  ChevronLeft,
+  Share2,
+  MoreVertical,
+  Heart,
+  MessageCircle,
+  X,
+  Send,
+  HelpCircle,
+} from 'lucide-react-native'
 import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/context/ThemeContext'
-import { spacing, radius, typography, font, duration } from '@/constants/theme'
+import {
+  spacing,
+  radius,
+  typography,
+  font,
+  duration,
+  score as scoreScale,
+  scrim,
+  scrimStrong,
+} from '@/constants/theme'
 import { prBadgeRecipe, type PrType } from '@/constants/recipes'
-import MyoChart, { FAMILY_NAMES, FAMILY_NAMES_SHORT, SECTOR_COLORS_HEX } from '@/app/workout/myo-chart'
+import MyoChart, {
+  FAMILY_NAMES,
+  FAMILY_NAMES_SHORT,
+  SECTOR_COLORS_HEX,
+} from '@/app/workout/myo-chart'
 import MyoGlossaryScreen from '@/app/myo-glossary'
 import { sessionValuesFromSignature } from '@/lib/myo'
+import { formatDuration, formatVolumeKg } from '@/lib/utils'
+import { MUSCLE_LABELS } from '@/lib/muscles'
 import { Zap, Flame, Dumbbell, Trophy } from 'lucide-react-native'
 import Svg, { Text as SvgText, Defs, LinearGradient, Stop, Rect } from 'react-native-svg'
 
@@ -36,9 +71,9 @@ function GradientScoreText({ score, size = 80 }: { score: number; size?: number 
     <Svg width={size} height={size * 0.7} viewBox={`0 0 ${size} ${size * 0.7}`}>
       <Defs>
         <LinearGradient id="scoreGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-          <Stop offset="0%" stopColor="#8E8E93" />
-          <Stop offset="50%" stopColor="#D85A30" />
-          <Stop offset="100%" stopColor="#FAC775" />
+          <Stop offset="0%" stopColor={scoreScale.low} />
+          <Stop offset="50%" stopColor={scoreScale.mid} />
+          <Stop offset="100%" stopColor={scoreScale.high} />
         </LinearGradient>
       </Defs>
       <SvgText
@@ -58,10 +93,10 @@ function GradientScoreText({ score, size = 80 }: { score: number; size?: number 
 // ─── PR Badge (unified) ──────────────────────────────────────────────────────
 
 const PR_ICON: Record<PrType, React.ComponentType<{ size?: number; color?: string }>> = {
-  charge:   Zap,
-  serie:    Flame,
+  charge: Zap,
+  serie: Flame,
   exercice: Dumbbell,
-  seance:   Trophy,
+  seance: Trophy,
 }
 
 function PrBadge({
@@ -114,7 +149,7 @@ interface FeedWorkoutDetail {
 }
 
 interface WorkoutMetricsData {
-  [key: string]: any
+  [key: string]: unknown
 }
 
 interface SetRow {
@@ -164,47 +199,8 @@ function formatDate(iso: string): string {
   return `${weekday.charAt(0).toUpperCase() + weekday.slice(1)} ${day} ${month.charAt(0).toUpperCase() + month.slice(1)}`
 }
 
-function formatDuration(sec: number | null): string {
-  if (!sec) return '—'
-  const h = Math.floor(sec / 3600)
-  const m = Math.floor((sec % 3600) / 60)
-  if (h > 0) return `${h}h ${String(m).padStart(2, '0')}min`
-  return `${m}min`
-}
-
-function formatVolume(kg: number | null): string {
-  if (kg == null) return '—'
-  const rounded = Math.round(kg)
-  if (rounded >= 1000) {
-    const thousands = Math.floor(rounded / 1000)
-    const remainder = rounded % 1000
-    return `${thousands} ${String(remainder).padStart(3, '0')} kg`
-  }
-  return `${rounded} kg`
-}
-
 function totalSets(exercises: ExerciseWithSets[]): number {
   return exercises.reduce((sum, ex) => sum + ex.sets.length, 0)
-}
-
-const MUSCLE_LABEL_MAP: Record<string, string> = {
-  grand_pectoral: 'Pectoraux',
-  deltoide: 'Deltoïdes',
-  grand_dorsal: 'Grand dorsal',
-  trapeze: 'Trapèze',
-  biceps: 'Biceps',
-  triceps: 'Triceps',
-  quadriceps: 'Quadriceps',
-  ischio_jambiers: 'Ischio-jambiers',
-  fessier_maximus: 'Fessiers',
-  fessier_median: 'Fessiers',
-  fessier_minimus: 'Fessiers',
-  mollets: 'Mollets',
-  abdominaux: 'Core',
-  grand_rond: 'Grand rond',
-  rhomboide: 'Rhomboïdes',
-  erecteurs_rachis: 'Érecteurs rachis',
-  avant_bras: 'Avant-bras',
 }
 
 function formatCommentDate(iso: string): string {
@@ -216,7 +212,7 @@ function formatCommentDate(iso: string): string {
   const diffHours = Math.floor(diffMins / 60)
   const diffDays = Math.floor(diffHours / 24)
 
-  if (diffSecs < 60) return 'À l\'instant'
+  if (diffSecs < 60) return "À l'instant"
   if (diffMins < 60) return `${diffMins}min`
   if (diffHours < 24) return `${diffHours}h`
   if (diffDays < 7) return `${diffDays}j`
@@ -249,32 +245,44 @@ function RecapSection({
     <View style={recapS.wrapper}>
       <Text style={[recapS.sectionTitle, { color: colors.textTertiary }]}>RÉCAP SÉANCE</Text>
       {exercises.map((ex, idx) => {
-        const workingSets = ex.sets.filter(s => s.set_type !== 'warmup')
-        const totalVol = workingSets.reduce((s, set) => s + (set.weight_kg ?? 0) * (set.reps ?? 0), 0)
-        const maxWeight = Math.max(...ex.sets.map(s => s.weight_kg ?? 0), 0)
+        const workingSets = ex.sets.filter((s) => s.set_type !== 'warmup')
+        const totalVol = workingSets.reduce(
+          (s, set) => s + (set.weight_kg ?? 0) * (set.reps ?? 0),
+          0
+        )
+        const maxWeight = Math.max(...ex.sets.map((s) => s.weight_kg ?? 0), 0)
         const nbSets = workingSets.length
 
-        const restsValid = workingSets.filter(s => (s.rest_seconds ?? 0) > 0)
+        const restsValid = workingSets.filter((s) => (s.rest_seconds ?? 0) > 0)
         const avgRest = restsValid.length
-          ? Math.round(restsValid.reduce((s, set) => s + (set.rest_seconds ?? 0), 0) / restsValid.length)
+          ? Math.round(
+              restsValid.reduce((s, set) => s + (set.rest_seconds ?? 0), 0) / restsValid.length
+            )
           : null
 
-        const bestSet = workingSets.length > 0
-          ? workingSets.reduce((best, s) => {
-              const vol = (s.weight_kg ?? 0) * (s.reps ?? 0)
-              const bestVol = (best.weight_kg ?? 0) * (best.reps ?? 0)
-              return vol > bestVol ? s : best
-            })
-          : null
+        const bestSet =
+          workingSets.length > 0
+            ? workingSets.reduce((best, s) => {
+                const vol = (s.weight_kg ?? 0) * (s.reps ?? 0)
+                const bestVol = (best.weight_kg ?? 0) * (best.reps ?? 0)
+                return vol > bestVol ? s : best
+              })
+            : null
 
         const prColor =
-          ex.pr_exercice === 'gold' ? colors.prGold :
-          ex.pr_exercice === 'silver' ? colors.prSilver :
-          ex.pr_exercice === 'bronze' ? colors.prBronze :
-          null
+          ex.pr_exercice === 'gold'
+            ? colors.prGold
+            : ex.pr_exercice === 'silver'
+              ? colors.prSilver
+              : ex.pr_exercice === 'bronze'
+                ? colors.prBronze
+                : null
 
         return (
-          <View key={ex.workoutExerciseId} style={[recapS.card, { backgroundColor: colors.backgroundSecondary }]}>
+          <View
+            key={ex.workoutExerciseId}
+            style={[recapS.card, { backgroundColor: colors.backgroundSecondary }]}
+          >
             {/* Header */}
             <View style={recapS.cardHeader}>
               <View style={[recapS.indexBadge, { backgroundColor: colors.backgroundTertiary }]}>
@@ -285,9 +293,7 @@ function RecapSection({
               <Text style={[recapS.exName, { color: colors.textPrimary }]} numberOfLines={1}>
                 {ex.nameFr}
               </Text>
-              {prColor && (
-                <View style={[recapS.prDot, { backgroundColor: prColor }]} />
-              )}
+              {prColor && <View style={[recapS.prDot, { backgroundColor: prColor }]} />}
             </View>
 
             {/* Séparateur */}
@@ -296,28 +302,40 @@ function RecapSection({
             {/* 4 stats */}
             <View style={recapS.statsRow}>
               <View style={recapS.statCell}>
-                <Text style={[recapS.statValue, { color: colors.textPrimary }]} allowFontScaling={false}>
+                <Text
+                  style={[recapS.statValue, { color: colors.textPrimary }]}
+                  allowFontScaling={false}
+                >
                   {totalVol > 0 ? formatExVol(totalVol) : '—'}
                 </Text>
                 <Text style={[recapS.statLabel, { color: colors.textTertiary }]}>VOLUME</Text>
               </View>
               <View style={[recapS.statDivider, { backgroundColor: colors.separator }]} />
               <View style={recapS.statCell}>
-                <Text style={[recapS.statValue, { color: colors.textPrimary }]} allowFontScaling={false}>
+                <Text
+                  style={[recapS.statValue, { color: colors.textPrimary }]}
+                  allowFontScaling={false}
+                >
                   {nbSets}
                 </Text>
                 <Text style={[recapS.statLabel, { color: colors.textTertiary }]}>SÉRIES</Text>
               </View>
               <View style={[recapS.statDivider, { backgroundColor: colors.separator }]} />
               <View style={recapS.statCell}>
-                <Text style={[recapS.statValue, { color: colors.textPrimary }]} allowFontScaling={false}>
+                <Text
+                  style={[recapS.statValue, { color: colors.textPrimary }]}
+                  allowFontScaling={false}
+                >
                   {avgRest != null ? formatRestTime(avgRest) : '—'}
                 </Text>
                 <Text style={[recapS.statLabel, { color: colors.textTertiary }]}>REPOS MOY.</Text>
               </View>
               <View style={[recapS.statDivider, { backgroundColor: colors.separator }]} />
               <View style={recapS.statCell}>
-                <Text style={[recapS.statValue, { color: colors.textPrimary }]} allowFontScaling={false}>
+                <Text
+                  style={[recapS.statValue, { color: colors.textPrimary }]}
+                  allowFontScaling={false}
+                >
                   {maxWeight > 0 ? `${maxWeight} kg` : '—'}
                 </Text>
                 <Text style={[recapS.statLabel, { color: colors.textTertiary }]}>MAX</Text>
@@ -329,8 +347,13 @@ function RecapSection({
               <>
                 <View style={[recapS.sep, { backgroundColor: colors.separator }]} />
                 <View style={recapS.bestRow}>
-                  <Text style={[recapS.bestLabel, { color: colors.textTertiary }]}>MEILLEURE SÉRIE</Text>
-                  <Text style={[recapS.bestValue, { color: colors.accent }]} allowFontScaling={false}>
+                  <Text style={[recapS.bestLabel, { color: colors.textTertiary }]}>
+                    MEILLEURE SÉRIE
+                  </Text>
+                  <Text
+                    style={[recapS.bestValue, { color: colors.accent }]}
+                    allowFontScaling={false}
+                  >
                     {bestSet.reps} reps × {bestSet.weight_kg} kg
                   </Text>
                 </View>
@@ -450,25 +473,33 @@ const recapS = StyleSheet.create({
 
 const chipBaseStyle = {
   paddingHorizontal: spacing.s3,
-  paddingVertical  : 5,
-  borderRadius     : radius.full,
-  borderWidth      : 1,
-  alignItems       : 'center' as const,
-  justifyContent   : 'center' as const,
-  flexShrink       : 1 as const,
+  paddingVertical: 5,
+  borderRadius: radius.full,
+  borderWidth: 1,
+  alignItems: 'center' as const,
+  justifyContent: 'center' as const,
+  flexShrink: 1 as const,
 }
 const chipLabelBase = {
-  fontSize     : 9,
-  fontFamily   : font.bold,
+  fontSize: 9,
+  fontFamily: font.bold,
   letterSpacing: 0.8,
   textTransform: 'uppercase' as const,
 }
 
 function FamilyChip({
-  name, color, isActive, anyActive, onPress,
+  name,
+  color,
+  isActive,
+  anyActive,
+  onPress,
 }: {
-  name: string; index: number; color: string
-  isActive: boolean; anyActive: boolean; onPress: () => void
+  name: string
+  index: number
+  color: string
+  isActive: boolean
+  anyActive: boolean
+  onPress: () => void
 }) {
   return (
     <Pressable
@@ -476,9 +507,9 @@ function FamilyChip({
       style={[
         chipBaseStyle,
         {
-          borderColor    : color,
+          borderColor: color,
           backgroundColor: isActive ? `${color}22` : 'transparent',
-          opacity        : anyActive && !isActive ? 0.42 : 1,
+          opacity: anyActive && !isActive ? 0.42 : 1,
         },
       ]}
     >
@@ -503,6 +534,7 @@ export default function FeedDetailScreen(): React.JSX.Element {
   const [muscleBars, setMuscleBars] = useState<MuscleBar[]>([])
   const [likes, setLikes] = useState<number>(0)
   const [hasLiked, setHasLiked] = useState<boolean>(false)
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [comments, setComments] = useState<CommentRow[]>([])
   const [loading, setLoading] = useState<boolean>(true)
   const [photoLightbox, setPhotoLightbox] = useState<string | null>(null)
@@ -520,7 +552,9 @@ export default function FeedDetailScreen(): React.JSX.Element {
 
   useAnimatedReaction(
     () => volumeAnim.value,
-    (value) => { runOnJS(setDisplayVolume)(Math.round(value)) }
+    (value) => {
+      runOnJS(setDisplayVolume)(Math.round(value))
+    }
   )
 
   useEffect(() => {
@@ -530,7 +564,10 @@ export default function FeedDetailScreen(): React.JSX.Element {
     setVolumeReady(true)
     volumeAnim.value = withSequence(
       withTiming(0, { duration: 0 }),
-      withTiming(workout.total_volume_kg, { duration: 1800, easing: Easing.bezier(0.16, 1, 0.3, 1) })
+      withTiming(workout.total_volume_kg, {
+        duration: 1800,
+        easing: Easing.bezier(0.16, 1, 0.3, 1),
+      })
     )
   }, [workout?.id])
 
@@ -550,7 +587,7 @@ export default function FeedDetailScreen(): React.JSX.Element {
         withDelay(900, withTiming(1, { duration: 350, easing: Easing.out(Easing.ease) })),
         withTiming(1, { duration: 2200 }),
         withTiming(0, { duration: 450, easing: Easing.in(Easing.ease) }),
-        withTiming(0, { duration: 1800 }),
+        withTiming(0, { duration: 1800 })
       ),
       -1,
       false
@@ -562,7 +599,7 @@ export default function FeedDetailScreen(): React.JSX.Element {
         withTiming(0, { duration: 2200 }),
         withTiming(-3, { duration: 450, easing: Easing.in(Easing.ease) }),
         withTiming(6, { duration: 0 }),
-        withTiming(6, { duration: 1800 }),
+        withTiming(6, { duration: 1800 })
       ),
       -1,
       false
@@ -588,17 +625,21 @@ export default function FeedDetailScreen(): React.JSX.Element {
 
   const familyScores = useMemo(() => {
     if (!sessionValues) return new Array(8).fill(0) as number[]
-    return sessionValues.map(fam =>
+    return sessionValues.map((fam) =>
       Math.round((fam.reduce((s, v) => s + v, 0) / fam.length) * 100)
     )
   }, [sessionValues])
 
   const globalScore = useMemo(() => {
     if (!sessionValues) return 0
-    const sum = sessionValues.reduce((acc, fam) => acc + fam.reduce((s, v) => s + v, 0) / fam.length, 0)
+    const sum = sessionValues.reduce(
+      (acc, fam) => acc + fam.reduce((s, v) => s + v, 0) / fam.length,
+      0
+    )
     return Math.round((sum / sessionValues.length) * 100)
   }, [sessionValues])
-  const scoreColor = globalScore >= 66 ? '#FAC775' : globalScore >= 33 ? '#D85A30' : '#8E8E93'
+  const scoreColor =
+    globalScore >= 66 ? scoreScale.high : globalScore >= 33 ? scoreScale.mid : scoreScale.low
 
   const openMyoFullscreen = useCallback(() => {
     setMyoFullscreen(true)
@@ -610,12 +651,14 @@ export default function FeedDetailScreen(): React.JSX.Element {
     // Workout
     const { data: wData, error: wError } = await supabase
       .from('workouts')
-      .select(`
+      .select(
+        `
         id, user_id, title, started_at, ended_at, duration_sec, total_volume_kg,
         note, photo_url, pr_seance, avg_rest_seconds, location_city, is_public,
         poids_corps_kg,
         user:user_id(id, username, full_name, avatar_url)
-      `)
+      `
+      )
       .eq('id', id)
       .single()
 
@@ -641,23 +684,24 @@ export default function FeedDetailScreen(): React.JSX.Element {
       location_city: string | null
       is_public: boolean
       poids_corps_kg: number | null
-      user: Array<{
-        id: string
-        username: string | null
-        full_name: string | null
-        avatar_url: string | null
-      }> | {
-        id: string
-        username: string | null
-        full_name: string | null
-        avatar_url: string | null
-      } | null
+      user:
+        | Array<{
+            id: string
+            username: string | null
+            full_name: string | null
+            avatar_url: string | null
+          }>
+        | {
+            id: string
+            username: string | null
+            full_name: string | null
+            avatar_url: string | null
+          }
+        | null
     }
 
     const userRaw = wTyped.user
-    const userObj = Array.isArray(userRaw)
-      ? (userRaw[0] ?? null)
-      : userRaw
+    const userObj = Array.isArray(userRaw) ? (userRaw[0] ?? null) : userRaw
 
     const workoutData: FeedWorkoutDetail = {
       id: wTyped.id,
@@ -681,11 +725,13 @@ export default function FeedDetailScreen(): React.JSX.Element {
     // Exercises + sets
     const { data: weData } = await supabase
       .from('workout_exercises')
-      .select(`
+      .select(
+        `
         id, exercise_id, order_index, pr_exercice,
         exercises!inner(name_fr),
         workout_sets(id, set_number, set_type, reps, weight_kg, rest_seconds, pr_charge, pr_serie)
-      `)
+      `
+      )
       .eq('workout_id', id)
       .order('order_index')
 
@@ -698,7 +744,7 @@ export default function FeedDetailScreen(): React.JSX.Element {
         exercises: { name_fr: string }[] | { name_fr: string }
         workout_sets: SetRow[] | null
       }
-      const exs: ExerciseWithSets[] = (weData as WeRow[]).map(we => {
+      const exs: ExerciseWithSets[] = (weData as WeRow[]).map((we) => {
         const exRaw = we.exercises
         const exObj = Array.isArray(exRaw) ? exRaw[0] : exRaw
         return {
@@ -713,7 +759,7 @@ export default function FeedDetailScreen(): React.JSX.Element {
       setExercises(exs)
 
       // Muscle bars
-      const exerciseIds = exs.map(e => e.exerciseId)
+      const exerciseIds = exs.map((e) => e.exerciseId)
       const { data: emData } = await supabase
         .from('exercise_muscles')
         .select('exercise_id, muscle, role, activation_pct')
@@ -724,12 +770,12 @@ export default function FeedDetailScreen(): React.JSX.Element {
         const muscleVol: Record<string, number> = {}
 
         for (const em of emData) {
-          const ex = exs.find(e => e.exerciseId === em.exercise_id)
+          const ex = exs.find((e) => e.exerciseId === em.exercise_id)
           if (!ex) continue
           const vol = ex.sets.reduce((sum, s) => {
             return sum + (s.weight_kg ?? 0) * (s.reps ?? 0) * ((em.activation_pct ?? 0) / 100)
           }, 0)
-          const label = MUSCLE_LABEL_MAP[em.muscle as string] ?? (em.muscle as string)
+          const label = MUSCLE_LABELS[em.muscle as string] ?? (em.muscle as string)
           muscleVol[label] = (muscleVol[label] ?? 0) + vol
         }
 
@@ -747,22 +793,31 @@ export default function FeedDetailScreen(): React.JSX.Element {
     }
 
     // Likes
+    const { data: authData } = await supabase.auth.getUser()
+    const uid = authData.user?.id ?? null
+    setCurrentUserId(uid)
+
     const { data: likeData, count: likeCount } = await supabase
       .from('likes')
-      .select('*', { count: 'exact' })
+      .select('user_id', { count: 'exact' })
       .eq('workout_id', id)
 
     if (likeCount !== null) {
       setLikes(likeCount)
     }
+    if (likeData && uid) {
+      setHasLiked((likeData as Array<{ user_id: string }>).some((l) => l.user_id === uid))
+    }
 
     // Comments
     const { data: commentData } = await supabase
       .from('comments')
-      .select(`
+      .select(
+        `
         id, content, created_at, user_id,
         users(username, full_name, avatar_url)
-      `)
+      `
+      )
       .eq('workout_id', id)
       .order('created_at', { ascending: false })
 
@@ -778,7 +833,7 @@ export default function FeedDetailScreen(): React.JSX.Element {
           avatar_url: string | null
         }>
       }
-      const typedComments: CommentRow[] = (commentData as unknown as CommentRaw[]).map(c => ({
+      const typedComments: CommentRow[] = (commentData as unknown as CommentRaw[]).map((c) => ({
         id: c.id,
         content: c.content,
         created_at: c.created_at,
@@ -791,16 +846,26 @@ export default function FeedDetailScreen(): React.JSX.Element {
     // Myo signature — données réelles
     const { data: myoRow } = await supabase
       .from('myo_signatures')
-      .select('z_volume, z_intensite, z_structure, z_recovery, z_performance, z_regularite, z_extended')
+      .select(
+        'z_volume, z_intensite, z_structure, z_recovery, z_performance, z_regularite, z_extended'
+      )
       .eq('workout_id', id)
       .maybeSingle()
 
     if (myoRow) {
-      setSessionValues(sessionValuesFromSignature(myoRow as {
-        z_volume: number; z_intensite: number; z_structure: number
-        z_recovery: number; z_performance: number; z_regularite: number
-        z_extended: Record<string, unknown>
-      }))
+      setSessionValues(
+        sessionValuesFromSignature(
+          myoRow as {
+            z_volume: number
+            z_intensite: number
+            z_structure: number
+            z_recovery: number
+            z_performance: number
+            z_regularite: number
+            z_extended: Record<string, unknown>
+          }
+        )
+      )
     }
 
     setLoading(false)
@@ -809,6 +874,25 @@ export default function FeedDetailScreen(): React.JSX.Element {
   useEffect(() => {
     void fetchWorkout()
   }, [fetchWorkout])
+
+  const toggleLike = useCallback(async (): Promise<void> => {
+    if (!currentUserId || !id) return
+
+    // Optimistic update
+    const wasLiked = hasLiked
+    setHasLiked(!wasLiked)
+    setLikes((prev) => prev + (wasLiked ? -1 : 1))
+
+    const { error } = wasLiked
+      ? await supabase.from('likes').delete().eq('user_id', currentUserId).eq('workout_id', id)
+      : await supabase.from('likes').insert({ user_id: currentUserId, workout_id: id })
+
+    // Revert on error
+    if (error) {
+      setHasLiked(wasLiked)
+      setLikes((prev) => prev + (wasLiked ? 1 : -1))
+    }
+  }, [currentUserId, id, hasLiked])
 
   const s = buildStyles(colors)
 
@@ -865,19 +949,21 @@ export default function FeedDetailScreen(): React.JSX.Element {
 
   // PR badges
   const hasPrSeance = workout.pr_seance != null
-  const prExercises = exercises.filter(ex => ex.pr_exercice != null)
-  const prChargeEx = exercises.find(ex => ex.sets.some(s => s.pr_charge != null))
-  const prSerieEx = exercises.find(ex => ex.sets.some(s => s.pr_serie != null))
+  const prExercises = exercises.filter((ex) => ex.pr_exercice != null)
+  const prChargeEx = exercises.find((ex) => ex.sets.some((s) => s.pr_charge != null))
+  const prSerieEx = exercises.find((ex) => ex.sets.some((s) => s.pr_serie != null))
 
-  const bestLevel = (vals: Array<'gold' | 'silver' | 'bronze' | null>): 'gold' | 'silver' | 'bronze' | null => {
+  const bestLevel = (
+    vals: Array<'gold' | 'silver' | 'bronze' | null>
+  ): 'gold' | 'silver' | 'bronze' | null => {
     if (vals.includes('gold')) return 'gold'
     if (vals.includes('silver')) return 'silver'
     if (vals.includes('bronze')) return 'bronze'
     return null
   }
 
-  const prChargeLevel = prChargeEx ? bestLevel(prChargeEx.sets.map(s => s.pr_charge)) : null
-  const prSerieLevel = prSerieEx ? bestLevel(prSerieEx.sets.map(s => s.pr_serie)) : null
+  const prChargeLevel = prChargeEx ? bestLevel(prChargeEx.sets.map((s) => s.pr_charge)) : null
+  const prSerieLevel = prSerieEx ? bestLevel(prSerieEx.sets.map((s) => s.pr_serie)) : null
 
   return (
     <View style={s.container}>
@@ -887,214 +973,254 @@ export default function FeedDetailScreen(): React.JSX.Element {
         showsVerticalScrollIndicator={false}
         decelerationRate={0.96}
       >
-      <View>
-        {/* ── Header compact (back + user + actions) ── */}
-        <View style={[s.header, { paddingTop: insets.top + spacing.s2 }]}>
-          <Pressable
-            style={({ pressed }) => [s.backBtn, pressed && { opacity: 0.6 }]}
-            onPress={() => router.back()}
-            accessibilityRole="button"
-            accessibilityLabel="Retour"
-            hitSlop={8}
-          >
-            <ChevronLeft size={22} color={colors.textPrimary} />
-          </Pressable>
+        <View>
+          {/* ── Header compact (back + user + actions) ── */}
+          <View style={[s.header, { paddingTop: insets.top + spacing.s2 }]}>
+            <Pressable
+              style={({ pressed }) => [s.backBtn, pressed && { opacity: 0.6 }]}
+              onPress={() => router.back()}
+              accessibilityRole="button"
+              accessibilityLabel="Retour"
+              hitSlop={8}
+            >
+              <ChevronLeft size={22} color={colors.textPrimary} />
+            </Pressable>
 
-          <View style={[s.userAvatar, { backgroundColor: colors.backgroundSecondary }]}>
-            {workout.user.avatar_url ? (
-              <Image source={{ uri: workout.user.avatar_url }} style={s.userAvatarImg} accessibilityLabel="Avatar" />
-            ) : (
-              <Text style={s.userAvatarInit}>
-                {(workout.user.full_name?.[0] ?? workout.user.username?.[0] ?? 'U').toUpperCase()}
+            <View style={[s.userAvatar, { backgroundColor: colors.backgroundSecondary }]}>
+              {workout.user.avatar_url ? (
+                <Image
+                  source={{ uri: workout.user.avatar_url }}
+                  style={s.userAvatarImg}
+                  accessibilityLabel="Avatar"
+                />
+              ) : (
+                <Text style={s.userAvatarInit}>
+                  {(workout.user.full_name?.[0] ?? workout.user.username?.[0] ?? 'U').toUpperCase()}
+                </Text>
+              )}
+            </View>
+
+            <View style={s.userInfo}>
+              <Text style={s.userName} numberOfLines={1}>
+                {workout.user.full_name || workout.user.username || 'Utilisateur'}
               </Text>
-            )}
-          </View>
-
-          <View style={s.userInfo}>
-            <Text style={s.userName} numberOfLines={1}>
-              {workout.user.full_name || workout.user.username || 'Utilisateur'}
-            </Text>
-            <Text style={s.userHandle} numberOfLines={1}>
-              {formatDate(workout.started_at)}
-            </Text>
-          </View>
-
-          <Pressable
-            style={({ pressed }) => [s.headerBtn, pressed && { opacity: 0.6 }]}
-            onPress={() => void handleShare()}
-            hitSlop={8}
-            accessibilityLabel="Partager"
-          >
-            <Share2 size={18} color={colors.textSecondary} />
-          </Pressable>
-          <Pressable
-            style={({ pressed }) => [s.headerBtn, pressed && { opacity: 0.6 }]}
-            onPress={handleMenu}
-            hitSlop={8}
-            accessibilityLabel="Plus d'options"
-          >
-            <MoreVertical size={18} color={colors.textSecondary} />
-          </Pressable>
-        </View>
-
-        {/* ── Titre séance ── */}
-        {workout.title && (
-          <View style={s.titleBlock}>
-            <Text style={s.workoutTitle} numberOfLines={2}>{workout.title}</Text>
-          </View>
-        )}
-
-        {/* ── Hero stats — toujours visibles ── */}
-        <View style={s.heroBlock}>
-          <Text style={s.heroLabel}>VOLUME TOTAL</Text>
-          <View style={s.heroRow}>
-            <Text style={[s.heroValue, { color: colors.accent }]} allowFontScaling={false}>
-              {volumeReady ? formatVolume(displayVolume) : formatVolume(workout.total_volume_kg)}
-            </Text>
-          </View>
-          <View style={s.statChips}>
-            <View style={[s.statChip, { backgroundColor: colors.backgroundSecondary }]}>
-              <Text style={[s.chipValue, { color: colors.textPrimary }]}>{formatDuration(workout.duration_sec)}</Text>
-              <Text style={[s.chipLabel, { color: colors.textTertiary }]}>DURÉE</Text>
-            </View>
-            <View style={[s.statChip, { backgroundColor: colors.backgroundSecondary }]}>
-              <Text style={[s.chipValue, { color: colors.textPrimary }]}>{nSets}</Text>
-              <Text style={[s.chipLabel, { color: colors.textTertiary }]}>SETS</Text>
-            </View>
-            <View style={[s.statChip, { backgroundColor: colors.backgroundSecondary }]}>
-              <Text style={[s.chipValue, { color: colors.textPrimary }]}>
-                {workout.avg_rest_seconds ? `${Math.round(workout.avg_rest_seconds)}s` : '—'}
+              <Text style={s.userHandle} numberOfLines={1}>
+                {formatDate(workout.started_at)}
               </Text>
-              <Text style={[s.chipLabel, { color: colors.textTertiary }]}>REPOS</Text>
+            </View>
+
+            <Pressable
+              style={({ pressed }) => [s.headerBtn, pressed && { opacity: 0.6 }]}
+              onPress={() => void handleShare()}
+              hitSlop={8}
+              accessibilityLabel="Partager"
+            >
+              <Share2 size={18} color={colors.textSecondary} />
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [s.headerBtn, pressed && { opacity: 0.6 }]}
+              onPress={handleMenu}
+              hitSlop={8}
+              accessibilityLabel="Plus d'options"
+            >
+              <MoreVertical size={18} color={colors.textSecondary} />
+            </Pressable>
+          </View>
+
+          {/* ── Titre séance ── */}
+          {workout.title && (
+            <View style={s.titleBlock}>
+              <Text style={s.workoutTitle} numberOfLines={2}>
+                {workout.title}
+              </Text>
+            </View>
+          )}
+
+          {/* ── Hero stats — toujours visibles ── */}
+          <View style={s.heroBlock}>
+            <Text style={s.heroLabel}>VOLUME TOTAL</Text>
+            <View style={s.heroRow}>
+              <Text style={[s.heroValue, { color: colors.accent }]} allowFontScaling={false}>
+                {volumeReady
+                  ? formatVolumeKg(displayVolume)
+                  : formatVolumeKg(workout.total_volume_kg)}
+              </Text>
+            </View>
+            <View style={s.statChips}>
+              <View style={[s.statChip, { backgroundColor: colors.backgroundSecondary }]}>
+                <Text style={[s.chipValue, { color: colors.textPrimary }]}>
+                  {formatDuration(workout.duration_sec)}
+                </Text>
+                <Text style={[s.chipLabel, { color: colors.textTertiary }]}>DURÉE</Text>
+              </View>
+              <View style={[s.statChip, { backgroundColor: colors.backgroundSecondary }]}>
+                <Text style={[s.chipValue, { color: colors.textPrimary }]}>{nSets}</Text>
+                <Text style={[s.chipLabel, { color: colors.textTertiary }]}>SETS</Text>
+              </View>
+              <View style={[s.statChip, { backgroundColor: colors.backgroundSecondary }]}>
+                <Text style={[s.chipValue, { color: colors.textPrimary }]}>
+                  {workout.avg_rest_seconds ? `${Math.round(workout.avg_rest_seconds)}s` : '—'}
+                </Text>
+                <Text style={[s.chipLabel, { color: colors.textTertiary }]}>REPOS</Text>
+              </View>
             </View>
           </View>
-        </View>
 
-        {/* ── PRs — toujours visibles ── */}
-        {(hasPrSeance || prChargeEx != null || prSerieEx != null) && (
-          <View style={s.prsBlock}>
-            {hasPrSeance && workout.pr_seance && (
-              <PrBadge level={workout.pr_seance} type="seance" label="PR Séance" size={13} />
-            )}
-            {prChargeEx != null && prChargeLevel && (
-              <PrBadge level={prChargeLevel} type="charge" label={`Charge · ${prChargeEx.nameFr}`} size={13} />
-            )}
-            {prSerieEx != null && prSerieEx !== prChargeEx && prSerieLevel && (
-              <PrBadge level={prSerieLevel} type="serie" label={`Série · ${prSerieEx.nameFr}`} size={13} />
-            )}
-          </View>
-        )}
+          {/* ── PRs — toujours visibles ── */}
+          {(hasPrSeance || prChargeEx != null || prSerieEx != null) && (
+            <View style={s.prsBlock}>
+              {hasPrSeance && workout.pr_seance && (
+                <PrBadge level={workout.pr_seance} type="seance" label="PR Séance" size={13} />
+              )}
+              {prChargeEx != null && prChargeLevel && (
+                <PrBadge
+                  level={prChargeLevel}
+                  type="charge"
+                  label={`Charge · ${prChargeEx.nameFr}`}
+                  size={13}
+                />
+              )}
+              {prSerieEx != null && prSerieEx !== prChargeEx && prSerieLevel && (
+                <PrBadge
+                  level={prSerieLevel}
+                  type="serie"
+                  label={`Série · ${prSerieEx.nameFr}`}
+                  size={13}
+                />
+              )}
+            </View>
+          )}
 
-        {/* ── Note ── */}
-        {workout.note && (
-          <View style={s.noteBlock}>
-            <Text style={[s.noteText, { color: colors.textSecondary }]}>{workout.note}</Text>
-          </View>
-        )}
+          {/* ── Note ── */}
+          {workout.note && (
+            <View style={s.noteBlock}>
+              <Text style={[s.noteText, { color: colors.textSecondary }]}>{workout.note}</Text>
+            </View>
+          )}
 
-        {/* ── Photo ── */}
-        {workout.photo_url && (
-          <Pressable
-            onPress={() => setPhotoLightbox(workout.photo_url!)}
-            style={s.photoBlock}
-          >
-            <Image
-              source={{ uri: workout.photo_url }}
-              style={s.photoImage}
-              accessibilityLabel="Photo de séance"
-            />
-          </Pressable>
-        )}
-
-        {/* ── Séparateur ── */}
-        <View style={[s.divider, { backgroundColor: colors.separator }]} />
-
-        {/* ── Myo Orb (miniature cliquable) ── */}
-        <View style={s.myoSection}>
-          <Text style={[s.sectionTitle, { color: colors.textTertiary }]}>MYO</Text>
-          <Pressable
-            style={({ pressed }) => [s.myoMiniCard, { backgroundColor: colors.backgroundSecondary, opacity: pressed ? 0.85 : 1 }]}
-            onPress={openMyoFullscreen}
-            accessibilityRole="button"
-            accessibilityLabel="Voir le graphe Myo en grand"
-          >
-            <View pointerEvents="none" style={s.myoMiniOrb}>
-              <MyoChart
-                sessionValues={sessionValues}
-                size={140}
-                selectedFamily={null}
-                onFamilySelect={() => {}}
-                showScore={false}
-                showLabels={false}
+          {/* ── Photo ── */}
+          {workout.photo_url && (
+            <Pressable onPress={() => setPhotoLightbox(workout.photo_url!)} style={s.photoBlock}>
+              <Image
+                source={{ uri: workout.photo_url }}
+                style={s.photoImage}
+                accessibilityLabel="Photo de séance"
               />
-            </View>
-            <View style={s.myoMiniInfo}>
-              <Text style={[s.myoMiniTitle, { color: colors.textPrimary }]}>Signature Myo</Text>
-              <Text style={[s.myoMiniSub, { color: colors.textSecondary }]}>8 familles · Tap pour détailler</Text>
-              <View style={{ marginTop: spacing.s2, gap: 6 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                  <GradientScoreText score={globalScore} size={44} />
-                  <Text style={[s.myoMiniSub, { color: colors.textTertiary, fontSize: 11 }]}>/ 100</Text>
-                </View>
-                <View style={[s.scoreBarTrack, { backgroundColor: colors.backgroundTertiary }]}>
-                  <Svg width={`${globalScore}%`} height={6} style={{ borderRadius: 3 }}>
-                    <Defs>
-                      <LinearGradient id="sbGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                        <Stop offset="0%" stopColor="#8E8E93" />
-                        <Stop offset="50%" stopColor="#D85A30" />
-                        <Stop offset="100%" stopColor="#FAC775" />
-                      </LinearGradient>
-                    </Defs>
-                    <Rect x={0} y={0} width="100%" height={6} rx={3} fill="url(#sbGrad)" />
-                  </Svg>
-                </View>
-              </View>
-            </View>
-          </Pressable>
-        </View>
+            </Pressable>
+          )}
 
-        {/* ── Muscles travaillés ── */}
-        {muscleBars.length > 0 && (
-          <View style={s.section}>
-            <Text style={[s.sectionTitle, { color: colors.textTertiary }]}>MUSCLES TRAVAILLÉS</Text>
-            {muscleBars.map((bar, idx) => (
-              <View key={idx} style={s.muscleRow}>
-                <Text style={[s.muscleLabel, { color: colors.textSecondary }]} numberOfLines={1}>
-                  {bar.muscleLabel}
-                </Text>
-                <View style={[s.muscleBarTrack, { backgroundColor: colors.backgroundTertiary }]}>
-                  <View style={[s.muscleBarFill, { width: `${bar.pct}%`, backgroundColor: colors.accent }]} />
-                </View>
-                <Text style={[s.musclePct, { color: colors.accent }]}>
-                  {bar.pct}%
-                </Text>
+          {/* ── Séparateur ── */}
+          <View style={[s.divider, { backgroundColor: colors.separator }]} />
+
+          {/* ── Myo Orb (miniature cliquable) ── */}
+          <View style={s.myoSection}>
+            <Text style={[s.sectionTitle, { color: colors.textTertiary }]}>MYO</Text>
+            <Pressable
+              style={({ pressed }) => [
+                s.myoMiniCard,
+                { backgroundColor: colors.backgroundSecondary, opacity: pressed ? 0.85 : 1 },
+              ]}
+              onPress={openMyoFullscreen}
+              accessibilityRole="button"
+              accessibilityLabel="Voir le graphe Myo en grand"
+            >
+              <View pointerEvents="none" style={s.myoMiniOrb}>
+                <MyoChart
+                  sessionValues={sessionValues}
+                  size={140}
+                  selectedFamily={null}
+                  onFamilySelect={() => {}}
+                  showScore={false}
+                  showLabels={false}
+                />
               </View>
-            ))}
+              <View style={s.myoMiniInfo}>
+                <Text style={[s.myoMiniTitle, { color: colors.textPrimary }]}>Signature Myo</Text>
+                <Text style={[s.myoMiniSub, { color: colors.textSecondary }]}>
+                  8 familles · Tap pour détailler
+                </Text>
+                <View style={{ marginTop: spacing.s2, gap: 6 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <GradientScoreText score={globalScore} size={44} />
+                    <Text style={[s.myoMiniSub, { color: colors.textTertiary, fontSize: 11 }]}>
+                      / 100
+                    </Text>
+                  </View>
+                  <View style={[s.scoreBarTrack, { backgroundColor: colors.backgroundTertiary }]}>
+                    <Svg width={`${globalScore}%`} height={6} style={{ borderRadius: 3 }}>
+                      <Defs>
+                        <LinearGradient id="sbGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                          <Stop offset="0%" stopColor={scoreScale.low} />
+                          <Stop offset="50%" stopColor={scoreScale.mid} />
+                          <Stop offset="100%" stopColor={scoreScale.high} />
+                        </LinearGradient>
+                      </Defs>
+                      <Rect x={0} y={0} width="100%" height={6} rx={3} fill="url(#sbGrad)" />
+                    </Svg>
+                  </View>
+                </View>
+              </View>
+            </Pressable>
           </View>
-        )}
 
-        {/* ── Récap séance ── */}
-        {exercises.length > 0 && (
-          <RecapSection exercises={exercises} colors={colors} />
-        )}
-      </View>
+          {/* ── Muscles travaillés ── */}
+          {muscleBars.length > 0 && (
+            <View style={s.section}>
+              <Text style={[s.sectionTitle, { color: colors.textTertiary }]}>
+                MUSCLES TRAVAILLÉS
+              </Text>
+              {muscleBars.map((bar, idx) => (
+                <View key={idx} style={s.muscleRow}>
+                  <Text style={[s.muscleLabel, { color: colors.textSecondary }]} numberOfLines={1}>
+                    {bar.muscleLabel}
+                  </Text>
+                  <View style={[s.muscleBarTrack, { backgroundColor: colors.backgroundTertiary }]}>
+                    <View
+                      style={[
+                        s.muscleBarFill,
+                        { width: `${bar.pct}%`, backgroundColor: colors.accent },
+                      ]}
+                    />
+                  </View>
+                  <Text style={[s.musclePct, { color: colors.accent }]}>{bar.pct}%</Text>
+                </View>
+              ))}
+            </View>
+          )}
+
+          {/* ── Récap séance ── */}
+          {exercises.length > 0 && <RecapSection exercises={exercises} colors={colors} />}
+        </View>
       </ScrollView>
 
       {/* ── Bottom bar — like + commentaires ── */}
-      <View style={[s.bottomBar, { backgroundColor: colors.background, borderTopColor: colors.separator, paddingBottom: insets.bottom + spacing.s2 }]}>
+      <View
+        style={[
+          s.bottomBar,
+          {
+            backgroundColor: colors.background,
+            borderTopColor: colors.separator,
+            paddingBottom: insets.bottom + spacing.s2,
+          },
+        ]}
+      >
         <Pressable
           style={({ pressed }) => [s.bottomAction, pressed && { opacity: 0.7 }]}
-          onPress={() => setHasLiked(!hasLiked)}
+          onPress={toggleLike}
+          accessibilityRole="button"
+          accessibilityLabel={hasLiked ? "Retirer j'aime" : "J'aime"}
         >
           <Heart
             size={17}
-            color={hasLiked ? '#FF3B30' : colors.textSecondary}
-            fill={hasLiked ? '#FF3B30' : 'none'}
+            color={hasLiked ? colors.error : colors.textSecondary}
+            fill={hasLiked ? colors.error : 'none'}
           />
-          <Text style={[s.bottomCount, { color: hasLiked ? '#FF3B30' : colors.textSecondary }]}>
-            {likes + (hasLiked ? 1 : 0)}
+          <Text style={[s.bottomCount, { color: hasLiked ? colors.error : colors.textSecondary }]}>
+            {likes}
           </Text>
-          <Text style={[s.bottomActionLabel, { color: hasLiked ? '#FF3B30' : colors.textTertiary }]}>
+          <Text
+            style={[s.bottomActionLabel, { color: hasLiked ? colors.error : colors.textTertiary }]}
+          >
             J'AIME
           </Text>
         </Pressable>
@@ -1106,12 +1232,8 @@ export default function FeedDetailScreen(): React.JSX.Element {
           onPress={() => setCommentsOpen(true)}
         >
           <MessageCircle size={17} color={colors.textSecondary} />
-          <Text style={[s.bottomCount, { color: colors.textSecondary }]}>
-            {comments.length}
-          </Text>
-          <Text style={[s.bottomActionLabel, { color: colors.textTertiary }]}>
-            COMMENTAIRES
-          </Text>
+          <Text style={[s.bottomCount, { color: colors.textSecondary }]}>{comments.length}</Text>
+          <Text style={[s.bottomActionLabel, { color: colors.textTertiary }]}>COMMENTAIRES</Text>
         </Pressable>
       </View>
 
@@ -1126,7 +1248,10 @@ export default function FeedDetailScreen(): React.JSX.Element {
           <Pressable style={s.commentsOverlay} onPress={() => setCommentsOpen(false)} />
           <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            style={[s.commentsSheet, { backgroundColor: colors.backgroundSecondary, paddingBottom: insets.bottom }]}
+            style={[
+              s.commentsSheet,
+              { backgroundColor: colors.backgroundSecondary, paddingBottom: insets.bottom },
+            ]}
           >
             <View style={[s.commentsHandle, { backgroundColor: colors.textTertiary }]} />
 
@@ -1144,35 +1269,55 @@ export default function FeedDetailScreen(): React.JSX.Element {
                 <Text style={[s.commentsEmpty, { color: colors.textTertiary }]}>
                   Aucun commentaire.
                 </Text>
-              ) : comments.map(comment => (
-                <View key={comment.id} style={[s.commentCard, { borderBottomColor: colors.separator }]}>
-                  <View style={[s.commentAvatar, { backgroundColor: colors.backgroundTertiary }]}>
-                    {comment.users?.avatar_url ? (
-                      <Image source={{ uri: comment.users.avatar_url }} style={s.commentAvatarImg} />
-                    ) : (
-                      <Text style={[s.commentAvatarInit, { color: colors.textPrimary }]}>
-                        {(comment.users?.full_name?.[0] ?? comment.users?.username?.[0] ?? 'U').toUpperCase()}
-                      </Text>
-                    )}
-                  </View>
-                  <View style={s.commentBody}>
-                    <View style={s.commentHeaderRow}>
-                      <Text style={[s.commentAuthor, { color: colors.textPrimary }]} numberOfLines={1}>
-                        {comment.users?.full_name || comment.users?.username || 'Utilisateur'}
-                      </Text>
-                      <Text style={[s.commentTime, { color: colors.textTertiary }]}>
-                        {formatCommentDate(comment.created_at)}
+              ) : (
+                comments.map((comment) => (
+                  <View
+                    key={comment.id}
+                    style={[s.commentCard, { borderBottomColor: colors.separator }]}
+                  >
+                    <View style={[s.commentAvatar, { backgroundColor: colors.backgroundTertiary }]}>
+                      {comment.users?.avatar_url ? (
+                        <Image
+                          source={{ uri: comment.users.avatar_url }}
+                          style={s.commentAvatarImg}
+                        />
+                      ) : (
+                        <Text style={[s.commentAvatarInit, { color: colors.textPrimary }]}>
+                          {(
+                            comment.users?.full_name?.[0] ??
+                            comment.users?.username?.[0] ??
+                            'U'
+                          ).toUpperCase()}
+                        </Text>
+                      )}
+                    </View>
+                    <View style={s.commentBody}>
+                      <View style={s.commentHeaderRow}>
+                        <Text
+                          style={[s.commentAuthor, { color: colors.textPrimary }]}
+                          numberOfLines={1}
+                        >
+                          {comment.users?.full_name || comment.users?.username || 'Utilisateur'}
+                        </Text>
+                        <Text style={[s.commentTime, { color: colors.textTertiary }]}>
+                          {formatCommentDate(comment.created_at)}
+                        </Text>
+                      </View>
+                      <Text style={[s.commentText, { color: colors.textSecondary }]}>
+                        {comment.content}
                       </Text>
                     </View>
-                    <Text style={[s.commentText, { color: colors.textSecondary }]}>{comment.content}</Text>
                   </View>
-                </View>
-              ))}
+                ))
+              )}
             </ScrollView>
 
             <View style={[s.commentInputRow, { borderTopColor: colors.separator }]}>
               <TextInput
-                style={[s.commentInputField, { color: colors.textPrimary, backgroundColor: colors.backgroundTertiary }]}
+                style={[
+                  s.commentInputField,
+                  { color: colors.textPrimary, backgroundColor: colors.backgroundTertiary },
+                ]}
                 placeholder="Ajouter un commentaire…"
                 placeholderTextColor={colors.textTertiary}
                 value={newComment}
@@ -1181,7 +1326,11 @@ export default function FeedDetailScreen(): React.JSX.Element {
                 returnKeyType="send"
               />
               <Pressable
-                style={({ pressed }) => [s.commentSend, pressed && { opacity: 0.6 }, !newComment.trim() && { opacity: 0.3 }]}
+                style={({ pressed }) => [
+                  s.commentSend,
+                  pressed && { opacity: 0.6 },
+                  !newComment.trim() && { opacity: 0.3 },
+                ]}
                 disabled={!newComment.trim()}
               >
                 <Send size={17} color={colors.accent} />
@@ -1199,7 +1348,9 @@ export default function FeedDetailScreen(): React.JSX.Element {
         onRequestClose={() => setMyoFullscreen(false)}
         statusBarTranslucent
       >
-        <View style={[s.myoFsContainer, { backgroundColor: colors.background, paddingTop: insets.top }]}>
+        <View
+          style={[s.myoFsContainer, { backgroundColor: colors.background, paddingTop: insets.top }]}
+        >
           <View style={s.myoFsHeader}>
             <Pressable
               style={({ pressed }) => [s.myoFsHelpBtn, pressed && { opacity: 0.6 }]}
@@ -1208,7 +1359,9 @@ export default function FeedDetailScreen(): React.JSX.Element {
               accessibilityLabel="Guide des variables Myo"
             >
               <HelpCircle size={22} color={colors.textPrimary} />
-              <Animated.Text style={[hintAnimStyle, s.myoFsHelpHint, { color: colors.textSecondary }]}>
+              <Animated.Text
+                style={[hintAnimStyle, s.myoFsHelpHint, { color: colors.textSecondary }]}
+              >
                 GUIDE
               </Animated.Text>
             </Pressable>
@@ -1234,7 +1387,12 @@ export default function FeedDetailScreen(): React.JSX.Element {
               onFamilySelect={(fi) => setSelectedFamily(fi)}
             />
           </ScrollView>
-          <View style={[s.familySelector, { paddingHorizontal: spacing.s4, paddingBottom: spacing.s3, alignSelf: 'stretch' }]}>
+          <View
+            style={[
+              s.familySelector,
+              { paddingHorizontal: spacing.s4, paddingBottom: spacing.s3, alignSelf: 'stretch' },
+            ]}
+          >
             {FAMILY_NAMES_SHORT.map((name, idx) => (
               <FamilyChip
                 key={idx}
@@ -1249,7 +1407,11 @@ export default function FeedDetailScreen(): React.JSX.Element {
           </View>
           {/* ── Glossaire — overlay animé dans le même container ── */}
           <Animated.View
-            style={[StyleSheet.absoluteFillObject, { backgroundColor: colors.background }, glossaryAnimStyle]}
+            style={[
+              StyleSheet.absoluteFillObject,
+              { backgroundColor: colors.background },
+              glossaryAnimStyle,
+            ]}
             pointerEvents={myoGlossaryOpen ? 'auto' : 'none'}
           >
             <MyoGlossaryScreen onClose={() => setMyoGlossaryOpen(false)} />
@@ -1265,19 +1427,12 @@ export default function FeedDetailScreen(): React.JSX.Element {
           animationType="fade"
           onRequestClose={() => setPhotoLightbox(null)}
         >
-          <View style={[s.lightboxContainer, { backgroundColor: 'rgba(0,0,0,0.95)' }]}>
-            <Pressable
-              style={s.lightboxClose}
-              onPress={() => setPhotoLightbox(null)}
-            >
+          <View style={[s.lightboxContainer, { backgroundColor: scrimStrong }]}>
+            <Pressable style={s.lightboxClose} onPress={() => setPhotoLightbox(null)}>
               <X size={28} color={colors.textPrimary} />
             </Pressable>
 
-            <Image
-              source={{ uri: photoLightbox }}
-              style={s.lightboxImage}
-              resizeMode="contain"
-            />
+            <Image source={{ uri: photoLightbox }} style={s.lightboxImage} resizeMode="contain" />
           </View>
         </Modal>
       )}
@@ -1664,7 +1819,7 @@ function buildStyles(colors: ReturnType<typeof useTheme>['colors']) {
     // Comments modal
     commentsOverlay: {
       flex: 1,
-      backgroundColor: 'rgba(0,0,0,0.5)',
+      backgroundColor: scrim,
     },
     commentsSheet: {
       maxHeight: '70%',

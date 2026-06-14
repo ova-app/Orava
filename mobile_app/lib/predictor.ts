@@ -1,22 +1,19 @@
 import { getDB } from '@/lib/db'
+import { epley1RM } from '@/lib/utils'
 
 export interface Prediction {
   exerciseId: string
   exerciseName: string
-  predictedPR: number   // kg
+  predictedPR: number // kg
   daysUntilPR: number
-  confidence: number    // 0-1
-  delta: number         // kg au-dessus du record actuel
+  confidence: number // 0-1
+  delta: number // kg au-dessus du record actuel
 }
 
 interface RawSet {
   weight_kg: number
   reps: number
-  logged_at: number     // UNIX ms
-}
-
-function epley1RM(weight_kg: number, reps: number): number {
-  return reps === 1 ? weight_kg : weight_kg * (1 + reps / 30)
+  logged_at: number // UNIX ms
 }
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000
@@ -36,7 +33,7 @@ function weight(loggedAt: number, now: number): number {
 function weightedLinearRegression(
   xs: number[],
   ys: number[],
-  ws: number[],
+  ws: number[]
 ): { slope: number; intercept: number } | null {
   const sw = ws.reduce((a, b) => a + b, 0)
   if (sw === 0) return null
@@ -60,7 +57,7 @@ function weightedR2(
   ys: number[],
   ws: number[],
   slope: number,
-  intercept: number,
+  intercept: number
 ): number {
   const sw = ws.reduce((a, b) => a + b, 0)
   const meanY = ys.reduce((a, y, i) => a + ws[i] * y, 0) / sw
@@ -70,21 +67,24 @@ function weightedR2(
   return Math.max(0, 1 - ssRes / ssTot)
 }
 
-// Confiance composée : R² × facteur fréquence × facteur points
-function computeConfidence(
+// Confiance composée : somme pondérée (R² 55 % + densité points 25 % + fréquence 20 %),
+// le tout modulé par la fatigue. Max théorique = 1.0.
+// ⚠️ Bug historique : les poids étaient multipliés (max ≈ 0,0275) → toujours sous le seuil.
+export function computeConfidence(
   r2: number,
   nPoints: number,
   recentSessionCount: number,
-  fatigueFactor: number,
+  fatigueFactor: number
 ): number {
   const pointsFactor = Math.min(1, nPoints / 15)
   const freqFactor = Math.min(1, recentSessionCount / 4)
-  return r2 * 0.55 * pointsFactor * 0.25 * freqFactor * 0.20 * fatigueFactor
+  const base = r2 * 0.55 + pointsFactor * 0.25 + freqFactor * 0.2
+  return Math.min(1, base * fatigueFactor)
 }
 
 export async function computePrediction(
   exerciseId: string,
-  exerciseName: string,
+  exerciseName: string
 ): Promise<Prediction | null> {
   try {
     const db = getDB()
@@ -96,7 +96,7 @@ export async function computePrediction(
        FROM local_sets
        WHERE exercise_id = ? AND weight_kg > 0 AND reps > 0
        ORDER BY logged_at ASC`,
-      exerciseId,
+      exerciseId
     )
 
     if (rows.length < MIN_POINTS) return null
@@ -113,12 +113,12 @@ export async function computePrediction(
     if (points.length < MIN_POINTS) return null
 
     const todayDay = Math.floor(now / MS_PER_DAY)
-    const xs = points.map(([d]) => d - todayDay)  // jours relatifs (≤ 0)
-    const ys = points.map(([, rm]) => rm)          // 1RM Epley estimé
+    const xs = points.map(([d]) => d - todayDay) // jours relatifs (≤ 0)
+    const ys = points.map(([, rm]) => rm) // 1RM Epley estimé
     const ws = points.map(([d]) => weight(d * MS_PER_DAY, now))
 
     const reg = weightedLinearRegression(xs, ys, ws)
-    if (!reg || reg.slope <= 0) return null  // pas de progression → pas de prédiction
+    if (!reg || reg.slope <= 0) return null // pas de progression → pas de prédiction
 
     const r2 = weightedR2(xs, ys, ws, reg.slope, reg.intercept)
 
@@ -138,23 +138,25 @@ export async function computePrediction(
        FROM local_sets
        WHERE exercise_id = ? AND logged_at >= ?`,
       exerciseId,
-      cutoff7d,
+      cutoff7d
     )
     const recentSessionCount = recent7d[0]?.cnt ?? 0
 
     // Volume 7j vs volume 30j normalisé (indicateur fatigue)
     const vol7d = await db.getAllAsync<{ v: number }>(
       `SELECT SUM(volume) as v FROM local_sets WHERE exercise_id = ? AND logged_at >= ?`,
-      exerciseId, cutoff7d,
+      exerciseId,
+      cutoff7d
     )
     const vol30d = await db.getAllAsync<{ v: number }>(
       `SELECT SUM(volume) as v FROM local_sets WHERE exercise_id = ? AND logged_at >= ?`,
-      exerciseId, now - 30 * MS_PER_DAY,
+      exerciseId,
+      now - 30 * MS_PER_DAY
     )
     const v7 = vol7d[0]?.v ?? 0
     const v30 = vol30d[0]?.v ?? 1
     // Fatigue : surcharge récente → confiance réduite
-    const fatigueFactor = v30 > 0 ? Math.max(0.5, 1 - Math.max(0, (v7 / (v30 / 4)) - 1) * 0.3) : 1
+    const fatigueFactor = v30 > 0 ? Math.max(0.5, 1 - Math.max(0, v7 / (v30 / 4) - 1) * 0.3) : 1
 
     const confidence = computeConfidence(r2, points.length, recentSessionCount, fatigueFactor)
     if (confidence < MIN_CONFIDENCE) return null
@@ -162,7 +164,7 @@ export async function computePrediction(
     return {
       exerciseId,
       exerciseName,
-      predictedPR: Math.round(predicted1RM * 4) / 4,  // arrondi 0.25 kg — affiché comme 1RM estimé
+      predictedPR: Math.round(predicted1RM * 4) / 4, // arrondi 0.25 kg — affiché comme 1RM estimé
       daysUntilPR,
       confidence: Math.min(1, confidence),
       delta: Math.round((predicted1RM - currentMax1RM) * 10) / 10,

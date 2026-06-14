@@ -24,62 +24,38 @@ import Animated, {
   Easing,
 } from 'react-native-reanimated'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { useRouter, useFocusEffect } from 'expo-router'
-import { Zap, Flame, Trophy, ChevronRight, Shield, TrendingUp, Settings, Users, UserPlus } from 'lucide-react-native'
+import { useRouter } from 'expo-router'
+import {
+  Zap,
+  Flame,
+  Trophy,
+  ChevronRight,
+  Shield,
+  TrendingUp,
+  Settings,
+  Users,
+  UserPlus,
+} from 'lucide-react-native'
 import Svg, { Circle as SvgCircle } from 'react-native-svg'
-import { Canvas, Path as SkiaPath, Skia, LinearGradient as SkiaLinearGradient, vec } from '@shopify/react-native-skia'
+import {
+  Canvas,
+  Path as SkiaPath,
+  Skia,
+  LinearGradient as SkiaLinearGradient,
+  vec,
+} from '@shopify/react-native-skia'
 import { Dimensions } from 'react-native'
 import { supabase } from '@/lib/supabase'
 
 const { width: PROFILE_W } = Dimensions.get('window')
 import { useTheme } from '@/context/ThemeContext'
 import { spacing, radius, typography, font } from '@/constants/theme'
-import { formatVolume } from '@/lib/utils'
-
-// ─── Types ───────────────────────────────────────────────────────────────────
-
-interface UserProfile {
-  id: string
-  username: string | null
-  full_name: string | null
-  plan: 'free' | 'premium'
-  avatar_url: string | null
-  created_at: string | null
-}
-
-interface MonthStats {
-  seances: number
-  volumeKg: number
-  streakSemaines: number
-}
-
-interface TopPR {
-  exerciseName: string
-  value: number
-  level: 'gold' | 'silver' | 'bronze'
-}
-
-interface WorkoutRow {
-  id: string
-  title: string
-  started_at: string
-  duration_sec: number | null
-  total_volume_kg: number | null
-  total_sets: number
-  pr_seance: 'gold' | 'silver' | 'bronze' | null
-}
-
-interface HistorySection {
-  title: string
-  data: WorkoutRow[]
-}
+import { formatVolume, formatDuration } from '@/lib/utils'
+import { type WorkoutRow } from '@/lib/hooks/useHistoryData'
+import { useProfileData, type UserProfile, type SparklineData } from '@/lib/hooks/useProfileData'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-const MONTHS_FR = [
-  'JANVIER', 'FÉVRIER', 'MARS', 'AVRIL', 'MAI', 'JUIN',
-  'JUILLET', 'AOÛT', 'SEPTEMBRE', 'OCTOBRE', 'NOVEMBRE', 'DÉCEMBRE',
-]
 const DAYS_FR = ['DIM', 'LUN', 'MAR', 'MER', 'JEU', 'VEN', 'SAM']
 
 function getInitiale(profile: UserProfile): string {
@@ -93,44 +69,22 @@ function getUsername(profile: UserProfile): string {
   return 'Athlète'
 }
 
-function sectionKeyFromDate(dateStr: string): string {
-  const d = new Date(dateStr)
-  return `${MONTHS_FR[d.getMonth()]} ${d.getFullYear()}`
-}
-
-function formatDuration(sec: number | null): string {
-  if (!sec) return '—'
-  const h = Math.floor(sec / 3600)
-  const m = Math.floor((sec % 3600) / 60)
-  if (h > 0) return `${h}h ${m.toString().padStart(2, '0')}min`
-  return `${m}min`
-}
-
-function groupByMonth(rows: WorkoutRow[]): HistorySection[] {
-  const map = new Map<string, WorkoutRow[]>()
-  for (const row of rows) {
-    const key = sectionKeyFromDate(row.started_at)
-    if (!map.has(key)) map.set(key, [])
-    map.get(key)!.push(row)
-  }
-  return Array.from(map.entries()).map(([title, data]) => ({ title, data }))
-}
-
 // ─── Sparkline mini ────────────────────────────────────────────────────────────
 
-interface SparklineData {
-  volume: number
-  date: string
-}
-
-function SparklineRow({ data, colors }: { data: SparklineData[]; colors: any }) {
+function SparklineRow({
+  data,
+  colors,
+}: {
+  data: SparklineData[]
+  colors: ReturnType<typeof useTheme>['colors']
+}) {
   const canvasW = PROFILE_W - spacing.s4 * 4
   const canvasH = 56
 
   const { linePath, fillPath } = useMemo(() => {
     if (data.length === 0) return { linePath: null, fillPath: null }
 
-    const maxVol = Math.max(...data.map(d => d.volume), 1)
+    const maxVol = Math.max(...data.map((d) => d.volume), 1)
     const n = data.length
     const padX = 4
     const padY = 6
@@ -162,7 +116,14 @@ function SparklineRow({ data, colors }: { data: SparklineData[]; colors: any }) 
 
   if (data.length === 0 || !linePath || !fillPath) {
     return (
-      <Text style={{ ...typography.caption, color: colors.textTertiary, textAlign: 'center', marginVertical: spacing.s3 }}>
+      <Text
+        style={{
+          ...typography.caption,
+          color: colors.textTertiary,
+          textAlign: 'center',
+          marginVertical: spacing.s3,
+        }}
+      >
         Aucune séance récente
       </Text>
     )
@@ -196,7 +157,7 @@ function SparklineRow({ data, colors }: { data: SparklineData[]; colors: any }) 
 interface HistoryRowProps {
   item: WorkoutRow
   onPress: () => void
-  colors: any
+  colors: ReturnType<typeof useTheme>['colors']
 }
 
 function HistoryRowInProfile({ item, onPress, colors }: HistoryRowProps) {
@@ -213,7 +174,10 @@ function HistoryRowInProfile({ item, onPress, colors }: HistoryRowProps) {
     <TouchableOpacity
       activeOpacity={0.75}
       onPress={onPress}
-      style={[styles.card, { backgroundColor: colors.backgroundSecondary, marginBottom: spacing.s2 }]}
+      style={[
+        styles.card,
+        { backgroundColor: colors.backgroundSecondary, marginBottom: spacing.s2 },
+      ]}
     >
       <View style={styles.cardInner}>
         {/* Bloc date */}
@@ -245,10 +209,7 @@ function HistoryRowInProfile({ item, onPress, colors }: HistoryRowProps) {
         {/* Centre */}
         <View style={styles.centerCol}>
           <Text
-            style={[
-              typography.body,
-              { color: colors.textPrimary, fontFamily: font.bold },
-            ]}
+            style={[typography.body, { color: colors.textPrimary, fontFamily: font.bold }]}
             numberOfLines={1}
           >
             {item.title ?? '—'}
@@ -263,15 +224,9 @@ function HistoryRowInProfile({ item, onPress, colors }: HistoryRowProps) {
 
         {/* Right : icône PR + volume + chevron */}
         <View style={styles.rightCol}>
-          {item.pr_seance === 'gold' && (
-            <Trophy size={14} color={colors.prGold} />
-          )}
-          {item.pr_seance === 'silver' && (
-            <Trophy size={14} color={colors.prSilver} />
-          )}
-          {item.pr_seance === 'bronze' && (
-            <Trophy size={14} color={colors.prBronze} />
-          )}
+          {item.pr_seance === 'gold' && <Trophy size={14} color={colors.prGold} />}
+          {item.pr_seance === 'silver' && <Trophy size={14} color={colors.prSilver} />}
+          {item.pr_seance === 'bronze' && <Trophy size={14} color={colors.prBronze} />}
           <Text
             style={[
               typography.body,
@@ -321,9 +276,12 @@ function AnimatedCounter({
   const sv = useSharedValue(0)
   const [displayValue, setDisplayValue] = useState(() => formatter(0))
 
-  const formatAndSet = useCallback((v: number) => {
-    setDisplayValue(formatter(Math.round(v)))
-  }, [formatter])
+  const formatAndSet = useCallback(
+    (v: number) => {
+      setDisplayValue(formatter(Math.round(v)))
+    },
+    [formatter]
+  )
 
   useEffect(() => {
     sv.value = withDelay(delay, withTiming(target, { duration, easing: easeOutCubic }))
@@ -345,8 +303,8 @@ function AnimatedCounter({
 
 // ─── Spark helpers ────────────────────────────────────────────────────────────
 
-const CIRC = 2 * Math.PI * 21        // ≈ 131.9 px (périmètre r=21)
-const SPARK_LEN = 9                   // longueur du trait en px
+const CIRC = 2 * Math.PI * 21 // ≈ 131.9 px (périmètre r=21)
+const SPARK_LEN = 9 // longueur du trait en px
 const AnimatedSvgCircle = Animated.createAnimatedComponent(SvgCircle)
 
 function useSpark(sparkDelay: number) {
@@ -371,7 +329,10 @@ function useSpark(sparkDelay: number) {
   useEffect(() => {
     const initial = setTimeout(() => triggerSpark(), sparkDelay)
     const interval = setInterval(() => triggerSpark(), 5000)
-    return () => { clearTimeout(initial); clearInterval(interval) }
+    return () => {
+      clearTimeout(initial)
+      clearInterval(interval)
+    }
   }, [])
 
   const sparkContainerStyle = useAnimatedStyle(() => ({ opacity: sparkOpacity.value }))
@@ -380,7 +341,11 @@ function useSpark(sparkDelay: number) {
   return { sparkContainerStyle, animatedCircleProps }
 }
 
-function SparkOverlay({ colors, sparkContainerStyle, animatedCircleProps }: {
+function SparkOverlay({
+  colors,
+  sparkContainerStyle,
+  animatedCircleProps,
+}: {
   colors: ReturnType<typeof useTheme>['colors']
   sparkContainerStyle: ReturnType<typeof useAnimatedStyle>
   animatedCircleProps: ReturnType<typeof useAnimatedProps>
@@ -429,7 +394,10 @@ function FollowStatButton({
   const { sparkContainerStyle, animatedCircleProps } = useSpark(sparkDelay)
 
   useEffect(() => {
-    mountOpacity.value = withDelay(delay, withTiming(1, { duration: 350, easing: Easing.out(Easing.cubic) }))
+    mountOpacity.value = withDelay(
+      delay,
+      withTiming(1, { duration: 350, easing: Easing.out(Easing.cubic) })
+    )
     translateX.value = withDelay(delay, withSpring(0, { damping: 20, stiffness: 300 }))
   }, [delay])
 
@@ -443,19 +411,39 @@ function FollowStatButton({
     <Animated.View style={containerStyle}>
       <Pressable
         accessibilityLabel={label}
-        onPressIn={() => { scale.value = withSpring(0.78, { damping: 20, stiffness: 600 }) }}
-        onPressOut={() => { scale.value = withSpring(1, { damping: 12, stiffness: 200 }) }}
+        onPressIn={() => {
+          scale.value = withSpring(0.78, { damping: 20, stiffness: 600 })
+        }}
+        onPressOut={() => {
+          scale.value = withSpring(1, { damping: 12, stiffness: 200 })
+        }}
         style={{
-          width: 44, height: 44, borderRadius: 9999,
+          width: 44,
+          height: 44,
+          borderRadius: 9999,
           backgroundColor: colors.backgroundSecondary,
-          alignItems: 'center', justifyContent: 'center',
-          borderWidth: 1, borderColor: colors.border,
+          alignItems: 'center',
+          justifyContent: 'center',
+          borderWidth: 1,
+          borderColor: colors.border,
         }}
       >
         <Icon size={18} color={colors.textSecondary} strokeWidth={1.5} />
       </Pressable>
-      <SparkOverlay colors={colors} sparkContainerStyle={sparkContainerStyle} animatedCircleProps={animatedCircleProps} />
-      <Text style={{ fontSize: 11, fontVariant: ['tabular-nums'], color: colors.textSecondary, marginTop: 4, letterSpacing: 0.2 }}>
+      <SparkOverlay
+        colors={colors}
+        sparkContainerStyle={sparkContainerStyle}
+        animatedCircleProps={animatedCircleProps}
+      />
+      <Text
+        style={{
+          fontSize: 11,
+          fontVariant: ['tabular-nums'],
+          color: colors.textSecondary,
+          marginTop: 4,
+          letterSpacing: 0.2,
+        }}
+      >
         {count}
       </Text>
     </Animated.View>
@@ -485,7 +473,10 @@ function QuickActionButton({
   const { sparkContainerStyle, animatedCircleProps } = useSpark(sparkDelay)
 
   useEffect(() => {
-    mountOpacity.value = withDelay(delay, withTiming(1, { duration: 350, easing: Easing.out(Easing.cubic) }))
+    mountOpacity.value = withDelay(
+      delay,
+      withTiming(1, { duration: 350, easing: Easing.out(Easing.cubic) })
+    )
     translateX.value = withDelay(delay, withSpring(0, { damping: 20, stiffness: 300 }))
   }, [delay])
 
@@ -498,19 +489,31 @@ function QuickActionButton({
     <Animated.View style={containerStyle}>
       <Pressable
         accessibilityLabel={label}
-        onPressIn={() => { scale.value = withSpring(0.78, { damping: 20, stiffness: 600 }) }}
-        onPressOut={() => { scale.value = withSpring(1, { damping: 12, stiffness: 200 }) }}
+        onPressIn={() => {
+          scale.value = withSpring(0.78, { damping: 20, stiffness: 600 })
+        }}
+        onPressOut={() => {
+          scale.value = withSpring(1, { damping: 12, stiffness: 200 })
+        }}
         onPress={onPress}
         style={{
-          width: 44, height: 44, borderRadius: radius.full,
+          width: 44,
+          height: 44,
+          borderRadius: radius.full,
           backgroundColor: colors.backgroundSecondary,
-          alignItems: 'center', justifyContent: 'center',
-          borderWidth: 1, borderColor: colors.border,
+          alignItems: 'center',
+          justifyContent: 'center',
+          borderWidth: 1,
+          borderColor: colors.border,
         }}
       >
         <Icon size={18} color={colors.textSecondary} strokeWidth={1.5} />
       </Pressable>
-      <SparkOverlay colors={colors} sparkContainerStyle={sparkContainerStyle} animatedCircleProps={animatedCircleProps} />
+      <SparkOverlay
+        colors={colors}
+        sparkContainerStyle={sparkContainerStyle}
+        animatedCircleProps={animatedCircleProps}
+      />
     </Animated.View>
   )
 }
@@ -521,150 +524,19 @@ export default function ProfileScreen(): React.JSX.Element {
   const { colors } = useTheme()
   const router = useRouter()
 
-  const [profile, setProfile] = useState<UserProfile | null>(null)
-  const [stats, setStats] = useState<MonthStats>({ seances: 0, volumeKg: 0, streakSemaines: 0 })
-  const [topPRs, setTopPRs] = useState<TopPR[]>([])
-  const [followers, setFollowers] = useState<number>(0)
-  const [follows, setFollows] = useState<number>(0)
-  const [sparklineData, setSparklineData] = useState<SparklineData[]>([])
-  const [historySections, setHistorySections] = useState<HistorySection[]>([])
+  const {
+    profile,
+    stats,
+    topPRs,
+    followers,
+    follows,
+    sparklineData,
+    historySections,
+    refreshing,
+    onRefresh,
+  } = useProfileData()
+
   const [deconnexionLoading, setDeconnexionLoading] = useState<boolean>(false)
-  const [refreshing, setRefreshing] = useState(false)
-
-  // ── Fetch ──────────────────────────────────────────────────────────────────
-
-  const fetchProfile = useCallback(async (): Promise<void> => {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
-      router.replace('/auth/login')
-      return
-    }
-
-    const uid = user.id
-    const debutMois = new Date()
-    debutMois.setDate(1)
-    debutMois.setHours(0, 0, 0, 0)
-
-    // Toutes les queries indépendantes en parallèle
-    const [
-      profileRes,
-      workoutsMonthRes,
-      followerRes,
-      followingRes,
-      setsRes,
-      last8Res,
-      historyRes,
-    ] = await Promise.all([
-      supabase.from('users').select('id, username, full_name, plan, avatar_url, created_at').eq('id', uid).single(),
-      supabase.from('workouts').select('id, total_volume_kg, started_at').eq('user_id', uid).gte('started_at', debutMois.toISOString()).order('started_at', { ascending: false }),
-      supabase.from('follows').select('id', { count: 'exact' }).eq('following_id', uid),
-      supabase.from('follows').select('id', { count: 'exact' }).eq('follower_id', uid),
-      supabase.from('workout_sets').select(`weight_kg, pr_charge, workout_exercises!inner(exercise_id, exercises!inner(name_fr))`).eq('workout_exercises.workouts.user_id', uid).not('pr_charge', 'is', null).order('weight_kg', { ascending: false }).limit(10),
-      supabase.from('workouts').select('total_volume_kg, started_at').eq('user_id', uid).order('started_at', { ascending: false }).limit(8),
-      supabase.from('workouts').select(`id, title, started_at, duration_sec, total_volume_kg, pr_seance, workout_exercises(workout_sets(id))`).eq('user_id', uid).order('started_at', { ascending: false }).limit(50),
-    ])
-
-    // Profile
-    if (profileRes.data) setProfile(profileRes.data as UserProfile)
-
-    // Followers
-    setFollowers(followerRes.data?.length ?? 0)
-    setFollows(followingRes.data?.length ?? 0)
-
-    // Stats mois
-    const workoutsData = workoutsMonthRes.data
-    const seances = workoutsData?.length ?? 0
-    const volumeKg = workoutsData?.reduce((sum, w) => sum + (w.total_volume_kg ?? 0), 0) ?? 0
-
-    // Streak (dépend de workoutsData — query séparée inévitable)
-    let streakSemaines = 0
-    if (workoutsData && workoutsData.length > 0) {
-      const { data: metricsData } = await supabase
-        .from('workout_metrics')
-        .select('data')
-        .eq('workout_id', workoutsData[0].id)
-        .single()
-      if (metricsData?.data && typeof metricsData.data === 'object') {
-        const d = metricsData.data as Record<string, unknown>
-        streakSemaines = typeof d.streak_semaines === 'number' ? d.streak_semaines : 0
-      }
-    }
-
-    setStats({ seances, volumeKg, streakSemaines })
-
-    // PRs
-    if (setsRes.data) {
-      type SetsRow = {
-        weight_kg: number | null
-        pr_charge: string | null
-        workout_exercises: {
-          exercise_id: string
-          exercises: { name_fr: string }[] | { name_fr: string }
-        }[] | {
-          exercise_id: string
-          exercises: { name_fr: string }[] | { name_fr: string }
-        }
-      }
-      const prs: TopPR[] = (setsRes.data as SetsRow[])
-        .filter(s => s.pr_charge !== null)
-        .slice(0, 3)
-        .map(s => {
-          const we = Array.isArray(s.workout_exercises) ? s.workout_exercises[0] : s.workout_exercises
-          const exRaw = we.exercises
-          const ex = Array.isArray(exRaw) ? exRaw[0] : exRaw
-          return {
-            exerciseName: ex.name_fr,
-            value: s.weight_kg ?? 0,
-            level: (s.pr_charge ?? 'bronze') as 'gold' | 'silver' | 'bronze',
-          }
-        })
-      setTopPRs(prs)
-    }
-
-    // Sparkline
-    if (last8Res.data) {
-      setSparklineData(
-        [...last8Res.data].reverse().map(w => ({
-          volume: w.total_volume_kg ?? 0,
-          date: new Date(w.started_at).toLocaleDateString('fr-FR', { day: 'numeric' }),
-        }))
-      )
-    }
-
-    // Historique
-    if (historyRes.data) {
-      const rows: WorkoutRow[] = (historyRes.data as Array<{
-        id: string
-        title: string
-        started_at: string
-        duration_sec: number | null
-        total_volume_kg: number | null
-        pr_seance: 'gold' | 'silver' | 'bronze' | null
-        workout_exercises: Array<{ workout_sets: Array<{ id: string }> }>
-      }>).map(w => ({
-        id: w.id,
-        title: w.title ?? '—',
-        started_at: w.started_at,
-        duration_sec: w.duration_sec,
-        total_volume_kg: w.total_volume_kg,
-        total_sets: w.workout_exercises.reduce((acc, ex) => acc + ex.workout_sets.length, 0),
-        pr_seance: w.pr_seance,
-      }))
-      setHistorySections(groupByMonth(rows))
-    }
-
-  }, [router])
-
-  useFocusEffect(
-    useCallback(() => {
-      void fetchProfile()
-    }, [fetchProfile])
-  )
-
-  const onRefresh = useCallback((): void => {
-    setRefreshing(true)
-    void fetchProfile().finally(() => setRefreshing(false))
-  }, [fetchProfile])
 
   async function seDeconnecter(): Promise<void> {
     setDeconnexionLoading(true)
@@ -685,7 +557,7 @@ export default function ProfileScreen(): React.JSX.Element {
     <SafeAreaView style={[s.container]} edges={['top']}>
       <SectionList
         sections={historySections}
-        keyExtractor={item => item.id}
+        keyExtractor={(item) => item.id}
         scrollEnabled
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -783,12 +655,22 @@ export default function ProfileScreen(): React.JSX.Element {
               <View style={s.statSepH} />
               <View style={s.statSecondaryRow}>
                 <View style={s.statCol}>
-                  <AnimatedCounter target={stats.seances} duration={1000} delay={120} style={s.statValueSide} />
+                  <AnimatedCounter
+                    target={stats.seances}
+                    duration={1000}
+                    delay={120}
+                    style={s.statValueSide}
+                  />
                   <Text style={s.statLabel}>SÉANCES</Text>
                 </View>
                 <View style={s.statSep} />
                 <View style={s.statCol}>
-                  <AnimatedCounter target={stats.streakSemaines} duration={1000} delay={120} style={s.statValueSide} />
+                  <AnimatedCounter
+                    target={stats.streakSemaines}
+                    duration={1000}
+                    delay={120}
+                    style={s.statValueSide}
+                  />
                   <Text style={s.statLabel}>STREAK SEM.</Text>
                 </View>
               </View>
@@ -827,9 +709,19 @@ export default function ProfileScreen(): React.JSX.Element {
                           {pr.exerciseName.toUpperCase()}
                         </Text>
                         {pr.level === 'gold' ? (
-                          <Zap size={14} color={colors.prGold} fill={colors.prGold} strokeWidth={0} />
+                          <Zap
+                            size={14}
+                            color={colors.prGold}
+                            fill={colors.prGold}
+                            strokeWidth={0}
+                          />
                         ) : (
-                          <Flame size={14} color={colors.accent} fill={colors.accent} strokeWidth={0} />
+                          <Flame
+                            size={14}
+                            color={colors.accent}
+                            fill={colors.accent}
+                            strokeWidth={0}
+                          />
                         )}
                       </View>
                       <Text style={s.prValue}>
@@ -856,11 +748,7 @@ export default function ProfileScreen(): React.JSX.Element {
         )}
         ListHeaderComponentStyle={s.headerContent}
         contentContainerStyle={s.contentContainer}
-        renderSectionHeader={({ section }) => (
-          <Text style={s.sectionHeader}>
-            {section.title}
-          </Text>
-        )}
+        renderSectionHeader={({ section }) => <Text style={s.sectionHeader}>{section.title}</Text>}
         renderItem={({ item }) => (
           <HistoryRowInProfile
             item={item}

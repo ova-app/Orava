@@ -1,1 +1,9 @@
-npx lint-staged
+#!/usr/bin/env sh
+# Hook exécuté depuis la racine du repo (orava/) — on entre dans mobile_app.
+# core.hooksPath est pointé ici par le script "prepare" (husky v9 ne trouve pas
+# .git depuis un sous-dossier — voir package.json).
+cd mobile_app || exit 1
+
+npx lint-staged || exit 1
+npx tsc --noEmit || exit 1
+npm test --silent || exit 1

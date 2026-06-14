@@ -23,16 +23,18 @@ import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/context/ThemeContext'
 import { spacing, radius, typography, font } from '@/constants/theme'
 import { prBadgeRecipe, type PrType } from '@/constants/recipes'
+import { formatDuration, formatVolumeKg } from '@/lib/utils'
+import { MUSCLE_LABELS } from '@/lib/muscles'
 
 const { width: SCREEN_W } = Dimensions.get('window')
 
 // ─── PR Badge (unified) ──────────────────────────────────────────────────────
 
 const PR_ICON: Record<PrType, React.ComponentType<{ size?: number; color?: string }>> = {
-  charge:   Zap,
-  serie:    Flame,
+  charge: Zap,
+  serie: Flame,
   exercice: Dumbbell,
-  seance:   Trophy,
+  seance: Trophy,
 }
 
 function PrBadge({
@@ -96,7 +98,7 @@ interface ExerciseWithSets {
 
 interface MuscleBar {
   muscleLabel: string
-  pct: number  // normalized 0-100
+  pct: number // normalized 0-100
   role: 'primary' | 'secondary'
 }
 
@@ -110,47 +112,8 @@ function formatDate(iso: string): string {
   return `${weekday.charAt(0).toUpperCase() + weekday.slice(1)} ${day} ${month.charAt(0).toUpperCase() + month.slice(1)}`
 }
 
-function formatDuration(sec: number | null): string {
-  if (!sec) return '—'
-  const h = Math.floor(sec / 3600)
-  const m = Math.floor((sec % 3600) / 60)
-  if (h > 0) return `${h}h ${String(m).padStart(2, '0')}min`
-  return `${m}min`
-}
-
-function formatVolume(kg: number | null): string {
-  if (kg == null) return '—'
-  const rounded = Math.round(kg)
-  if (rounded >= 1000) {
-    const thousands = Math.floor(rounded / 1000)
-    const remainder = rounded % 1000
-    return `${thousands} ${String(remainder).padStart(3, '0')} kg`
-  }
-  return `${rounded} kg`
-}
-
 function totalSets(exercises: ExerciseWithSets[]): number {
   return exercises.reduce((sum, ex) => sum + ex.sets.length, 0)
-}
-
-const MUSCLE_LABEL_MAP: Record<string, string> = {
-  grand_pectoral: 'Pectoraux',
-  deltoide: 'Deltoïdes',
-  grand_dorsal: 'Grand dorsal',
-  trapeze: 'Trapèze',
-  biceps: 'Biceps',
-  triceps: 'Triceps',
-  quadriceps: 'Quadriceps',
-  ischio_jambiers: 'Ischio-jambiers',
-  fessier_maximus: 'Fessiers',
-  fessier_median: 'Fessiers',
-  fessier_minimus: 'Fessiers',
-  mollets: 'Mollets',
-  abdominaux: 'Core',
-  grand_rond: 'Grand rond',
-  rhomboide: 'Rhomboïdes',
-  erecteurs_rachis: 'Érecteurs rachis',
-  avant_bras: 'Avant-bras',
 }
 
 // ─── Barre musculaire Skia animée ────────────────────────────────────────────
@@ -175,12 +138,15 @@ function SkiaMuscleBar({
   const progress = useSharedValue(0)
 
   useEffect(() => {
-    progress.value = withDelay(delay, withTiming(pct / 100, { duration: 650, easing: Easing.bezier(0.16, 1, 0.3, 1) }))
+    progress.value = withDelay(
+      delay,
+      withTiming(pct / 100, { duration: 650, easing: Easing.bezier(0.16, 1, 0.3, 1) })
+    )
   }, [])
 
   const isPrimary = role === 'primary'
   const gradStart = isPrimary ? ACCENT_COLOR : '#FF6B00'
-  const gradEnd   = isPrimary ? '#FAC775'    : '#7A7A8C'
+  const gradEnd = isPrimary ? '#FAC775' : '#7A7A8C'
 
   const barStyle = useAnimatedStyle(() => ({
     width: Math.max(progress.value * barW, BAR_RADIUS * 2),
@@ -204,11 +170,7 @@ function SkiaMuscleBar({
         <Animated.View style={[histStyles.muscleBarAnimWrap, barStyle]}>
           <Canvas style={{ width: barW, height: BAR_H }}>
             <Path path={barPath} style="fill">
-              <LinearGradient
-                start={vec(0, 0)}
-                end={vec(barW, 0)}
-                colors={[gradStart, gradEnd]}
-              />
+              <LinearGradient start={vec(0, 0)} end={vec(barW, 0)} colors={[gradStart, gradEnd]} />
             </Path>
           </Canvas>
         </Animated.View>
@@ -242,7 +204,9 @@ export default function HistoryDetailScreen(): React.JSX.Element {
     // Workout
     const { data: wData } = await supabase
       .from('workouts')
-      .select('id, title, started_at, ended_at, duration_sec, total_volume_kg, note, photo_url, pr_seance, avg_rest_seconds, location_city, gym_id')
+      .select(
+        'id, title, started_at, ended_at, duration_sec, total_volume_kg, note, photo_url, pr_seance, avg_rest_seconds, location_city, gym_id'
+      )
       .eq('id', id)
       .single()
 
@@ -269,11 +233,13 @@ export default function HistoryDetailScreen(): React.JSX.Element {
     // Exercises + sets
     const { data: weData } = await supabase
       .from('workout_exercises')
-      .select(`
+      .select(
+        `
         id, exercise_id, order_index, pr_exercice,
         exercises!inner(name_fr),
         workout_sets(id, set_number, set_type, reps, weight_kg, pr_charge, pr_serie)
-      `)
+      `
+      )
       .eq('workout_id', id)
       .order('order_index')
 
@@ -286,7 +252,7 @@ export default function HistoryDetailScreen(): React.JSX.Element {
         exercises: { name_fr: string }[] | { name_fr: string }
         workout_sets: SetRow[] | null
       }
-      const exs: ExerciseWithSets[] = (weData as WeRow[]).map(we => {
+      const exs: ExerciseWithSets[] = (weData as WeRow[]).map((we) => {
         const exRaw = we.exercises
         const exObj = Array.isArray(exRaw) ? exRaw[0] : exRaw
         return {
@@ -301,7 +267,7 @@ export default function HistoryDetailScreen(): React.JSX.Element {
       setExercises(exs)
 
       // Muscle bars
-      const exerciseIds = exs.map(e => e.exerciseId)
+      const exerciseIds = exs.map((e) => e.exerciseId)
       const { data: emData } = await supabase
         .from('exercise_muscles')
         .select('exercise_id, muscle, role, activation_pct')
@@ -309,16 +275,16 @@ export default function HistoryDetailScreen(): React.JSX.Element {
         .in('role', ['primary', 'secondary'])
 
       if (emData) {
-        const muscleVol:  Record<string, number>               = {}
+        const muscleVol: Record<string, number> = {}
         const muscleRole: Record<string, 'primary' | 'secondary'> = {}
 
         for (const em of emData) {
-          const ex = exs.find(e => e.exerciseId === em.exercise_id)
+          const ex = exs.find((e) => e.exerciseId === em.exercise_id)
           if (!ex) continue
           const vol = ex.sets.reduce((sum, s) => {
             return sum + (s.weight_kg ?? 0) * (s.reps ?? 0) * ((em.activation_pct ?? 0) / 100)
           }, 0)
-          const label = MUSCLE_LABEL_MAP[em.muscle as string] ?? (em.muscle as string)
+          const label = MUSCLE_LABELS[em.muscle as string] ?? (em.muscle as string)
           muscleVol[label] = (muscleVol[label] ?? 0) + vol
           // primary wins over secondary
           if (!muscleRole[label] || em.role === 'primary') {
@@ -330,7 +296,7 @@ export default function HistoryDetailScreen(): React.JSX.Element {
         const bars: MuscleBar[] = Object.entries(muscleVol)
           .map(([muscleLabel, vol]) => ({
             muscleLabel,
-            pct:  Math.round((vol / maxVol) * 100),
+            pct: Math.round((vol / maxVol) * 100),
             role: muscleRole[muscleLabel] ?? 'secondary',
           }))
           .sort((a, b) => b.pct - a.pct)
@@ -369,23 +335,21 @@ export default function HistoryDetailScreen(): React.JSX.Element {
 
   // Collect PR badges from exercises
   const hasPrSeance = workout.pr_seance != null
-  const prExercises = exercises.filter(ex => ex.pr_exercice != null)
-  const prChargeEx = exercises.find(ex => ex.sets.some(s => s.pr_charge != null))
-  const prSerieEx = exercises.find(ex => ex.sets.some(s => s.pr_serie != null))
+  const prExercises = exercises.filter((ex) => ex.pr_exercice != null)
+  const prChargeEx = exercises.find((ex) => ex.sets.some((s) => s.pr_charge != null))
+  const prSerieEx = exercises.find((ex) => ex.sets.some((s) => s.pr_serie != null))
 
   // Best level helpers — gold > silver > bronze
-  const bestLevel = (vals: Array<'gold' | 'silver' | 'bronze' | null>): 'gold' | 'silver' | 'bronze' | null => {
+  const bestLevel = (
+    vals: Array<'gold' | 'silver' | 'bronze' | null>
+  ): 'gold' | 'silver' | 'bronze' | null => {
     if (vals.includes('gold')) return 'gold'
     if (vals.includes('silver')) return 'silver'
     if (vals.includes('bronze')) return 'bronze'
     return null
   }
-  const prChargeLevel = prChargeEx
-    ? bestLevel(prChargeEx.sets.map(s => s.pr_charge))
-    : null
-  const prSerieLevel = prSerieEx
-    ? bestLevel(prSerieEx.sets.map(s => s.pr_serie))
-    : null
+  const prChargeLevel = prChargeEx ? bestLevel(prChargeEx.sets.map((s) => s.pr_charge)) : null
+  const prSerieLevel = prSerieEx ? bestLevel(prSerieEx.sets.map((s) => s.pr_serie)) : null
 
   return (
     <View style={s.container}>
@@ -430,7 +394,9 @@ export default function HistoryDetailScreen(): React.JSX.Element {
           {gymName != null && (
             <View style={s.bannerGymRow}>
               <MapPin size={12} color={colors.error} />
-              <Text style={s.bannerGymText} numberOfLines={1}>{gymName}</Text>
+              <Text style={s.bannerGymText} numberOfLines={1}>
+                {gymName}
+              </Text>
             </View>
           )}
         </View>
@@ -438,8 +404,11 @@ export default function HistoryDetailScreen(): React.JSX.Element {
         {/* ── Stats Row ── */}
         <View style={s.statsCard}>
           <View style={s.statItem}>
-            <Text style={[s.statValue, { color: colors.accent }]} accessibilityLabel={`${formatVolume(workout.total_volume_kg)} volume`}>
-              {formatVolume(workout.total_volume_kg)}
+            <Text
+              style={[s.statValue, { color: colors.accent }]}
+              accessibilityLabel={`${formatVolumeKg(workout.total_volume_kg)} volume`}
+            >
+              {formatVolumeKg(workout.total_volume_kg)}
             </Text>
             <Text style={s.statLabel}>VOLUME</Text>
           </View>
@@ -509,27 +478,30 @@ export default function HistoryDetailScreen(): React.JSX.Element {
           <View style={s.section}>
             <Text style={s.sectionTitle}>EXERCICES</Text>
 
-            {exercises.map(ex => {
-              const exSetPrCharge = bestLevel(ex.sets.map(set => set.pr_charge))
-              const exSetPrSerie  = bestLevel(ex.sets.map(set => set.pr_serie))
+            {exercises.map((ex) => {
+              const exSetPrCharge = bestLevel(ex.sets.map((set) => set.pr_charge))
+              const exSetPrSerie = bestLevel(ex.sets.map((set) => set.pr_serie))
               // Priorité d'affichage : exercice > charge > série (un seul badge — header compact)
               const exBadgeLevel: 'gold' | 'silver' | 'bronze' | null =
                 ex.pr_exercice ?? exSetPrCharge ?? exSetPrSerie
               const exBadgeType: PrType =
-                ex.pr_exercice != null ? 'exercice' :
-                exSetPrCharge != null ? 'charge' :
-                'serie'
+                ex.pr_exercice != null ? 'exercice' : exSetPrCharge != null ? 'charge' : 'serie'
               const exBadgeLabel =
-                ex.pr_exercice != null ? 'Exercice' :
-                exSetPrCharge != null ? 'Charge' :
-                'Série'
+                ex.pr_exercice != null ? 'Exercice' : exSetPrCharge != null ? 'Charge' : 'Série'
               return (
                 <View key={ex.workoutExerciseId} style={s.exCard}>
                   {/* Nom + PR badge */}
                   <View style={s.exHeader}>
-                    <Text style={s.exName} numberOfLines={1}>{ex.nameFr}</Text>
+                    <Text style={s.exName} numberOfLines={1}>
+                      {ex.nameFr}
+                    </Text>
                     {exBadgeLevel && (
-                      <PrBadge level={exBadgeLevel} type={exBadgeType} label={exBadgeLabel} size={10} />
+                      <PrBadge
+                        level={exBadgeLevel}
+                        type={exBadgeType}
+                        label={exBadgeLabel}
+                        size={10}
+                      />
                     )}
                   </View>
 
@@ -552,15 +524,19 @@ export default function HistoryDetailScreen(): React.JSX.Element {
 
                         return (
                           <View key={set.id} style={[s.setRow, { backgroundColor: rowBg }]}>
-                            <Text style={[s.setCellMono, s.colSet, hasPrSet && prColor ? { color: prColor } : null]}>
+                            <Text
+                              style={[
+                                s.setCellMono,
+                                s.colSet,
+                                hasPrSet && prColor ? { color: prColor } : null,
+                              ]}
+                            >
                               {set.set_number}
                             </Text>
                             <Text style={[s.setCellMono, s.colWeight]}>
                               {set.weight_kg != null ? `${set.weight_kg} kg` : '—'}
                             </Text>
-                            <Text style={[s.setCellMono, s.colReps]}>
-                              {set.reps ?? '—'}
-                            </Text>
+                            <Text style={[s.setCellMono, s.colReps]}>{set.reps ?? '—'}</Text>
                             <Text style={[s.setCellMono, s.colVol]}>
                               {vol > 0 ? `${vol} kg` : '—'}
                             </Text>
@@ -817,30 +793,30 @@ function buildStyles(colors: ReturnType<typeof useTheme>['colors']) {
 const histStyles = StyleSheet.create({
   muscleRow: {
     flexDirection: 'row',
-    alignItems   : 'center',
-    marginBottom : spacing.s3,
-    gap          : spacing.s3,
+    alignItems: 'center',
+    marginBottom: spacing.s3,
+    gap: spacing.s3,
   },
   muscleLabel: {
-    fontSize : 12,
+    fontSize: 12,
     fontFamily: font.medium,
-    width    : 96,
+    width: 96,
   },
   muscleBarTrack: {
-    height      : BAR_H,
+    height: BAR_H,
     borderRadius: BAR_RADIUS,
-    overflow    : 'hidden',
+    overflow: 'hidden',
   },
   muscleBarAnimWrap: {
-    height      : BAR_H,
-    overflow    : 'hidden',
+    height: BAR_H,
+    overflow: 'hidden',
     borderRadius: BAR_RADIUS,
   },
   musclePct: {
-    fontSize   : 12,
-    fontFamily : font.bold,
-    width      : 36,
-    textAlign  : 'right',
+    fontSize: 12,
+    fontFamily: font.bold,
+    width: 36,
+    textAlign: 'right',
     fontVariant: ['tabular-nums'],
   },
 })

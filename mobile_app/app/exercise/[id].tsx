@@ -1,17 +1,11 @@
 import React, { useCallback, useEffect, useState } from 'react'
-import {
-  View,
-  Text,
-  ScrollView,
-  Pressable,
-  StyleSheet,
-  ActivityIndicator,
-} from 'react-native'
+import { View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { ChevronLeft, Zap, Flame, Image as ImageIcon } from 'lucide-react-native'
 import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/context/ThemeContext'
 import { spacing, radius, typography, font } from '@/constants/theme'
+import { MUSCLE_LABELS_DETAILED } from '@/lib/muscles'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -48,35 +42,9 @@ interface RecentSession {
 
 // ─── Colors ──────────────────────────────────────────────────────────────────
 
-const DOT_SECONDARY = '#f97316'  // orange — famille VOLUME Myo, encodage rôle secondaire
+const DOT_SECONDARY = '#f97316' // orange — famille VOLUME Myo, encodage rôle secondaire
 
 // ─── Constants ───────────────────────────────────────────────────────────────
-
-const MUSCLE_LABEL_MAP: Record<string, string> = {
-  grand_pectoral: 'Grand pectoral',
-  deltoide: 'Deltoïde',
-  grand_dorsal: 'Grand dorsal',
-  trapeze: 'Trapèze',
-  biceps: 'Biceps',
-  triceps: 'Triceps',
-  quadriceps: 'Quadriceps',
-  ischio_jambiers: 'Ischio-jambiers',
-  fessier_maximus: 'Fessier maximus',
-  fessier_median: 'Fessier médian',
-  fessier_minimus: 'Fessier minimus',
-  mollets: 'Mollets',
-  abdominaux: 'Abdominaux',
-  grand_rond: 'Grand rond',
-  rhomboide: 'Rhomboïdes',
-  erecteurs_rachis: 'Érecteurs rachis',
-  avant_bras: 'Avant-bras',
-  brachial: 'Brachial',
-  brachioradial: 'Brachioradial',
-  adducteurs: 'Adducteurs',
-  iliopsoas: 'Iliopsoas',
-  infra_epineux: 'Infra-épineux',
-  serratus_anterieur: 'Serratus ant.',
-}
 
 const FASCICLE_LABEL_MAP: Record<string, string> = {
   faisceau_claviculaire: 'faisceau claviculaire',
@@ -114,7 +82,7 @@ const FASCICLE_LABEL_MAP: Record<string, string> = {
 }
 
 function muscleName(m: MuscleMapping): string {
-  const base = MUSCLE_LABEL_MAP[m.muscle] ?? m.muscle
+  const base = MUSCLE_LABELS_DETAILED[m.muscle] ?? m.muscle
   if (!m.fascicle) return base
   const fascLabel = FASCICLE_LABEL_MAP[m.fascicle] ?? m.fascicle.replace(/_/g, ' ')
   return `${base} — ${fascLabel}`
@@ -136,7 +104,9 @@ export default function ExerciseDetailScreen(): React.JSX.Element {
   const fetchExercise = useCallback(async (): Promise<void> => {
     if (!id) return
 
-    const { data: { user } } = await supabase.auth.getUser()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
     if (!user) return
 
     // Exercise
@@ -166,13 +136,15 @@ export default function ExerciseDetailScreen(): React.JSX.Element {
     // PR history — top sets par charge
     const { data: setsData } = await supabase
       .from('workout_sets')
-      .select(`
+      .select(
+        `
         weight_kg, reps,
         workout_exercises!inner(
           workout_id,
           workouts!inner(user_id, started_at)
         )
-      `)
+      `
+      )
       .eq('workout_exercises.exercise_id', id)
       .eq('workout_exercises.workouts.user_id', user.id)
       .not('weight_kg', 'is', null)
@@ -180,9 +152,11 @@ export default function ExerciseDetailScreen(): React.JSX.Element {
       .limit(50)
 
     if (setsData && setsData.length > 0) {
-      const maxCharge = (setsData[0].weight_kg as number)
-      const maxSerieRow = [...setsData].sort((a, b) =>
-        ((b.weight_kg as number) * (b.reps as number)) - ((a.weight_kg as number) * (a.reps as number))
+      const maxCharge = setsData[0].weight_kg as number
+      const maxSerieRow = [...setsData].sort(
+        (a, b) =>
+          (b.weight_kg as number) * (b.reps as number) -
+          (a.weight_kg as number) * (a.reps as number)
       )[0]
 
       setRecords({
@@ -197,11 +171,13 @@ export default function ExerciseDetailScreen(): React.JSX.Element {
     // 3 dernières sessions
     const { data: weData } = await supabase
       .from('workout_exercises')
-      .select(`
+      .select(
+        `
         workout_id,
         workouts!inner(started_at, user_id),
         workout_sets(weight_kg, reps)
-      `)
+      `
+      )
       .eq('exercise_id', id)
       .eq('workouts.user_id', user.id)
       .order('workouts.started_at', { ascending: false })
@@ -210,19 +186,27 @@ export default function ExerciseDetailScreen(): React.JSX.Element {
     if (weData && weData.length > 0) {
       type WeSessionRow = {
         workout_id: string
-        workouts: { started_at: string; user_id: string }[] | { started_at: string; user_id: string }
+        workouts:
+          | { started_at: string; user_id: string }[]
+          | { started_at: string; user_id: string }
         workout_sets: Array<{ weight_kg: number | null; reps: number | null }> | null
       }
       const typedWeData = weData as WeSessionRow[]
       const sessions: RecentSession[] = typedWeData.slice(0, 3).map((we, idx) => {
-        const sets = (we.workout_sets ?? []) as Array<{ weight_kg: number | null; reps: number | null }>
-        const maxW = Math.max(...sets.map(s => s.weight_kg ?? 0), 0)
+        const sets = (we.workout_sets ?? []) as Array<{
+          weight_kg: number | null
+          reps: number | null
+        }>
+        const maxW = Math.max(...sets.map((s) => s.weight_kg ?? 0), 0)
         const nS = sets.length
 
         let delta: number | null = null
         if (idx < typedWeData.length - 1) {
-          const prevSets = (typedWeData[idx + 1].workout_sets ?? []) as Array<{ weight_kg: number | null; reps: number | null }>
-          const prevMaxW = Math.max(...prevSets.map(s => s.weight_kg ?? 0), 0)
+          const prevSets = (typedWeData[idx + 1].workout_sets ?? []) as Array<{
+            weight_kg: number | null
+            reps: number | null
+          }>
+          const prevMaxW = Math.max(...prevSets.map((s) => s.weight_kg ?? 0), 0)
           if (prevMaxW > 0 && maxW > 0) {
             delta = maxW - prevMaxW
           }
@@ -262,14 +246,16 @@ export default function ExerciseDetailScreen(): React.JSX.Element {
   if (!exercise) {
     return (
       <View style={s.loader}>
-        <Text style={{ ...typography.body, color: colors.textSecondary }}>Exercice introuvable.</Text>
+        <Text style={{ ...typography.body, color: colors.textSecondary }}>
+          Exercice introuvable.
+        </Text>
       </View>
     )
   }
 
-  const primaryMuscles = muscles.filter(m => m.role === 'primary')
-  const secondaryMuscles = muscles.filter(m => m.role === 'secondary')
-  const stabilizerMuscles = muscles.filter(m => m.role === 'stabilizer')
+  const primaryMuscles = muscles.filter((m) => m.role === 'primary')
+  const secondaryMuscles = muscles.filter((m) => m.role === 'secondary')
+  const stabilizerMuscles = muscles.filter((m) => m.role === 'stabilizer')
 
   return (
     <View style={s.container}>
@@ -290,7 +276,9 @@ export default function ExerciseDetailScreen(): React.JSX.Element {
             <ChevronLeft size={24} color={colors.textPrimary} />
           </Pressable>
 
-          <Text style={s.headerTitle} numberOfLines={1}>{exercise.name_fr}</Text>
+          <Text style={s.headerTitle} numberOfLines={1}>
+            {exercise.name_fr}
+          </Text>
 
           <View style={s.backBtnPlaceholder} />
         </View>
@@ -379,7 +367,10 @@ export default function ExerciseDetailScreen(): React.JSX.Element {
                   <View key={idx} style={{ gap: spacing.s1 }}>
                     <View style={s.muscleRow}>
                       <View style={[s.muscleDot, { backgroundColor: colors.textTertiary }]} />
-                      <Text style={[s.muscleName, { color: colors.textSecondary }]} numberOfLines={1}>
+                      <Text
+                        style={[s.muscleName, { color: colors.textSecondary }]}
+                        numberOfLines={1}
+                      >
                         {muscleName(m)}
                       </Text>
                       <Text
@@ -414,7 +405,12 @@ export default function ExerciseDetailScreen(): React.JSX.Element {
             <View style={s.recordCard}>
               <Zap size={20} color={colors.prGold} style={s.recordIcon} />
               <Text style={s.recordCardLabel}>CHARGE MAX</Text>
-              <Text style={s.recordValue} accessibilityLabel={records.maxCharge != null ? `${records.maxCharge} kilogrammes` : 'Aucun record'}>
+              <Text
+                style={s.recordValue}
+                accessibilityLabel={
+                  records.maxCharge != null ? `${records.maxCharge} kilogrammes` : 'Aucun record'
+                }
+              >
                 {records.maxCharge != null ? `${records.maxCharge} kg` : '—'}
               </Text>
             </View>
@@ -423,12 +419,17 @@ export default function ExerciseDetailScreen(): React.JSX.Element {
             <View style={s.recordCard}>
               <Flame size={20} color={colors.prGold} style={s.recordIcon} />
               <Text style={s.recordCardLabel}>MEILLEURE SÉRIE</Text>
-              <Text style={s.recordValue} accessibilityLabel={
-                records.maxSerie != null
-                  ? `${records.maxSerie.weight} kilogrammes ${records.maxSerie.reps} répétitions`
-                  : 'Aucun record'
-              }>
-                {records.maxSerie != null ? `${records.maxSerie.weight} × ${records.maxSerie.reps}` : '—'}
+              <Text
+                style={s.recordValue}
+                accessibilityLabel={
+                  records.maxSerie != null
+                    ? `${records.maxSerie.weight} kilogrammes ${records.maxSerie.reps} répétitions`
+                    : 'Aucun record'
+                }
+              >
+                {records.maxSerie != null
+                  ? `${records.maxSerie.weight} × ${records.maxSerie.reps}`
+                  : '—'}
               </Text>
             </View>
           </View>
@@ -451,15 +452,19 @@ export default function ExerciseDetailScreen(): React.JSX.Element {
                 const hasDelta = session.delta != null
                 const deltaPositive = (session.delta ?? 0) > 0
                 const deltaZero = (session.delta ?? 0) === 0
-                const deltaColor = !hasDelta || deltaZero
-                  ? colors.textTertiary
-                  : deltaPositive ? colors.success : colors.error
+                const deltaColor =
+                  !hasDelta || deltaZero
+                    ? colors.textTertiary
+                    : deltaPositive
+                      ? colors.success
+                      : colors.error
 
-                const deltaText = !hasDelta || deltaZero
-                  ? '—'
-                  : deltaPositive
-                    ? `+${session.delta!} kg`
-                    : `${session.delta!} kg`
+                const deltaText =
+                  !hasDelta || deltaZero
+                    ? '—'
+                    : deltaPositive
+                      ? `+${session.delta!} kg`
+                      : `${session.delta!} kg`
 
                 return (
                   <Pressable
@@ -480,9 +485,7 @@ export default function ExerciseDetailScreen(): React.JSX.Element {
                       {session.maxWeight != null ? ` · ${session.maxWeight} kg max` : ''}
                     </Text>
 
-                    <Text style={[s.historyDelta, { color: deltaColor }]}>
-                      {deltaText}
-                    </Text>
+                    <Text style={[s.historyDelta, { color: deltaColor }]}>{deltaText}</Text>
                   </Pressable>
                 )
               })}

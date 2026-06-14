@@ -17,6 +17,7 @@ import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/context/ThemeContext'
 import { spacing, radius, typography, font, touchTarget } from '@/constants/theme'
 import { emptyStateRecipe } from '@/constants/recipes'
+import { muscleGroupLabel } from '@/lib/muscles'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -32,17 +33,38 @@ interface ExercisePR {
   exerciseId: string
   nameFr: string
   muscleGroup: string
-  podiumCharge: PodiumSlot[]    // top 3 pr_charge par poids, triés gold→silver→bronze
-  podiumSerie: PodiumSlot[]     // top 3 pr_serie, triés gold→silver→bronze
+  podiumCharge: PodiumSlot[] // top 3 pr_charge par poids, triés gold→silver→bronze
+  podiumSerie: PodiumSlot[] // top 3 pr_serie, triés gold→silver→bronze
 }
 
 // ─── Raw DB row type ──────────────────────────────────────────────────────────
 
+// Lignes brutes des requêtes Supabase (client non typé — cast via `unknown`, ORA-036)
+interface WorkoutIdRow {
+  id: string
+}
+interface WeQueryRow {
+  id: string
+  exercise_id: string
+}
+interface ExQueryRow {
+  id: string
+  name_fr: string
+  muscle_group: string
+}
+interface SetQueryRow {
+  weight_kg: number | null
+  reps: number | null
+  pr_charge: string | null
+  pr_serie: string | null
+  workout_exercise_id: string
+}
+
 interface RawSetRow {
-  weight_kg:  number | null
-  reps:       number | null
-  pr_charge:  string | null
-  pr_serie:   string | null
+  weight_kg: number | null
+  reps: number | null
+  pr_charge: string | null
+  pr_serie: string | null
   workout_exercises:
     | {
         exercise_id: string
@@ -62,31 +84,11 @@ interface RawSetRow {
 
 const LEVEL_ORDER: Record<PrLevel, number> = { gold: 0, silver: 1, bronze: 2 }
 
-const MUSCLE_LABELS: Record<string, string> = {
-  pectoraux:       'Pectoraux',
-  dos:             'Dos',
-  epaules:         'Épaules',
-  biceps:          'Biceps',
-  triceps:         'Triceps',
-  quadriceps:      'Quadriceps',
-  ischio_jambiers: 'Ischio-jambiers',
-  fessiers:        'Fessiers',
-  mollets:         'Mollets',
-  abdominaux:      'Abdominaux',
-  avant_bras:      'Avant-bras',
-}
-
-function muscleLabel(raw: string): string {
-  return MUSCLE_LABELS[raw] ?? raw.replace(/_/g, ' ')
-}
-
 function levelShortLabel(level: PrLevel): string {
   return level === 'gold' ? 'OR' : level === 'silver' ? 'ARG' : 'BRZ'
 }
 
-function resolveWE(
-  raw: RawSetRow['workout_exercises'],
-): {
+function resolveWE(raw: RawSetRow['workout_exercises']): {
   exercise_id: string
   exercises: { name_fr: string; muscle_group: string }[] | { name_fr: string; muscle_group: string }
 } {
@@ -94,7 +96,7 @@ function resolveWE(
 }
 
 function resolveExercise(
-  raw: { name_fr: string; muscle_group: string }[] | { name_fr: string; muscle_group: string },
+  raw: { name_fr: string; muscle_group: string }[] | { name_fr: string; muscle_group: string }
 ): { name_fr: string; muscle_group: string } {
   return Array.isArray(raw) ? raw[0] : raw
 }
@@ -102,7 +104,7 @@ function resolveExercise(
 // ─── Build podiums from raw sets ──────────────────────────────────────────────
 
 function buildPodium(
-  entries: { weight_kg: number; reps: number | null; level: PrLevel }[],
+  entries: { weight_kg: number; reps: number | null; level: PrLevel }[]
 ): PodiumSlot[] {
   const byLevel = new Map<PrLevel, PodiumSlot>()
   for (const e of entries) {
@@ -112,15 +114,21 @@ function buildPodium(
     }
   }
   return ([...byLevel.values()] as PodiumSlot[]).sort(
-    (a, b) => LEVEL_ORDER[a.level] - LEVEL_ORDER[b.level],
+    (a, b) => LEVEL_ORDER[a.level] - LEVEL_ORDER[b.level]
   )
 }
 
 function buildExercisePRs(rows: RawSetRow[]): ExercisePR[] {
-  type EntryBuf = { weight_kg: number; reps: number | null; level: PrLevel; nameFr: string; muscleGroup: string }
+  type EntryBuf = {
+    weight_kg: number
+    reps: number | null
+    level: PrLevel
+    nameFr: string
+    muscleGroup: string
+  }
 
   const chargeMap = new Map<string, EntryBuf[]>()
-  const serieMap  = new Map<string, EntryBuf[]>()
+  const serieMap = new Map<string, EntryBuf[]>()
 
   for (const row of rows) {
     if (!row.workout_exercises) continue
@@ -129,8 +137,8 @@ function buildExercisePRs(rows: RawSetRow[]): ExercisePR[] {
     const ex = resolveExercise(we.exercises)
     if (!ex) continue
 
-    const id          = we.exercise_id
-    const nameFr      = ex.name_fr
+    const id = we.exercise_id
+    const nameFr = ex.name_fr
     const muscleGroup = ex.muscle_group
 
     if (row.pr_charge !== null) {
@@ -153,23 +161,23 @@ function buildExercisePRs(rows: RawSetRow[]): ExercisePR[] {
 
   for (const id of allIds) {
     const chargeEntries = chargeMap.get(id) ?? []
-    const serieEntries  = serieMap.get(id)  ?? []
+    const serieEntries = serieMap.get(id) ?? []
     const anyEntry = chargeEntries[0] ?? serieEntries[0]
     if (!anyEntry) continue
 
     result.push({
-      exerciseId:    id,
-      nameFr:        anyEntry.nameFr,
-      muscleGroup:   anyEntry.muscleGroup,
-      podiumCharge:  buildPodium(chargeEntries),
-      podiumSerie:   buildPodium(serieEntries),
+      exerciseId: id,
+      nameFr: anyEntry.nameFr,
+      muscleGroup: anyEntry.muscleGroup,
+      podiumCharge: buildPodium(chargeEntries),
+      podiumSerie: buildPodium(serieEntries),
     })
   }
 
   // Gold first, puis par poids max descendant
   result.sort((a, b) => {
-    const aGold = a.podiumCharge.some(s => s.level === 'gold') ? 0 : 1
-    const bGold = b.podiumCharge.some(s => s.level === 'gold') ? 0 : 1
+    const aGold = a.podiumCharge.some((s) => s.level === 'gold') ? 0 : 1
+    const bGold = b.podiumCharge.some((s) => s.level === 'gold') ? 0 : 1
     if (aGold !== bGold) return aGold - bGold
     const aMax = a.podiumCharge[0]?.weight_kg ?? 0
     const bMax = b.podiumCharge[0]?.weight_kg ?? 0
@@ -189,19 +197,22 @@ interface PodiumSlotViewProps {
 
 function PodiumSlotView({ slot, type, colors }: PodiumSlotViewProps): React.JSX.Element {
   const levelColor =
-    slot.level === 'gold'   ? colors.prGold   :
-    slot.level === 'silver' ? colors.prSilver :
-    colors.prBronze
+    slot.level === 'gold'
+      ? colors.prGold
+      : slot.level === 'silver'
+        ? colors.prSilver
+        : colors.prBronze
 
   const iconColor = type === 'charge' ? colors.prGold : colors.accent
 
   return (
     <View style={slotSt.col}>
       <View style={[slotSt.iconBadge, { backgroundColor: `${levelColor}18` }]}>
-        {type === 'charge'
-          ? <Zap   size={13} color={iconColor} fill={iconColor} strokeWidth={0} />
-          : <Flame size={13} color={iconColor} fill={iconColor} strokeWidth={0} />
-        }
+        {type === 'charge' ? (
+          <Zap size={13} color={iconColor} fill={iconColor} strokeWidth={0} />
+        ) : (
+          <Flame size={13} color={iconColor} fill={iconColor} strokeWidth={0} />
+        )}
       </View>
       <Text
         style={[slotSt.weight, { color: levelColor }]}
@@ -211,13 +222,9 @@ function PodiumSlotView({ slot, type, colors }: PodiumSlotViewProps): React.JSX.
         <Text style={slotSt.unit}> kg</Text>
       </Text>
       {slot.reps !== null && slot.reps > 0 && (
-        <Text style={[slotSt.reps, { color: colors.textTertiary }]}>
-          {slot.reps} reps
-        </Text>
+        <Text style={[slotSt.reps, { color: colors.textTertiary }]}>{slot.reps} reps</Text>
       )}
-      <Text style={[slotSt.levelLabel, { color: levelColor }]}>
-        {levelShortLabel(slot.level)}
-      </Text>
+      <Text style={[slotSt.levelLabel, { color: levelColor }]}>{levelShortLabel(slot.level)}</Text>
     </View>
   )
 }
@@ -271,9 +278,9 @@ const CARD_W = Dimensions.get('window').width - spacing.s4 * 2
 
 function PodiumGlow({ level }: { level: PrLevel }): React.JSX.Element {
   const COLS: Record<PrLevel, string> = { gold: '#FAC775', silver: '#C0C0C0', bronze: '#CD7F32' }
-  const c   = COLS[level]
-  const r   = CARD_W / 2
-  const H   = 72
+  const c = COLS[level]
+  const r = CARD_W / 2
+  const H = 72
 
   return (
     <Canvas
@@ -281,11 +288,7 @@ function PodiumGlow({ level }: { level: PrLevel }): React.JSX.Element {
       pointerEvents="none"
     >
       <SkiaCircle cx={CARD_W / 2} cy={0} r={r}>
-        <RadialGradient
-          c={vec(CARD_W / 2, 0)}
-          r={r}
-          colors={[`${c}28`, `${c}00`]}
-        />
+        <RadialGradient c={vec(CARD_W / 2, 0)} r={r} colors={[`${c}28`, `${c}00`]} />
       </SkiaCircle>
     </Canvas>
   )
@@ -300,12 +303,11 @@ interface ExerciseCardProps {
 
 function ExerciseCard({ item, colors }: ExerciseCardProps): React.JSX.Element {
   const hasCharge = item.podiumCharge.length > 0
-  const hasSerie  = item.podiumSerie.length > 0
-  const hasGold   = item.podiumCharge.some(s => s.level === 'gold')
+  const hasSerie = item.podiumSerie.length > 0
+  const hasGold = item.podiumCharge.some((s) => s.level === 'gold')
 
   return (
     <View style={[cardSt.card, { backgroundColor: colors.backgroundSecondary }]}>
-
       {/* Glow pour les cards gold */}
       {hasGold && <PodiumGlow level="gold" />}
 
@@ -316,7 +318,7 @@ function ExerciseCard({ item, colors }: ExerciseCardProps): React.JSX.Element {
             {item.nameFr}
           </Text>
           <Text style={[cardSt.muscleGroup, { color: colors.textTertiary }]}>
-            {muscleLabel(item.muscleGroup).toUpperCase()}
+            {muscleGroupLabel(item.muscleGroup).toUpperCase()}
           </Text>
         </View>
 
@@ -333,12 +335,10 @@ function ExerciseCard({ item, colors }: ExerciseCardProps): React.JSX.Element {
         <View style={cardSt.section}>
           <View style={cardSt.sectionHeader}>
             <Zap size={11} color={colors.prGold} fill={colors.prGold} strokeWidth={0} />
-            <Text style={[cardSt.sectionLabel, { color: colors.textTertiary }]}>
-              CHARGE MAX
-            </Text>
+            <Text style={[cardSt.sectionLabel, { color: colors.textTertiary }]}>CHARGE MAX</Text>
           </View>
           <View style={cardSt.podiumRow}>
-            {item.podiumCharge.map(slot => (
+            {item.podiumCharge.map((slot) => (
               <PodiumSlotView key={slot.level} slot={slot} type="charge" colors={colors} />
             ))}
             {Array.from({ length: 3 - item.podiumCharge.length }).map((_, i) => (
@@ -363,7 +363,7 @@ function ExerciseCard({ item, colors }: ExerciseCardProps): React.JSX.Element {
             </Text>
           </View>
           <View style={cardSt.podiumRow}>
-            {item.podiumSerie.map(slot => (
+            {item.podiumSerie.map((slot) => (
               <PodiumSlotView key={slot.level} slot={slot} type="serie" colors={colors} />
             ))}
             {Array.from({ length: 3 - item.podiumSerie.length }).map((_, i) => (
@@ -443,19 +443,63 @@ const cardSt = StyleSheet.create({
 
 // ─── Skeleton card ────────────────────────────────────────────────────────────
 
-function SkeletonCard({ colors }: { colors: ReturnType<typeof useTheme>['colors'] }): React.JSX.Element {
+function SkeletonCard({
+  colors,
+}: {
+  colors: ReturnType<typeof useTheme>['colors']
+}): React.JSX.Element {
   return (
-    <View style={[cardSt.card, { backgroundColor: colors.backgroundSecondary, gap: spacing.s4, marginBottom: spacing.s3 }]}>
+    <View
+      style={[
+        cardSt.card,
+        { backgroundColor: colors.backgroundSecondary, gap: spacing.s4, marginBottom: spacing.s3 },
+      ]}
+    >
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-        <View style={{ width: 160, height: 15, borderRadius: radius.sm, backgroundColor: colors.backgroundTertiary }} />
-        <View style={{ width: 36, height: 12, borderRadius: radius.sm, backgroundColor: colors.backgroundTertiary }} />
+        <View
+          style={{
+            width: 160,
+            height: 15,
+            borderRadius: radius.sm,
+            backgroundColor: colors.backgroundTertiary,
+          }}
+        />
+        <View
+          style={{
+            width: 36,
+            height: 12,
+            borderRadius: radius.sm,
+            backgroundColor: colors.backgroundTertiary,
+          }}
+        />
       </View>
       <View style={{ flexDirection: 'row', justifyContent: 'space-around' }}>
-        {[0, 1, 2].map(i => (
+        {[0, 1, 2].map((i) => (
           <View key={i} style={{ alignItems: 'center', gap: spacing.s2 }}>
-            <View style={{ width: 28, height: 28, borderRadius: radius.full, backgroundColor: colors.backgroundTertiary }} />
-            <View style={{ width: 48, height: 18, borderRadius: radius.sm,  backgroundColor: colors.backgroundTertiary }} />
-            <View style={{ width: 24, height: 10, borderRadius: radius.sm,  backgroundColor: colors.backgroundTertiary }} />
+            <View
+              style={{
+                width: 28,
+                height: 28,
+                borderRadius: radius.full,
+                backgroundColor: colors.backgroundTertiary,
+              }}
+            />
+            <View
+              style={{
+                width: 48,
+                height: 18,
+                borderRadius: radius.sm,
+                backgroundColor: colors.backgroundTertiary,
+              }}
+            />
+            <View
+              style={{
+                width: 24,
+                height: 10,
+                borderRadius: radius.sm,
+                backgroundColor: colors.backgroundTertiary,
+              }}
+            />
           </View>
         ))}
       </View>
@@ -467,31 +511,31 @@ function SkeletonCard({ colors }: { colors: ReturnType<typeof useTheme>['colors'
 
 export default function PrsScreen(): React.JSX.Element {
   const { colors } = useTheme()
-  const router     = useRouter()
+  const router = useRouter()
 
-  const [prs, setPrs]               = useState<ExercisePR[]>([])
-  const [loading, setLoading]       = useState<boolean>(true)
-  const [hasError, setHasError]     = useState<boolean>(false)
+  const [prs, setPrs] = useState<ExercisePR[]>([])
+  const [loading, setLoading] = useState<boolean>(true)
+  const [hasError, setHasError] = useState<boolean>(false)
   const [selectedMuscle, setSelectedMuscle] = useState<string | null>(null)
 
   const muscleGroups = useMemo((): string[] => {
     const seen = new Set<string>()
     for (const pr of prs) if (pr.muscleGroup) seen.add(pr.muscleGroup)
-    return [...seen].sort((a, b) =>
-      muscleLabel(a).localeCompare(muscleLabel(b), 'fr')
-    )
+    return [...seen].sort((a, b) => muscleGroupLabel(a).localeCompare(muscleGroupLabel(b), 'fr'))
   }, [prs])
 
   const filteredPrs = useMemo((): ExercisePR[] => {
     if (!selectedMuscle) return prs
-    return prs.filter(pr => pr.muscleGroup === selectedMuscle)
+    return prs.filter((pr) => pr.muscleGroup === selectedMuscle)
   }, [prs, selectedMuscle])
 
   const fetchPRs = useCallback(async (): Promise<void> => {
     setLoading(true)
     setHasError(false)
 
-    const { data: { user } } = await supabase.auth.getUser()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
     if (!user) {
       router.replace('/auth/login')
       return
@@ -515,7 +559,7 @@ export default function PrsScreen(): React.JSX.Element {
       return
     }
 
-    const workoutIds = workoutsData.map(w => (w as any).id as string)
+    const workoutIds = (workoutsData as unknown as WorkoutIdRow[]).map((w) => w.id)
 
     // Step 2 : workout_exercises (pas de join — FK non déclaré en DB)
     const { data: weRows, error: weError } = await supabase
@@ -536,7 +580,7 @@ export default function PrsScreen(): React.JSX.Element {
     }
 
     // Step 3 : infos exercice (query séparée — FK exercise_id non contrainte)
-    const exerciseIds = [...new Set(weRows.map(w => (w as any).exercise_id as string))]
+    const exerciseIds = [...new Set((weRows as unknown as WeQueryRow[]).map((w) => w.exercise_id))]
     const { data: exRows, error: exError } = await supabase
       .from('exercises')
       .select('id, name_fr, muscle_group')
@@ -550,13 +594,13 @@ export default function PrsScreen(): React.JSX.Element {
     }
 
     const exMap = new Map<string, { name_fr: string; muscle_group: string }>()
-    for (const ex of exRows as any[]) {
+    for (const ex of exRows as unknown as ExQueryRow[]) {
       exMap.set(String(ex.id), { name_fr: ex.name_fr, muscle_group: ex.muscle_group })
     }
 
     type WeInfo = { exercise_id: string; name_fr: string; muscle_group: string }
     const weMap = new Map<string, WeInfo>()
-    for (const we of weRows as any[]) {
+    for (const we of weRows as unknown as WeQueryRow[]) {
       const exInfo = exMap.get(String(we.exercise_id))
       if (exInfo && we.id && we.exercise_id) {
         weMap.set(String(we.id), {
@@ -588,7 +632,7 @@ export default function PrsScreen(): React.JSX.Element {
     }
 
     const allRows: RawSetRow[] = []
-    for (const set of sets as any[]) {
+    for (const set of sets as unknown as SetQueryRow[]) {
       if (!set.pr_charge && !set.pr_serie) continue
       const info = weMap.get(String(set.workout_exercise_id))
       if (!info) continue
@@ -612,7 +656,7 @@ export default function PrsScreen(): React.JSX.Element {
     void fetchPRs()
   }, [fetchPRs])
 
-  const s     = buildStyles(colors)
+  const s = buildStyles(colors)
   const empty = emptyStateRecipe('history', colors)
 
   // ── Header partagé ────────────────────────────────────────────────────────
@@ -641,7 +685,9 @@ export default function PrsScreen(): React.JSX.Element {
         <StatusBar barStyle="light-content" backgroundColor={colors.background} />
         {Header}
         <View style={s.skeletonList}>
-          {[0, 1, 2, 3].map(i => <SkeletonCard key={i} colors={colors} />)}
+          {[0, 1, 2, 3].map((i) => (
+            <SkeletonCard key={i} colors={colors} />
+          ))}
         </View>
       </SafeAreaView>
     )
@@ -685,9 +731,7 @@ export default function PrsScreen(): React.JSX.Element {
             <Zap size={28} color={colors.textTertiary} strokeWidth={1.5} />
           </View>
           <Text style={empty.title}>Aucun record pour l'instant</Text>
-          <Text style={empty.subtitle}>
-            Lance ta première séance — tes PRs s'afficheront ici.
-          </Text>
+          <Text style={empty.subtitle}>Lance ta première séance — tes PRs s'afficheront ici.</Text>
         </View>
       </SafeAreaView>
     )
@@ -701,7 +745,7 @@ export default function PrsScreen(): React.JSX.Element {
 
       <FlatList
         data={filteredPrs}
-        keyExtractor={item => item.exerciseId}
+        keyExtractor={(item) => item.exerciseId}
         renderItem={({ item }) => <ExerciseCard item={item} colors={colors} />}
         ListHeaderComponent={
           <>
@@ -724,12 +768,17 @@ export default function PrsScreen(): React.JSX.Element {
                 accessibilityRole="button"
                 accessibilityLabel="Tous les groupes musculaires"
               >
-                <Text style={[s.chipLabel, { color: !selectedMuscle ? colors.background : colors.textSecondary }]}>
+                <Text
+                  style={[
+                    s.chipLabel,
+                    { color: !selectedMuscle ? colors.background : colors.textSecondary },
+                  ]}
+                >
                   TOUS
                 </Text>
               </Pressable>
 
-              {muscleGroups.map(group => {
+              {muscleGroups.map((group) => {
                 const active = selectedMuscle === group
                 return (
                   <Pressable
@@ -742,10 +791,15 @@ export default function PrsScreen(): React.JSX.Element {
                     ]}
                     onPress={() => setSelectedMuscle(active ? null : group)}
                     accessibilityRole="button"
-                    accessibilityLabel={muscleLabel(group)}
+                    accessibilityLabel={muscleGroupLabel(group)}
                   >
-                    <Text style={[s.chipLabel, { color: active ? colors.background : colors.textSecondary }]}>
-                      {muscleLabel(group).toUpperCase()}
+                    <Text
+                      style={[
+                        s.chipLabel,
+                        { color: active ? colors.background : colors.textSecondary },
+                      ]}
+                    >
+                      {muscleGroupLabel(group).toUpperCase()}
                     </Text>
                   </Pressable>
                 )

@@ -15,8 +15,7 @@
 
 // ─── Mock expo-sqlite via getDB ───────────────────────────────────────────────
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let mockGetFirstAsync: any
+let mockGetFirstAsync: jest.Mock
 
 jest.mock('../lib/db', () => ({
   getDB: () => ({ getFirstAsync: mockGetFirstAsync }),
@@ -88,13 +87,13 @@ describe('getGhostReference — cutoff temporel', () => {
     const [, , cutoff] = mockGetFirstAsync.mock.calls[0] as [string, string, number]
 
     const expectedMin = before - 30 * 24 * 60 * 60 * 1000
-    const expectedMax = after  - 30 * 24 * 60 * 60 * 1000
+    const expectedMax = after - 30 * 24 * 60 * 60 * 1000
 
     expect(cutoff).toBeGreaterThanOrEqual(expectedMin)
     expect(cutoff).toBeLessThanOrEqual(expectedMax)
   })
 
-  it('passe l\'exerciseId comme second paramètre SQL', async () => {
+  it("passe l'exerciseId comme second paramètre SQL", async () => {
     mockGetFirstAsync = jest.fn().mockResolvedValue(null)
     await getGhostReference('uuid-squat', 30)
     const [, exerciseId] = mockGetFirstAsync.mock.calls[0] as [string, string, number]
@@ -126,7 +125,7 @@ describe('getGhostReference — logique de tri (ORDER BY volume DESC, weight_kg 
   it('retourne le meilleur set (volume le plus élevé) parmi plusieurs candidats', async () => {
     // SQLite fait le tri — getFirstAsync retourne déjà le meilleur
     // On vérifie que la fonction ne re-trie pas et retourne tel quel
-    const bestRow = makeRow(100, 10, NOW - 1000)  // volume 1000 — meilleur
+    const bestRow = makeRow(100, 10, NOW - 1000) // volume 1000 — meilleur
     mockGetFirstAsync = jest.fn().mockResolvedValue(bestRow)
 
     const result = (await getGhostReference('uuid-bench', 30))!
@@ -136,7 +135,7 @@ describe('getGhostReference — logique de tri (ORDER BY volume DESC, weight_kg 
 
   it('à volume égal, retourne le set au poids le plus élevé', async () => {
     // volume = 800 pour 80×10 ou 160×5 — SQLite renvoie le plus lourd
-    const heavierRow = makeRow(160, 5, NOW - 2000)  // weight_kg 160, volume 800
+    const heavierRow = makeRow(160, 5, NOW - 2000) // weight_kg 160, volume 800
     mockGetFirstAsync = jest.fn().mockResolvedValue(heavierRow)
 
     const result = (await getGhostReference('uuid-bench', 30))!

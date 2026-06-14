@@ -1,12 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
-import {
-  SectionList,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native'
+import { SectionList, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import Animated, {
   useSharedValue,
   withRepeat,
@@ -23,6 +16,7 @@ import { useTheme } from '@/context/ThemeContext'
 import { spacing, radius, typography, font, touchTarget } from '@/constants/theme'
 import { emptyStateRecipe, skeletonRecipe } from '@/constants/recipes'
 import { supabase } from '@/lib/supabase'
+import { MUSCLE_GROUP_LABELS } from '@/lib/muscles'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -34,35 +28,18 @@ interface Exercise {
 }
 
 interface LibrarySection {
-  title: string      // muscle group label FR
+  title: string // muscle group label FR
   data: Exercise[]
 }
 
-// ─── Muscle group labels FR ───────────────────────────────────────────────────
-
-const MUSCLE_GROUP_LABELS: Record<string, string> = {
-  pectoraux:        'Pectoraux',
-  dos:              'Dos',
-  epaules:          'Épaules',
-  biceps:           'Biceps',
-  triceps:          'Triceps',
-  quadriceps:       'Quadriceps',
-  ischio_jambiers:  'Ischio-jambiers',
-  fessiers:         'Fessiers',
-  mollets:          'Mollets',
-  abdominaux:       'Abdominaux',
-  avant_bras:       'Avant-bras',
-}
+// ─── Muscle group labels FR (référentiel centralisé : lib/muscles.ts) ─────────
 
 const MUSCLE_GROUP_ORDER = Object.keys(MUSCLE_GROUP_LABELS)
 
 // ─── normalize NFD ────────────────────────────────────────────────────────────
 
 function normalize(str: string): string {
-  return str
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .toLowerCase()
+  return str.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 }
 
 // ─── Skeleton row ─────────────────────────────────────────────────────────────
@@ -85,7 +62,18 @@ function SkeletonRow() {
   }))
 
   return (
-    <Animated.View style={[{ minHeight: touchTarget.comfort, flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.s5, marginBottom: 2 }, shimmerStyle]}>
+    <Animated.View
+      style={[
+        {
+          minHeight: touchTarget.comfort,
+          flexDirection: 'row',
+          alignItems: 'center',
+          paddingHorizontal: spacing.s5,
+          marginBottom: 2,
+        },
+        shimmerStyle,
+      ]}
+    >
       <View style={{ flex: 1, gap: spacing.s2 }}>
         <View style={[sk.line, { width: '45%' }]} />
         <View style={[sk.line, { width: '30%', height: 10 }]} />
@@ -108,16 +96,12 @@ function ExerciseRow({ item, isFavorite, onPress, onToggleFavorite }: ExerciseRo
   const starScale = useSharedValue(1)
 
   const equipmentLabel = item.equipment_type
-    ? item.equipment_type
-        .replace(/_/g, ' ')
-        .replace(/\b\w/g, c => c.toUpperCase())
+    ? item.equipment_type.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
     : null
 
   const muscleLabel = MUSCLE_GROUP_LABELS[item.muscle_group] ?? item.muscle_group
 
-  const subtitle = equipmentLabel
-    ? `${equipmentLabel} · ${muscleLabel}`
-    : muscleLabel
+  const subtitle = equipmentLabel ? `${equipmentLabel} · ${muscleLabel}` : muscleLabel
 
   const starAnimStyle = useAnimatedStyle(() => ({
     transform: [{ scale: starScale.value }],
@@ -130,11 +114,7 @@ function ExerciseRow({ item, isFavorite, onPress, onToggleFavorite }: ExerciseRo
   }
 
   return (
-    <TouchableOpacity
-      activeOpacity={0.75}
-      onPress={onPress}
-      style={[styles.exerciseRow]}
-    >
+    <TouchableOpacity activeOpacity={0.75} onPress={onPress} style={[styles.exerciseRow]}>
       <View style={{ flex: 1, gap: spacing.s1 }}>
         <Text
           style={[typography.body, { color: colors.textPrimary, fontFamily: font.bold }]}
@@ -226,27 +206,30 @@ export default function LibraryScreen() {
 
   // ─── Toggle favorite ────────────────────────────────────────────────────────
 
-  const toggleFavorite = useCallback(async (exerciseId: string) => {
-    const newFavs = new Set(favorites)
-    if (newFavs.has(exerciseId)) {
-      newFavs.delete(exerciseId)
-    } else {
-      newFavs.add(exerciseId)
-    }
-    setFavorites(newFavs)
-    try {
-      await AsyncStorage.setItem('library_favorites', JSON.stringify(Array.from(newFavs)))
-    } catch {
-      // Silently fail
-    }
-  }, [favorites])
+  const toggleFavorite = useCallback(
+    async (exerciseId: string) => {
+      const newFavs = new Set(favorites)
+      if (newFavs.has(exerciseId)) {
+        newFavs.delete(exerciseId)
+      } else {
+        newFavs.add(exerciseId)
+      }
+      setFavorites(newFavs)
+      try {
+        await AsyncStorage.setItem('library_favorites', JSON.stringify(Array.from(newFavs)))
+      } catch {
+        // Silently fail
+      }
+    },
+    [favorites]
+  )
 
   // ─── Filter + sections ───────────────────────────────────────────────────────
 
   const sections = useMemo<LibrarySection[]>(() => {
     const normalizedQuery = normalize(query)
 
-    const filtered = exercises.filter(ex => {
+    const filtered = exercises.filter((ex) => {
       const matchesGroup = activeGroup == null || ex.muscle_group === activeGroup
       const matchesQuery =
         normalizedQuery.length === 0 ||
@@ -258,7 +241,7 @@ export default function LibraryScreen() {
     const result: LibrarySection[] = []
 
     // Favorites section first if any
-    const favoriteExercises = filtered.filter(ex => favorites.has(ex.id))
+    const favoriteExercises = filtered.filter((ex) => favorites.has(ex.id))
     if (favoriteExercises.length > 0) {
       result.push({
         title: 'FAVORIS',
@@ -294,14 +277,17 @@ export default function LibraryScreen() {
 
   // Muscle groups présents dans les données
   const presentGroups = useMemo(() => {
-    const set = new Set(exercises.map(e => e.muscle_group))
-    return MUSCLE_GROUP_ORDER.filter(g => set.has(g))
+    const set = new Set(exercises.map((e) => e.muscle_group))
+    return MUSCLE_GROUP_ORDER.filter((g) => set.has(g))
   }, [exercises])
 
   // ─── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: colors.background }]}
+      edges={['top']}
+    >
       <Text
         style={[
           typography.caption,
@@ -368,7 +354,7 @@ export default function LibraryScreen() {
           </Text>
         </TouchableOpacity>
 
-        {presentGroups.map(group => {
+        {presentGroups.map((group) => {
           const isActive = activeGroup === group
           return (
             <TouchableOpacity
@@ -407,7 +393,7 @@ export default function LibraryScreen() {
       ) : (
         <SectionList
           sections={sections}
-          keyExtractor={item => item.id}
+          keyExtractor={(item) => item.id}
           contentContainerStyle={{ paddingBottom: spacing.s12 }}
           renderSectionHeader={({ section }) => (
             <Text

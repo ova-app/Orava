@@ -4,7 +4,7 @@ import * as SecureStore from 'expo-secure-store'
 
 // Polyfill crypto.randomUUID pour Supabase
 if (!global.crypto.randomUUID) {
-  global.crypto.randomUUID = function() {
+  global.crypto.randomUUID = function () {
     const bytes = new Uint8Array(16)
     global.crypto.getRandomValues(bytes)
     bytes[6] = (bytes[6] & 0x0f) | 0x40
@@ -16,9 +16,13 @@ if (!global.crypto.randomUUID) {
       bytes.slice(8, 10),
       bytes.slice(10, 16),
     ]
-      .map(b => Array.from(b).map(x => x.toString(16).padStart(2, '0')).join(''))
+      .map((b) =>
+        Array.from(b)
+          .map((x) => x.toString(16).padStart(2, '0'))
+          .join('')
+      )
       .join('-') as unknown as ReturnType<typeof crypto.randomUUID>
-  } as any
+  } as typeof crypto.randomUUID
 }
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!
@@ -40,9 +44,7 @@ const ExpoSecureStoreAdapter = {
   setItem: async (key: string, value: string) => {
     const chunkSize = 1800
     const chunks = value.match(new RegExp(`.{1,${chunkSize}}`, 'g')) || []
-    await Promise.all(chunks.map((chunk, i) =>
-      SecureStore.setItemAsync(`${key}.${i}`, chunk)
-    ))
+    await Promise.all(chunks.map((chunk, i) => SecureStore.setItemAsync(`${key}.${i}`, chunk)))
   },
   removeItem: async (key: string) => {
     let i = 0

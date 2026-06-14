@@ -1,11 +1,5 @@
 import React, { useEffect } from 'react'
-import {
-  View,
-  Text,
-  StyleSheet,
-  StatusBar,
-  Image,
-} from 'react-native'
+import { View, Text, StyleSheet, StatusBar, Image } from 'react-native'
 import { useRouter } from 'expo-router'
 import Svg, { Path } from 'react-native-svg'
 import Animated, {
@@ -19,17 +13,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/context/ThemeContext'
 import { spacing, font } from '@/constants/theme'
+import oravaLogo from '@/assets/orava_logo.png'
 
 // ─── Logo Orava ───────────────────────────────────────────────────────────────
 
 function LogoOrava(): React.JSX.Element {
-  return (
-    <Image
-      source={require('@/assets/orava_logo.png')}
-      style={{ width: 72, height: 72 }}
-      resizeMode="contain"
-    />
-  )
+  return <Image source={oravaLogo} style={{ width: 72, height: 72 }} resizeMode="contain" />
 }
 
 // ─── Spinner — arc jaune animé ────────────────────────────────────────────────
@@ -50,12 +39,7 @@ function LoadingSpinner({ color }: { color: string }): React.JSX.Element {
   }))
 
   return (
-    <Animated.View
-      style={[
-        { width: 40, height: 40 },
-        spinStyle,
-      ]}
-    >
+    <Animated.View style={[{ width: 40, height: 40 }, spinStyle]}>
       <Svg width={40} height={40} viewBox="0 0 40 40">
         {/* Arc partiel ~270° — de 12h à 9h dans le sens horaire */}
         <Path
@@ -80,10 +64,12 @@ export default function SplashScreen(): React.JSX.Element {
 
   useEffect(() => {
     async function checkSession(): Promise<void> {
-      const [{ data: { session } }, onboardingDone] = await Promise.all([
-        supabase.auth.getSession(),
-        AsyncStorage.getItem('onboarding_done'),
-      ])
+      const [
+        {
+          data: { session },
+        },
+        onboardingDone,
+      ] = await Promise.all([supabase.auth.getSession(), AsyncStorage.getItem('onboarding_done')])
 
       if (session) {
         router.replace('/(tabs)/feed')

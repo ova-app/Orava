@@ -1,22 +1,17 @@
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react'
-import {
-  Dimensions,
-  PanResponder,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Dimensions, PanResponder, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { GLView, ExpoWebGLRenderingContext } from 'expo-gl'
 import * as THREE from 'three'
 import Svg, { Path, Text as SvgText } from 'react-native-svg'
-import Animated, { useSharedValue, withTiming, withSpring, withDelay, Easing, useAnimatedStyle, SharedValue } from 'react-native-reanimated'
+import Animated, {
+  useSharedValue,
+  withTiming,
+  withSpring,
+  withDelay,
+  Easing,
+  useAnimatedStyle,
+  SharedValue,
+} from 'react-native-reanimated'
 import { X } from 'lucide-react-native'
 
 // ─── Props ─────────────────────────────────────────────────────────────────
@@ -39,20 +34,26 @@ interface Props {
 }
 
 // ─── Config géométrique ────────────────────────────────────────────────────
-const TWO_PI     = Math.PI * 2
-const N_SECTORS  = 8
+const TWO_PI = Math.PI * 2
+const N_SECTORS = 8
 const SECTOR_ANG = TWO_PI / N_SECTORS
-const N_RINGS    = 42
-const N_SEGS     = 140
-const N_SPOKES   = 26
-const MAX_R      = 1.8
-const H_TOP      = 0.9
-const H_BOT      = 0.22
+const N_RINGS = 42
+const N_SEGS = 140
+const N_SPOKES = 26
+const MAX_R = 1.8
+const H_TOP = 0.9
+const H_BOT = 0.22
 
 // ─── Familles ──────────────────────────────────────────────────────────────
 const FAMILY_NAMES = [
-  'VOLUME', 'INTENSITÉ', 'STRUCTURE', 'RÉCUP',
-  'PERF', 'RÉGULARITÉ', 'MUSCLES', 'TEMPS',
+  'VOLUME',
+  'INTENSITÉ',
+  'STRUCTURE',
+  'RÉCUP',
+  'PERF',
+  'RÉGULARITÉ',
+  'MUSCLES',
+  'TEMPS',
 ]
 
 const DIM_NAMES = [
@@ -62,49 +63,78 @@ const DIM_NAMES = [
   ['Repos moy.', 'Var. repos', 'Complétion', 'Qualité repos', 'Récup. est.'],
   ['Nb PRs', 'Amp. PRs', 'Force rel.', 'Prog. 1RM', 'Constance perf.'],
   ['Fréquence', 'Streak', 'Var. séances', 'Planning', 'Régularité'],
-  ['Pec clav.', 'Pec sternal', 'Delt ant.', 'Delt médial', 'Delt post.', 'Grand dorsal', 'Trapèze', 'Grand rond', 'Rhomboïdes', 'Érecteurs', 'Biceps', 'Triceps', 'Quadriceps', 'Ischio', 'Fessiers', 'Mollets', 'Core'],
+  [
+    'Pec clav.',
+    'Pec sternal',
+    'Delt ant.',
+    'Delt médial',
+    'Delt post.',
+    'Grand dorsal',
+    'Trapèze',
+    'Grand rond',
+    'Rhomboïdes',
+    'Érecteurs',
+    'Biceps',
+    'Triceps',
+    'Quadriceps',
+    'Ischio',
+    'Fessiers',
+    'Mollets',
+    'Core',
+  ],
   ['Durée', 'Tempo', 'Densité', 'Efficacité', 'Timing'],
 ]
 
 const SECTOR_COLORS_HEX = [
-  '#f97316', '#ef4444', '#8b5cf6', '#06b6d4',
-  '#fac775', '#22c55e', '#ec4899', '#3b82f6',
+  '#f97316',
+  '#ef4444',
+  '#8b5cf6',
+  '#06b6d4',
+  '#fac775',
+  '#22c55e',
+  '#ec4899',
+  '#3b82f6',
 ]
 
 const SECTOR_COLORS: readonly number[] = [
-  0xf97316, 0xef4444, 0x8b5cf6, 0x06b6d4,
-  0xfac775, 0x22c55e, 0xec4899, 0x3b82f6,
+  0xf97316, 0xef4444, 0x8b5cf6, 0x06b6d4, 0xfac775, 0x22c55e, 0xec4899, 0x3b82f6,
 ]
 
 // ─── Mapping 41 dimensions ─────────────────────────────────────────────────
 const N_DIMS_PER_FAM = [6, 5, 5, 5, 5, 5, 17, 5] as const
 
 const EMPTY_SESSION: number[][] = [
-  [0,0,0,0,0,0], [0,0,0,0,0], [0,0,0,0,0], [0,0,0,0,0],
-  [0,0,0,0,0], [0,0,0,0,0], new Array(17).fill(0), [0,0,0,0,0],
+  [0, 0, 0, 0, 0, 0],
+  [0, 0, 0, 0, 0],
+  [0, 0, 0, 0, 0],
+  [0, 0, 0, 0, 0],
+  [0, 0, 0, 0, 0],
+  [0, 0, 0, 0, 0],
+  new Array(17).fill(0),
+  [0, 0, 0, 0, 0],
 ]
 
 // ─── Mock data (référence design uniquement — ne pas utiliser en prod) ──────
 const MOCK_SESSION: number[][] = [
   [0.92, 0.78, 0.85, 0.71, 0.88, 0.65],
-  [0.70, 0.82, 0.61, 0.75, 0.68],
+  [0.7, 0.82, 0.61, 0.75, 0.68],
   [0.55, 0.63, 0.48, 0.72, 0.58],
   [0.45, 0.52, 0.38, 0.61, 0.49],
   [0.88, 0.94, 0.77, 0.82, 0.91],
-  [0.60, 0.55, 0.68, 0.52, 0.63],
-  [0.72, 0.65, 0.40, 0.58, 0.30, 0.55, 0.48, 0.20, 0.25, 0.35, 0.70, 0.60, 0.45, 0.38, 0.52, 0.42, 0.35],
+  [0.6, 0.55, 0.68, 0.52, 0.63],
+  [0.72, 0.65, 0.4, 0.58, 0.3, 0.55, 0.48, 0.2, 0.25, 0.35, 0.7, 0.6, 0.45, 0.38, 0.52, 0.42, 0.35],
   [0.42, 0.38, 0.51, 0.46, 0.35],
 ]
 
 const MOCK_AVERAGE: number[][] = [
-  [0.72, 0.65, 0.70, 0.58, 0.75, 0.62],
+  [0.72, 0.65, 0.7, 0.58, 0.75, 0.62],
   [0.58, 0.65, 0.52, 0.61, 0.55],
-  [0.50, 0.55, 0.45, 0.60, 0.48],
+  [0.5, 0.55, 0.45, 0.6, 0.48],
   [0.58, 0.62, 0.48, 0.55, 0.52],
-  [0.72, 0.78, 0.65, 0.70, 0.75],
-  [0.48, 0.52, 0.55, 0.45, 0.50],
-  [0.60, 0.55, 0.35, 0.48, 0.28, 0.48, 0.40, 0.18, 0.22, 0.30, 0.58, 0.50, 0.40, 0.32, 0.45, 0.38, 0.30],
-  [0.45, 0.42, 0.48, 0.50, 0.38],
+  [0.72, 0.78, 0.65, 0.7, 0.75],
+  [0.48, 0.52, 0.55, 0.45, 0.5],
+  [0.6, 0.55, 0.35, 0.48, 0.28, 0.48, 0.4, 0.18, 0.22, 0.3, 0.58, 0.5, 0.4, 0.32, 0.45, 0.38, 0.3],
+  [0.45, 0.42, 0.48, 0.5, 0.38],
 ]
 
 // Named exports — placed AFTER const declarations to avoid temporal dead zone
@@ -126,16 +156,17 @@ const DIM_CONFIGS: readonly DimConfig[] = (() => {
   const PHI = 0.618033988749895
   let gIdx = 0
   for (let fi = 0; fi < N_SECTORS; fi++) {
-    const nv   = N_DIMS_PER_FAM[fi]
+    const nv = N_DIMS_PER_FAM[fi]
     const subW = SECTOR_ANG / nv
     for (let vi = 0; vi < nv; vi++) {
       configs.push({
-        fi, vi,
-        angCenter : (fi + (vi + 0.5) / nv) * SECTOR_ANG,
-        angSigma  : subW * 0.62,
-        rPeak     : 0.13 + ((gIdx * PHI) % 1) * 0.70,
-        rWidth    : 0.085 + vi * 0.010,
-        harmN     : 6 + vi * 3,
+        fi,
+        vi,
+        angCenter: (fi + (vi + 0.5) / nv) * SECTOR_ANG,
+        angSigma: subW * 0.62,
+        rPeak: 0.13 + ((gIdx * PHI) % 1) * 0.7,
+        rWidth: 0.085 + vi * 0.01,
+        harmN: 6 + vi * 3,
       })
       gIdx++
     }
@@ -147,15 +178,15 @@ const DIM_CONFIGS: readonly DimConfig[] = (() => {
 const ss = (t: number): number => t * t * (3 - 2 * t)
 
 function sectorBlend(theta: number): { s0: number; s1: number; t: number } {
-  const a  = ((theta % TWO_PI) + TWO_PI) % TWO_PI
+  const a = ((theta % TWO_PI) + TWO_PI) % TWO_PI
   const sf = a / SECTOR_ANG
   const s0 = Math.floor(sf) % N_SECTORS
   return { s0, s1: (s0 + 1) % N_SECTORS, t: ss(sf - Math.floor(sf)) }
 }
 
 function getH(r: number, theta: number, data: number[][], maxH: number): number {
-  const rn   = r / MAX_R
-  const edge = Math.min(rn / 0.10, 1.0) * Math.min((1 - rn) / 0.08, 1.0)
+  const rn = r / MAX_R
+  const edge = Math.min(rn / 0.1, 1.0) * Math.min((1 - rn) / 0.08, 1.0)
   if (edge === 0) return 0
 
   let h = 0
@@ -171,7 +202,7 @@ function getH(r: number, theta: number, data: number[][], maxH: number): number 
     if (angGauss < 0.003) continue
 
     const ripple = 1 + 0.38 * Math.cos(cfg.harmN * theta)
-    const ang    = angGauss * ripple
+    const ang = angGauss * ripple
 
     const rDist = Math.abs(rn - cfg.rPeak) / cfg.rWidth
     if (rDist >= 1) continue
@@ -189,15 +220,15 @@ function getC(theta: number): [number, number, number] {
   const h1 = SECTOR_COLORS[s1]
   return [
     (((h0 >> 16) & 0xff) * (1 - t) + ((h1 >> 16) & 0xff) * t) / 255,
-    (((h0 >>  8) & 0xff) * (1 - t) + ((h1 >>  8) & 0xff) * t) / 255,
-    (( h0        & 0xff) * (1 - t) + ( h1        & 0xff) * t) / 255,
+    (((h0 >> 8) & 0xff) * (1 - t) + ((h1 >> 8) & 0xff) * t) / 255,
+    ((h0 & 0xff) * (1 - t) + (h1 & 0xff) * t) / 255,
   ]
 }
 
 // ─── Helper SVG arc ────────────────────────────────────────────────────────
 function arcPath(cx: number, cy: number, r: number, startDeg: number, sweepDeg: number): string {
   if (sweepDeg <= 0) return ''
-  const toRad = (d: number) => d * Math.PI / 180
+  const toRad = (d: number) => (d * Math.PI) / 180
   const x1 = cx + r * Math.cos(toRad(startDeg))
   const y1 = cy + r * Math.sin(toRad(startDeg))
   const endDeg = startDeg + sweepDeg
@@ -219,27 +250,32 @@ function ScoreArcGradient({
 }) {
   const cx = size / 2
   const cy = size / 2
-  const r  = (size - strokeWidth * 2) / 2
+  const r = (size - strokeWidth * 2) / 2
 
   // Arc 240° centré en bas : de 150° à 390°
   const START_DEG = 150
   const TOTAL_DEG = 240
-  const filled    = (score / 100) * TOTAL_DEG
+  const filled = (score / 100) * TOTAL_DEG
 
   // Track (gris)
   const trackPath = arcPath(cx, cy, r, START_DEG, TOTAL_DEG)
 
   // Dégradé sombre→jaune Orava
-  const GRAD = [
-    { t: 0,    rgb: [0x2A, 0x24, 0x00] },
-    { t: 0.45, rgb: [0xCC, 0xAA, 0x00] },
-    { t: 1.0,  rgb: [0xFF, 0xDD, 0x00] },
-  ] as const
+  const GRAD: readonly { t: number; rgb: readonly [number, number, number] }[] = [
+    { t: 0, rgb: [0x2a, 0x24, 0x00] },
+    { t: 0.45, rgb: [0xcc, 0xaa, 0x00] },
+    { t: 1.0, rgb: [0xff, 0xdd, 0x00] },
+  ]
 
   function lerpGrad(t: number): [number, number, number] {
-    let lo = GRAD[0], hi = GRAD[GRAD.length - 1]
+    let lo = GRAD[0],
+      hi = GRAD[GRAD.length - 1]
     for (let k = 0; k < GRAD.length - 1; k++) {
-      if (t >= GRAD[k].t && t <= GRAD[k + 1].t) { lo = GRAD[k]; hi = GRAD[k + 1]; break }
+      if (t >= GRAD[k].t && t <= GRAD[k + 1].t) {
+        lo = GRAD[k]
+        hi = GRAD[k + 1]
+        break
+      }
     }
     const ft = lo.t === hi.t ? 0 : (t - lo.t) / (hi.t - lo.t)
     return [
@@ -255,10 +291,10 @@ function ScoreArcGradient({
 
   if (filled > 0.5) {
     for (let i = 0; i < N_SEG; i++) {
-      const t      = i / N_SEG
+      const t = i / N_SEG
       const sStart = START_DEG + i * segDeg
-      const sLen   = segDeg * 1.5
-      const path   = arcPath(cx, cy, r, sStart, sLen)
+      const sLen = segDeg * 1.5
+      const path = arcPath(cx, cy, r, sStart, sLen)
       if (!path) continue
       const [r8, g8, b8] = lerpGrad(t)
       segments.push({ path, color: `rgb(${r8},${g8},${b8})` })
@@ -323,26 +359,34 @@ function makeSectorLineGeo(fi: number, data: number[][], maxH: number): THREE.Bu
   for (let ri = 1; ri <= N_RINGS; ri++) {
     const r = (ri / N_RINGS) * MAX_R
     for (let si = 0; si < N_SEGS; si++) {
-      const a1  = (si / N_SEGS) * TWO_PI
-      const a2  = ((si + 1) / N_SEGS) * TWO_PI
+      const a1 = (si / N_SEGS) * TWO_PI
+      const a2 = ((si + 1) / N_SEGS) * TWO_PI
       const mid = (a1 + a2) / 2
-      if (Math.floor(((mid % TWO_PI) + TWO_PI) % TWO_PI / SECTOR_ANG) % N_SECTORS !== fi) continue
+      if (Math.floor((((mid % TWO_PI) + TWO_PI) % TWO_PI) / SECTOR_ANG) % N_SECTORS !== fi) continue
       pts.push(
-        r * Math.cos(a1), getH(r, a1, data, maxH), r * Math.sin(a1),
-        r * Math.cos(a2), getH(r, a2, data, maxH), r * Math.sin(a2),
+        r * Math.cos(a1),
+        getH(r, a1, data, maxH),
+        r * Math.sin(a1),
+        r * Math.cos(a2),
+        getH(r, a2, data, maxH),
+        r * Math.sin(a2)
       )
     }
   }
 
   for (let sp = 0; sp < N_SPOKES; sp++) {
     const a = (sp / N_SPOKES) * TWO_PI
-    if (Math.floor(((a % TWO_PI) + TWO_PI) % TWO_PI / SECTOR_ANG) % N_SECTORS !== fi) continue
+    if (Math.floor((((a % TWO_PI) + TWO_PI) % TWO_PI) / SECTOR_ANG) % N_SECTORS !== fi) continue
     for (let ri = 0; ri < N_RINGS; ri++) {
       const r1 = (ri / N_RINGS) * MAX_R
       const r2 = ((ri + 1) / N_RINGS) * MAX_R
       pts.push(
-        r1 * Math.cos(a), getH(r1, a, data, maxH), r1 * Math.sin(a),
-        r2 * Math.cos(a), getH(r2, a, data, maxH), r2 * Math.sin(a),
+        r1 * Math.cos(a),
+        getH(r1, a, data, maxH),
+        r1 * Math.sin(a),
+        r2 * Math.cos(a),
+        getH(r2, a, data, maxH),
+        r2 * Math.sin(a)
       )
     }
   }
@@ -363,9 +407,13 @@ function makeAvgLineGeo(data: number[][], maxH: number): THREE.BufferGeometry {
     for (let si = 0; si < N_SEGS; si++) {
       const a1 = (si / N_SEGS) * TWO_PI
       const a2 = ((si + 1) / N_SEGS) * TWO_PI
-      const b  = idx * 6
-      pts[b]   = r * Math.cos(a1); pts[b+1] = -getH(r, a1, data, maxH); pts[b+2] = r * Math.sin(a1)
-      pts[b+3] = r * Math.cos(a2); pts[b+4] = -getH(r, a2, data, maxH); pts[b+5] = r * Math.sin(a2)
+      const b = idx * 6
+      pts[b] = r * Math.cos(a1)
+      pts[b + 1] = -getH(r, a1, data, maxH)
+      pts[b + 2] = r * Math.sin(a1)
+      pts[b + 3] = r * Math.cos(a2)
+      pts[b + 4] = -getH(r, a2, data, maxH)
+      pts[b + 5] = r * Math.sin(a2)
       idx++
     }
   }
@@ -375,9 +423,13 @@ function makeAvgLineGeo(data: number[][], maxH: number): THREE.BufferGeometry {
     for (let ri = 0; ri < N_RINGS; ri++) {
       const r1 = (ri / N_RINGS) * MAX_R
       const r2 = ((ri + 1) / N_RINGS) * MAX_R
-      const b  = idx * 6
-      pts[b]   = r1 * Math.cos(a); pts[b+1] = -getH(r1, a, data, maxH); pts[b+2] = r1 * Math.sin(a)
-      pts[b+3] = r2 * Math.cos(a); pts[b+4] = -getH(r2, a, data, maxH); pts[b+5] = r2 * Math.sin(a)
+      const b = idx * 6
+      pts[b] = r1 * Math.cos(a)
+      pts[b + 1] = -getH(r1, a, data, maxH)
+      pts[b + 2] = r1 * Math.sin(a)
+      pts[b + 3] = r2 * Math.cos(a)
+      pts[b + 4] = -getH(r2, a, data, maxH)
+      pts[b + 5] = r2 * Math.sin(a)
       idx++
     }
   }
@@ -401,9 +453,13 @@ function makeSocleGeo(): THREE.BufferGeometry {
     for (let i = 0; i < N_SEGS; i++) {
       const a1 = (i / N_SEGS) * TWO_PI
       const a2 = ((i + 1) / N_SEGS) * TWO_PI
-      const b  = idx * 6
-      pts[b]     = r * Math.cos(a1); pts[b + 1] = 0; pts[b + 2] = r * Math.sin(a1)
-      pts[b + 3] = r * Math.cos(a2); pts[b + 4] = 0; pts[b + 5] = r * Math.sin(a2)
+      const b = idx * 6
+      pts[b] = r * Math.cos(a1)
+      pts[b + 1] = 0
+      pts[b + 2] = r * Math.sin(a1)
+      pts[b + 3] = r * Math.cos(a2)
+      pts[b + 4] = 0
+      pts[b + 5] = r * Math.sin(a2)
       idx++
     }
   }
@@ -415,8 +471,12 @@ function makeSocleGeo(): THREE.BufferGeometry {
   for (let t = 0; t < N_TICKS; t++) {
     const a = (t / N_TICKS) * TWO_PI
     const b = idx * 6
-    pts[b]     = R_INNER * Math.cos(a); pts[b + 1] = 0; pts[b + 2] = R_INNER * Math.sin(a)
-    pts[b + 3] = R_OUTER * Math.cos(a); pts[b + 4] = 0; pts[b + 5] = R_OUTER * Math.sin(a)
+    pts[b] = R_INNER * Math.cos(a)
+    pts[b + 1] = 0
+    pts[b + 2] = R_INNER * Math.sin(a)
+    pts[b + 3] = R_OUTER * Math.cos(a)
+    pts[b + 4] = 0
+    pts[b + 5] = R_OUTER * Math.sin(a)
     idx++
   }
 
@@ -427,7 +487,7 @@ function makeSocleGeo(): THREE.BufferGeometry {
 
 // ─── Hitbox secteur (pie-slice invisible, raycasting uniquement) ───────────
 function makeSectorHitbox(fi: number): THREE.Mesh {
-  const N_ARC  = 12
+  const N_ARC = 12
   const startA = fi * SECTOR_ANG
   const verts: number[] = [0, 0, 0]
   for (let i = 0; i <= N_ARC; i++) {
@@ -443,7 +503,7 @@ function makeSectorHitbox(fi: number): THREE.Mesh {
 
   const mesh = new THREE.Mesh(
     geo,
-    new THREE.MeshBasicMaterial({ visible: false, side: THREE.DoubleSide }),
+    new THREE.MeshBasicMaterial({ visible: false, side: THREE.DoubleSide })
   )
   mesh.userData.sectorIndex = fi
   return mesh
@@ -475,12 +535,14 @@ export default function MyoOrb({
   const [internalSelectedFamily, setInternalSelectedFamily] = useState<number | null>(null)
   const selectedFamily = isControlled ? (externalSelectedFamily ?? null) : internalSelectedFamily
   const [labelScreenPos, setLabelScreenPos] = useState<LabelPos[]>(
-    Array.from({ length: N_SECTORS }, () => ({ x: 0, y: 0, visible: false })),
+    Array.from({ length: N_SECTORS }, () => ({ x: 0, y: 0, visible: false }))
   )
 
   // ─── bgColor ref ─────────────────────────────────────────────────────────
   const bgColorRef = useRef(bgColor ?? '#0A0A0F')
-  useEffect(() => { bgColorRef.current = bgColor ?? '#0A0A0F' }, [bgColor])
+  useEffect(() => {
+    bgColorRef.current = bgColor ?? '#0A0A0F'
+  }, [bgColor])
 
   // ─── Fade-in entrée ──────────────────────────────────────────────────────
   const mountOpacity = useSharedValue(0)
@@ -491,35 +553,38 @@ export default function MyoOrb({
 
   // ─── Animation panneau détail + barres ───────────────────────────────────
   const panelTranslateY = useSharedValue(10)
-  const panelOpacity    = useSharedValue(0)
-  const barProgress     = useSharedValue(0)
-  const panelAnim       = useAnimatedStyle(() => ({
-    opacity:   panelOpacity.value,
+  const panelOpacity = useSharedValue(0)
+  const barProgress = useSharedValue(0)
+  const panelAnim = useAnimatedStyle(() => ({
+    opacity: panelOpacity.value,
     transform: [{ translateY: panelTranslateY.value }],
   }))
   useEffect(() => {
     if (selectedFamily === null) return
     panelTranslateY.value = 10
-    panelOpacity.value    = 0
-    barProgress.value     = 0
+    panelOpacity.value = 0
+    barProgress.value = 0
     panelTranslateY.value = withSpring(0, { damping: 18, stiffness: 300 })
-    panelOpacity.value    = withTiming(1, { duration: 200, easing: Easing.bezier(0.16, 1, 0.3, 1) })
-    barProgress.value     = withDelay(80, withTiming(1, { duration: 480, easing: Easing.bezier(0.16, 1, 0.3, 1) }))
+    panelOpacity.value = withTiming(1, { duration: 200, easing: Easing.bezier(0.16, 1, 0.3, 1) })
+    barProgress.value = withDelay(
+      80,
+      withTiming(1, { duration: 480, easing: Easing.bezier(0.16, 1, 0.3, 1) })
+    )
   }, [selectedFamily])
 
   // ─── Refs partagés GL ↔ React ────────────────────────────────────────────
-  const rafRef               = useRef<number | null>(null)
-  const cameraRef            = useRef<THREE.PerspectiveCamera | null>(null)
-  const sceneRef             = useRef<THREE.Scene | null>(null)
-  const sceneRotYRef         = useRef(0)
-  const targetRotYRef        = useRef(0)
-  const autoRotateRef        = useRef(true)
-  const selectedRef          = useRef<number | null>(null)
-  const svRef                = useRef(sessionValues)
-  const avRef                = useRef(averageValues)
-  const sessionMatsRef       = useRef<THREE.LineBasicMaterial[]>([])
-  const avgMatRef            = useRef<THREE.LineBasicMaterial | null>(null)
-  const hitboxMeshesRef      = useRef<THREE.Mesh[]>([])
+  const rafRef = useRef<number | null>(null)
+  const cameraRef = useRef<THREE.PerspectiveCamera | null>(null)
+  const sceneRef = useRef<THREE.Scene | null>(null)
+  const sceneRotYRef = useRef(0)
+  const targetRotYRef = useRef(0)
+  const autoRotateRef = useRef(true)
+  const selectedRef = useRef<number | null>(null)
+  const svRef = useRef(sessionValues)
+  const avRef = useRef(averageValues)
+  const sessionMatsRef = useRef<THREE.LineBasicMaterial[]>([])
+  const avgMatRef = useRef<THREE.LineBasicMaterial | null>(null)
+  const hitboxMeshesRef = useRef<THREE.Mesh[]>([])
   const autoRotateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // ─── Score global — pondéré 1/8 par famille (évite que MUSCLES/17 dims écrase tout)
@@ -550,16 +615,16 @@ export default function MyoOrb({
       return new THREE.Vector3(
         MAX_R * 0.65 * Math.cos(sA),
         maxHVal + 0.22,
-        MAX_R * 0.65 * Math.sin(sA),
+        MAX_R * 0.65 * Math.sin(sA)
       )
     })
   }, [sessionValues])
 
   // ─── Mise à jour positions 2D des labels (15 fps, délai 800ms) ───────────
   useEffect(() => {
-    const euler  = new THREE.Euler()
-    const tmpW   = new THREE.Vector3()
-    const tmpV   = new THREE.Vector3()
+    const euler = new THREE.Euler()
+    const tmpW = new THREE.Vector3()
+    const tmpV = new THREE.Vector3()
 
     let intervalId: ReturnType<typeof setInterval> | null = null
     const timeoutId = setTimeout(() => {
@@ -568,7 +633,7 @@ export default function MyoOrb({
         if (!cam) return
         euler.set(0, sceneRotYRef.current, 0)
 
-        const positions: LabelPos[] = labelPositions3D.map(p => {
+        const positions: LabelPos[] = labelPositions3D.map((p) => {
           tmpW.copy(p).applyEuler(euler)
           tmpV.copy(tmpW).applyMatrix4(cam.matrixWorldInverse)
           if (tmpV.z > -0.1) return { x: 0, y: 0, visible: false }
@@ -594,21 +659,24 @@ export default function MyoOrb({
   }, [labelPositions3D, S])
 
   // ─── Helpers select/deselect ─────────────────────────────────────────────
-  const selectFamily = useCallback((fi: number | null) => {
-    if (!isControlled) setInternalSelectedFamily(fi)
-    onFamilySelect?.(fi)
-    selectedRef.current = fi
-    if (autoRotateTimeoutRef.current) clearTimeout(autoRotateTimeoutRef.current)
-    if (fi === null) {
-      autoRotateTimeoutRef.current = setTimeout(() => {
-        autoRotateRef.current = true
-      }, 3000)
-    } else {
-      autoRotateRef.current = false
-      const sA = fi * SECTOR_ANG + SECTOR_ANG / 2
-      targetRotYRef.current = sA - Math.PI / 2
-    }
-  }, [isControlled, onFamilySelect])
+  const selectFamily = useCallback(
+    (fi: number | null) => {
+      if (!isControlled) setInternalSelectedFamily(fi)
+      onFamilySelect?.(fi)
+      selectedRef.current = fi
+      if (autoRotateTimeoutRef.current) clearTimeout(autoRotateTimeoutRef.current)
+      if (fi === null) {
+        autoRotateTimeoutRef.current = setTimeout(() => {
+          autoRotateRef.current = true
+        }, 3000)
+      } else {
+        autoRotateRef.current = false
+        const sA = fi * SECTOR_ANG + SECTOR_ANG / 2
+        targetRotYRef.current = sA - Math.PI / 2
+      }
+    },
+    [isControlled, onFamilySelect]
+  )
 
   // ─── Fermeture panneau ───────────────────────────────────────────────────
   const handleClose = useCallback(() => {
@@ -617,34 +685,35 @@ export default function MyoOrb({
 
   // ─── Raycasting sur hitboxes invisibles ──────────────────────────────────
   const panResponder = useMemo(
-    () => PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onPanResponderRelease: evt => {
-        const cam      = cameraRef.current
-        const scene    = sceneRef.current
-        const hitboxes = hitboxMeshesRef.current
-        if (!cam || !scene || hitboxes.length === 0) return
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onPanResponderRelease: (evt) => {
+          const cam = cameraRef.current
+          const scene = sceneRef.current
+          const hitboxes = hitboxMeshesRef.current
+          if (!cam || !scene || hitboxes.length === 0) return
 
-        const { locationX, locationY } = evt.nativeEvent
-        const ndcX = (locationX - S / 2) / (S / 2)
-        const ndcY = -((locationY - S / 2) / (S / 2))
+          const { locationX, locationY } = evt.nativeEvent
+          const ndcX = (locationX - S / 2) / (S / 2)
+          const ndcY = -((locationY - S / 2) / (S / 2))
 
-        scene.updateMatrixWorld(true)
+          scene.updateMatrixWorld(true)
 
-        const raycaster = new THREE.Raycaster()
-        raycaster.setFromCamera(new THREE.Vector2(ndcX, ndcY), cam)
-        const intersects = raycaster.intersectObjects(hitboxes, false)
+          const raycaster = new THREE.Raycaster()
+          raycaster.setFromCamera(new THREE.Vector2(ndcX, ndcY), cam)
+          const intersects = raycaster.intersectObjects(hitboxes, false)
 
-        if (intersects.length === 0) {
-          selectFamily(null)
-          return
-        }
+          if (intersects.length === 0) {
+            selectFamily(null)
+            return
+          }
 
-        const fi = intersects[0].object.userData.sectorIndex as number
-        selectFamily(selectedRef.current === fi ? null : fi)
-      },
-    }),
-    [S, selectFamily],
+          const fi = intersects[0].object.userData.sectorIndex as number
+          selectFamily(selectedRef.current === fi ? null : fi)
+        },
+      }),
+    [S, selectFamily]
   )
 
   // ─── Sync selectedRef quand prop externe change ──────────────────────────
@@ -665,10 +734,13 @@ export default function MyoOrb({
   }, [isControlled, externalSelectedFamily])
 
   // ─── Cleanup RAF ─────────────────────────────────────────────────────────
-  useEffect(() => () => {
-    if (rafRef.current !== null) cancelAnimationFrame(rafRef.current)
-    if (autoRotateTimeoutRef.current) clearTimeout(autoRotateTimeoutRef.current)
-  }, [])
+  useEffect(
+    () => () => {
+      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current)
+      if (autoRotateTimeoutRef.current) clearTimeout(autoRotateTimeoutRef.current)
+    },
+    []
+  )
 
   // ─── GL context — MUST be fully synchronous (zero async/await/Promise) ───
   const onContextCreate = useCallback((gl: ExpoWebGLRenderingContext) => {
@@ -677,9 +749,13 @@ export default function MyoOrb({
 
     // Exact canvas proxy shape required by expo-gl
     const canvas = {
-      width: W, height: H, style: {},
-      clientWidth: W, clientHeight: H,
-      addEventListener: () => {}, removeEventListener: () => {},
+      width: W,
+      height: H,
+      style: {},
+      clientWidth: W,
+      clientHeight: H,
+      addEventListener: () => {},
+      removeEventListener: () => {},
     } as unknown as HTMLCanvasElement
 
     const renderer = new THREE.WebGLRenderer({
@@ -693,7 +769,7 @@ export default function MyoOrb({
     const bgInt = parseInt(bgColorRef.current.replace('#', ''), 16)
     renderer.setClearColor(bgInt, 1)
 
-    const scene  = new THREE.Scene()
+    const scene = new THREE.Scene()
 
     const camera = new THREE.PerspectiveCamera(42, W / H, 0.1, 100)
     camera.position.set(0, 3.2, 4.8)
@@ -701,15 +777,15 @@ export default function MyoOrb({
     camera.updateMatrixWorld()
 
     cameraRef.current = camera
-    sceneRef.current  = scene
+    sceneRef.current = scene
 
     // ─── Session terrain — 8 LineBasicMaterial sectors ───────────────────
     const mats: THREE.LineBasicMaterial[] = []
     for (let fi = 0; fi < N_SECTORS; fi++) {
       const mat = new THREE.LineBasicMaterial({
-        color      : SECTOR_COLORS[fi],
+        color: SECTOR_COLORS[fi],
         transparent: true,
-        opacity    : 1.0,
+        opacity: 1.0,
       })
       mats.push(mat)
       scene.add(new THREE.LineSegments(makeSectorLineGeo(fi, svRef.current, H_TOP), mat))
@@ -718,18 +794,20 @@ export default function MyoOrb({
 
     // ─── Historical terrain — single LineBasicMaterial ───────────────────
     const avgMat = new THREE.LineBasicMaterial({
-      color      : 0x2a3a4e,
+      color: 0x2a3a4e,
       transparent: true,
-      opacity    : 0.55,
+      opacity: 0.55,
     })
     avgMatRef.current = avgMat
     scene.add(new THREE.LineSegments(makeAvgLineGeo(avRef.current, H_BOT), avgMat))
 
     // ─── Socle — near-invisible, dark navy ────────────────────────────────
-    scene.add(new THREE.LineSegments(
-      makeSocleGeo(),
-      new THREE.LineBasicMaterial({ color: 0x606060, transparent: true, opacity: 0.25 }),
-    ))
+    scene.add(
+      new THREE.LineSegments(
+        makeSocleGeo(),
+        new THREE.LineBasicMaterial({ color: 0x606060, transparent: true, opacity: 0.25 })
+      )
+    )
 
     // ─── Hitboxes (invisible pie-slices for raycasting) ───────────────────
     const hitboxes: THREE.Mesh[] = []
@@ -740,7 +818,7 @@ export default function MyoOrb({
     }
     hitboxMeshesRef.current = hitboxes
 
-    let last    = 0
+    let last = 0
     let prevSel: number | null = null
 
     const tick = (now: number): void => {
@@ -752,7 +830,7 @@ export default function MyoOrb({
         scene.rotation.y += 0.003
       } else {
         let diff = targetRotYRef.current - scene.rotation.y
-        diff = ((diff + Math.PI) % TWO_PI + TWO_PI) % TWO_PI - Math.PI
+        diff = ((((diff + Math.PI) % TWO_PI) + TWO_PI) % TWO_PI) - Math.PI
         scene.rotation.y += diff * 0.05
       }
       sceneRotYRef.current = scene.rotation.y
@@ -762,15 +840,15 @@ export default function MyoOrb({
       if (sel !== prevSel) {
         prevSel = sel
         for (let fi = 0; fi < N_SECTORS; fi++) {
-          const mat    = mats[fi]
+          const mat = mats[fi]
           const dimmed = sel !== null && fi !== sel
-          mat.opacity     = dimmed ? 0.28 : 1.0
+          mat.opacity = dimmed ? 0.28 : 1.0
           mat.transparent = fi !== sel
           mat.needsUpdate = true
         }
         const av = avgMatRef.current
         if (av !== null) {
-          av.opacity     = sel !== null ? 0.20 : 0.55
+          av.opacity = sel !== null ? 0.2 : 0.55
           av.transparent = true
           av.needsUpdate = true
         }
@@ -793,7 +871,6 @@ export default function MyoOrb({
 
   return (
     <Animated.View style={[{ width: S }, mountAnim]}>
-
       {/* Orb 3D (S×S, clippé) */}
       <View style={{ width: S, height: S }}>
         {/* Canvas GL + labels + touch */}
@@ -801,29 +878,31 @@ export default function MyoOrb({
           <GLView style={StyleSheet.absoluteFill} onContextCreate={onContextCreate} />
 
           {/* Étiquettes flottantes */}
-          {showLabels && <View style={StyleSheet.absoluteFill} pointerEvents="none">
-            {labelScreenPos.map((pos, i) => (
-              <Text
-                key={i}
-                style={[
-                  styles.label,
-                  {
-                    left: pos.x,
-                    top: pos.y,
-                    opacity: pos.visible
-                      ? (selectedFamily !== null && selectedFamily !== i ? 0.28 : 1)
-                      : 0,
-                    color: selectedFamily === i
-                      ? SECTOR_COLORS_HEX[i]
-                      : 'rgba(255,255,255,0.52)',
-                    transform: [{ scale: selectedFamily === i ? 1.18 : 1 }],
-                  },
-                ]}
-              >
-                {FAMILY_NAMES[i]}
-              </Text>
-            ))}
-          </View>}
+          {showLabels && (
+            <View style={StyleSheet.absoluteFill} pointerEvents="none">
+              {labelScreenPos.map((pos, i) => (
+                <Text
+                  key={i}
+                  style={[
+                    styles.label,
+                    {
+                      left: pos.x,
+                      top: pos.y,
+                      opacity: pos.visible
+                        ? selectedFamily !== null && selectedFamily !== i
+                          ? 0.28
+                          : 1
+                        : 0,
+                      color: selectedFamily === i ? SECTOR_COLORS_HEX[i] : 'rgba(255,255,255,0.52)',
+                      transform: [{ scale: selectedFamily === i ? 1.18 : 1 }],
+                    },
+                  ]}
+                >
+                  {FAMILY_NAMES[i]}
+                </Text>
+              ))}
+            </View>
+          )}
 
           {/* Couche tactile */}
           <View style={StyleSheet.absoluteFill} {...panResponder.panHandlers} />
@@ -885,117 +964,119 @@ export default function MyoOrb({
 
 const styles = StyleSheet.create({
   orbContainer: {
-    borderRadius   : 16,
-    overflow       : 'hidden',
+    borderRadius: 16,
+    overflow: 'hidden',
   },
   scoreArcRow: {
-    alignItems    : 'center',
-    marginTop     : -16,
+    alignItems: 'center',
+    marginTop: -16,
   },
   label: {
-    position     : 'absolute',
-    fontSize     : 11,
-    fontWeight   : '700',
+    position: 'absolute',
+    fontSize: 11,
+    fontWeight: '700',
     letterSpacing: 1.2,
   },
   detailPanel: {
     marginHorizontal: 8,
-    marginTop       : 6,
-    backgroundColor : 'rgba(8,8,8,0.90)',
-    borderRadius    : 12,
-    padding         : 14,
-    paddingTop      : 16,
+    marginTop: 6,
+    backgroundColor: 'rgba(8,8,8,0.90)',
+    borderRadius: 12,
+    padding: 14,
+    paddingTop: 16,
   },
   detailAccentBar: {
-    position    : 'absolute',
-    top         : 0,
-    left        : 0,
-    right       : 0,
-    height      : 2,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 2,
     borderRadius: 12,
-    opacity     : 0.85,
+    opacity: 0.85,
   },
   detailHeader: {
-    flexDirection : 'row',
-    alignItems    : 'center',
-    marginBottom  : 10,
-    gap           : 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+    gap: 10,
   },
   detailTitle: {
-    fontSize     : 12,
-    fontWeight   : '700',
+    fontSize: 12,
+    fontWeight: '700',
     letterSpacing: 1.6,
-    minWidth     : 80,
+    minWidth: 80,
   },
   familyScoreRow: {
-    flex         : 1,
+    flex: 1,
     flexDirection: 'row',
-    alignItems   : 'center',
-    gap          : 6,
+    alignItems: 'center',
+    gap: 6,
   },
   familyScoreBarBg: {
-    flex            : 1,
-    height          : 4,
-    backgroundColor : 'rgba(255,255,255,0.09)',
-    borderRadius    : 2,
-    overflow        : 'hidden',
+    flex: 1,
+    height: 4,
+    backgroundColor: 'rgba(255,255,255,0.09)',
+    borderRadius: 2,
+    overflow: 'hidden',
   },
   familyScoreVal: {
-    fontSize    : 12,
-    fontWeight  : '700',
+    fontSize: 12,
+    fontWeight: '700',
     letterSpacing: 0.2,
-    minWidth    : 24,
-    textAlign   : 'right',
+    minWidth: 24,
+    textAlign: 'right',
   },
   closeBtn: {
-    width          : 24,
-    height         : 24,
-    alignItems     : 'center',
-    justifyContent : 'center',
+    width: 24,
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: 'rgba(255,255,255,0.07)',
-    borderRadius   : 12,
+    borderRadius: 12,
   },
   dimRow: {
-    flexDirection : 'row',
-    alignItems    : 'center',
-    marginBottom  : 5,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 5,
   },
   dimName: {
-    color   : 'rgba(255,255,255,0.55)',
+    color: 'rgba(255,255,255,0.55)',
     fontSize: 10,
-    width   : 96,
+    width: 96,
   },
   dimBarBg: {
-    flex             : 1,
-    height           : 3,
-    backgroundColor  : 'rgba(255,255,255,0.09)',
-    borderRadius     : 2,
-    overflow         : 'hidden',
-    marginHorizontal : 8,
+    flex: 1,
+    height: 3,
+    backgroundColor: 'rgba(255,255,255,0.09)',
+    borderRadius: 2,
+    overflow: 'hidden',
+    marginHorizontal: 8,
   },
   dimBarFill: {
-    height      : 3,
+    height: 3,
     borderRadius: 2,
-    opacity     : 0.80,
+    opacity: 0.8,
   },
   dimVal: {
-    color    : 'rgba(255,255,255,0.45)',
-    fontSize : 10,
-    width    : 22,
+    color: 'rgba(255,255,255,0.45)',
+    fontSize: 10,
+    width: 22,
     textAlign: 'right',
   },
 })
 
 // ─── Animated bar fill (uses styles, defined after StyleSheet) ─────────────
-function AnimatedBarFill({ val, color, progress }: {
-  val     : number
-  color   : string
+function AnimatedBarFill({
+  val,
+  color,
+  progress,
+}: {
+  val: number
+  color: string
   progress: SharedValue<number>
 }) {
   const style = useAnimatedStyle(() => ({
     width: `${Math.round(val * 100 * progress.value)}%` as `${number}%`,
   }))
-  return (
-    <Animated.View style={[styles.dimBarFill, { backgroundColor: color }, style]} />
-  )
+  return <Animated.View style={[styles.dimBarFill, { backgroundColor: color }, style]} />
 }

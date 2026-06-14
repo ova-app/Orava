@@ -2,31 +2,31 @@
 
 export const dark = {
   // Fonds
-  background:          '#0A0A0F',
+  background: '#0A0A0F',
   backgroundSecondary: '#12121A',
-  backgroundTertiary:  '#1A1A24',
+  backgroundTertiary: '#1A1A24',
 
   // Texte
-  textPrimary:   '#F0F0F5',
+  textPrimary: '#F0F0F5',
   textSecondary: '#7A7A8C',
-  textTertiary:  '#4A4A5A',
+  textTertiary: '#4A4A5A',
 
   // Séparations
-  separator:     'rgba(255,255,255,0.06)',
-  border:        'rgba(240,240,245,0.07)',
+  separator: 'rgba(255,255,255,0.06)',
+  border: 'rgba(240,240,245,0.07)',
 
   // Accent unique — CTA, PR actif, métrique hero UNIQUEMENT
   accent: '#FFDD00',
 
   // PR Podium
-  prGold:     '#FAC775',
-  prSilver:   '#C0C0C0',
-  prBronze:   '#CD7F32',
+  prGold: '#FAC775',
+  prSilver: '#C0C0C0',
+  prBronze: '#CD7F32',
   prExercice: '#9B59B6',
 
   // États sémantiques — vert/rouge = gain/perte/succès/erreur UNIQUEMENT
   success: '#00E673',
-  error:   '#FF3B30',
+  error: '#FF3B30',
   warning: '#FFD60A',
 
   // Champs
@@ -35,26 +35,26 @@ export const dark = {
 }
 
 export const light = {
-  background:          '#F5F5FA',
+  background: '#F5F5FA',
   backgroundSecondary: '#FFFFFF',
-  backgroundTertiary:  '#EBEBF0',
+  backgroundTertiary: '#EBEBF0',
 
-  textPrimary:   '#0A0A0F',
+  textPrimary: '#0A0A0F',
   textSecondary: '#5A5A6C',
-  textTertiary:  '#9A9AAC',
+  textTertiary: '#9A9AAC',
 
-  separator:     'rgba(10,10,15,0.06)',
-  border:        'rgba(10,10,15,0.08)',
+  separator: 'rgba(10,10,15,0.06)',
+  border: 'rgba(10,10,15,0.08)',
 
   accent: '#FFDD00',
 
-  prGold:     '#FAC775',
-  prSilver:   '#C0C0C0',
-  prBronze:   '#CD7F32',
+  prGold: '#FAC775',
+  prSilver: '#C0C0C0',
+  prBronze: '#CD7F32',
   prExercice: '#9B59B6',
 
   success: '#00C85A',
-  error:   '#FF3B30',
+  error: '#FF3B30',
   warning: '#FFD60A',
 
   inputBackground: '#EBEBF0',
@@ -65,45 +65,83 @@ export type ThemeColors = typeof dark
 export type ThemeName = 'dark' | 'light'
 export const themes: Record<ThemeName, ThemeColors> = { dark, light }
 
+// ─── Palette indépendante du thème (immuable dark/light) — ORA-040 ─────────────
+
+// Couleur d'avatar stable par user id (hash → index)
+export const avatarColors = [
+  '#6C63FF', // violet
+  '#E9567A', // rose
+  '#38B2AC', // teal
+  '#F6A623', // orange
+  '#48BB78', // vert
+  '#667EEA', // indigo
+  '#ED8936', // orange chaud
+  '#9F7AEA', // purple
+] as const
+
+// Voiles d'overlay (modals, lightbox)
+export const scrim = 'rgba(0,0,0,0.5)'
+export const scrimStrong = 'rgba(0,0,0,0.95)'
+
+// Échelle de score Myo (arc 240° + dégradé) — haut/moyen/bas
+export const score = {
+  high: '#FAC775',
+  mid: '#D85A30',
+  low: '#8E8E93',
+} as const
+
 // ─── TYPOGRAPHY ──────────────────────────────────────────────────────────────
 
 export const font = {
-  regular:         'Barlow_400Regular',
-  medium:          'Barlow_500Medium',
-  bold:            'Barlow_700Bold',
-  extraBold:       'Barlow_800ExtraBold',
-  black:           'Barlow_900Black',
-  condensedBold:   'BarlowCondensed_700Bold',
-  mono:            'JetBrainsMono_500Medium',
+  regular: 'Barlow_400Regular',
+  medium: 'Barlow_500Medium',
+  bold: 'Barlow_700Bold',
+  extraBold: 'Barlow_800ExtraBold',
+  black: 'Barlow_900Black',
+  condensedBold: 'BarlowCondensed_700Bold',
+  mono: 'JetBrainsMono_500Medium',
 } as const
 
 export const typography = {
   hero: {
-    fontSize: 56, fontFamily: font.black,
-    letterSpacing: -1.5, lineHeight: 60,
+    fontSize: 56,
+    fontFamily: font.black,
+    letterSpacing: -1.5,
+    lineHeight: 60,
   },
   display: {
-    fontSize: 40, fontFamily: font.extraBold,
-    letterSpacing: -1.0, lineHeight: 44,
+    fontSize: 40,
+    fontFamily: font.extraBold,
+    letterSpacing: -1.0,
+    lineHeight: 44,
   },
   title: {
-    fontSize: 24, fontFamily: font.bold,
-    letterSpacing: -0.3, lineHeight: 30,
+    fontSize: 24,
+    fontFamily: font.bold,
+    letterSpacing: -0.3,
+    lineHeight: 30,
   },
   subtitle: {
-    fontSize: 18, fontFamily: font.medium,
-    letterSpacing: -0.2, lineHeight: 24,
+    fontSize: 18,
+    fontFamily: font.medium,
+    letterSpacing: -0.2,
+    lineHeight: 24,
   },
   body: {
-    fontSize: 15, fontFamily: font.regular,
-    letterSpacing: 0, lineHeight: 22,
+    fontSize: 15,
+    fontFamily: font.regular,
+    letterSpacing: 0,
+    lineHeight: 22,
   },
   caption: {
-    fontSize: 12, fontFamily: font.medium,
-    letterSpacing: 0.4, lineHeight: 16,
+    fontSize: 12,
+    fontFamily: font.medium,
+    letterSpacing: 0.4,
+    lineHeight: 16,
   },
   mono: {
-    fontSize: 14, fontFamily: font.mono,
+    fontSize: 14,
+    fontFamily: font.mono,
     letterSpacing: 0,
     // fontVariant: ['tabular-nums'] — ajouter sur le Text RN directement
   },
@@ -124,30 +162,30 @@ export const spacing = {
 } as const
 
 export const radius = {
-  sm:   8,
-  md:   12,
-  lg:   16,
-  xl:   24,
+  sm: 8,
+  md: 12,
+  lg: 16,
+  xl: 24,
   full: 9999,
 } as const
 
 export const touchTarget = {
-  min:     44,
+  min: 44,
   comfort: 52,
-  hero:    64,
+  hero: 64,
 } as const
 
 // ─── ANIMATION ────────────────────────────────────────────────────────────────
 
 export const spring = {
-  snappy:   { damping: 20, stiffness: 600 },
+  snappy: { damping: 20, stiffness: 600 },
   standard: { damping: 18, stiffness: 300 },
-  bouncy:   { damping: 12, stiffness: 200 },
-  gentle:   { damping: 25, stiffness: 120 },
+  bouncy: { damping: 12, stiffness: 200 },
+  gentle: { damping: 25, stiffness: 120 },
 } as const
 
 export const duration = {
-  fast:     150,
+  fast: 150,
   standard: 250,
   emphasis: 400,
   dramatic: 700,

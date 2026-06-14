@@ -1,11 +1,5 @@
-import React, { useCallback, useEffect, useState } from 'react'
-import {
-  SectionList,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native'
+import React, { useEffect } from 'react'
+import { SectionList, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import Animated, {
   useSharedValue,
   withRepeat,
@@ -19,66 +13,12 @@ import { useRouter } from 'expo-router'
 import { useTheme } from '@/context/ThemeContext'
 import { spacing, radius, typography } from '@/constants/theme'
 import { emptyStateRecipe } from '@/constants/recipes'
-import { supabase } from '@/lib/supabase'
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-interface WorkoutRow {
-  id: string
-  title: string
-  started_at: string
-  duration_sec: number | null
-  total_volume_kg: number | null
-  total_sets: number
-  pr_seance: 'gold' | 'silver' | 'bronze' | null
-}
-
-interface HistorySection {
-  title: string      // "MAI 2026"
-  data: WorkoutRow[]
-}
+import { formatVolume, formatDuration } from '@/lib/utils'
+import { useHistoryData, type WorkoutRow } from '@/lib/hooks/useHistoryData'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const MONTHS_FR = [
-  'JANVIER', 'FÉVRIER', 'MARS', 'AVRIL', 'MAI', 'JUIN',
-  'JUILLET', 'AOÛT', 'SEPTEMBRE', 'OCTOBRE', 'NOVEMBRE', 'DÉCEMBRE',
-]
 const DAYS_FR = ['DIM', 'LUN', 'MAR', 'MER', 'JEU', 'VEN', 'SAM']
-
-function sectionKeyFromDate(dateStr: string): string {
-  const d = new Date(dateStr)
-  return `${MONTHS_FR[d.getMonth()]} ${d.getFullYear()}`
-}
-
-function formatDuration(sec: number | null): string {
-  if (!sec) return '—'
-  const h = Math.floor(sec / 3600)
-  const m = Math.floor((sec % 3600) / 60)
-  if (h > 0) return `${h}h ${m.toString().padStart(2, '0')}min`
-  return `${m}min`
-}
-
-function formatVolume(kg: number | null): string {
-  if (kg == null) return '—'
-  const rounded = Math.round(kg)
-  if (rounded >= 1000) {
-    const thousands = Math.floor(rounded / 1000)
-    const rest = rounded % 1000
-    return `${thousands} ${rest.toString().padStart(3, '0')}`
-  }
-  return `${rounded}`
-}
-
-function groupByMonth(rows: WorkoutRow[]): HistorySection[] {
-  const map = new Map<string, WorkoutRow[]>()
-  for (const row of rows) {
-    const key = sectionKeyFromDate(row.started_at)
-    if (!map.has(key)) map.set(key, [])
-    map.get(key)!.push(row)
-  }
-  return Array.from(map.entries()).map(([title, data]) => ({ title, data }))
-}
 
 // ─── Skeleton row ─────────────────────────────────────────────────────────────
 
@@ -110,10 +50,29 @@ function SkeletonRow() {
       ]}
     >
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s4 }}>
-        <View style={[styles.dateBlock, { backgroundColor: colors.backgroundTertiary, borderRadius: 6 }]} />
+        <View
+          style={[
+            styles.dateBlock,
+            { backgroundColor: colors.backgroundTertiary, borderRadius: 6 },
+          ]}
+        />
         <View style={{ flex: 1, gap: 8 }}>
-          <View style={{ width: '55%', height: 12, borderRadius: 4, backgroundColor: colors.backgroundTertiary }} />
-          <View style={{ width: '40%', height: 10, borderRadius: 4, backgroundColor: colors.backgroundTertiary }} />
+          <View
+            style={{
+              width: '55%',
+              height: 12,
+              borderRadius: 4,
+              backgroundColor: colors.backgroundTertiary,
+            }}
+          />
+          <View
+            style={{
+              width: '40%',
+              height: 10,
+              borderRadius: 4,
+              backgroundColor: colors.backgroundTertiary,
+            }}
+          />
         </View>
       </View>
     </Animated.View>
@@ -144,7 +103,10 @@ function HistoryRow({ item, onPress }: HistoryRowProps) {
     <TouchableOpacity
       activeOpacity={0.75}
       onPress={onPress}
-      style={[styles.card, { backgroundColor: colors.backgroundSecondary, marginBottom: spacing.s2 }]}
+      style={[
+        styles.card,
+        { backgroundColor: colors.backgroundSecondary, marginBottom: spacing.s2 },
+      ]}
     >
       <View style={styles.cardInner}>
         {/* Bloc date */}
@@ -176,10 +138,7 @@ function HistoryRow({ item, onPress }: HistoryRowProps) {
         {/* Centre */}
         <View style={styles.centerCol}>
           <Text
-            style={[
-              typography.body,
-              { color: colors.textPrimary, fontFamily: 'Barlow_700Bold' },
-            ]}
+            style={[typography.body, { color: colors.textPrimary, fontFamily: 'Barlow_700Bold' }]}
             numberOfLines={1}
           >
             {item.title ?? '—'}
@@ -195,15 +154,9 @@ function HistoryRow({ item, onPress }: HistoryRowProps) {
         {/* Right : icône PR + volume + chevron */}
         <View style={styles.rightCol}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            {item.pr_seance === 'gold' && (
-              <Trophy size={14} color={colors.prGold} />
-            )}
-            {item.pr_seance === 'silver' && (
-              <Trophy size={14} color={colors.prSilver} />
-            )}
-            {item.pr_seance === 'bronze' && (
-              <Trophy size={14} color={colors.prBronze} />
-            )}
+            {item.pr_seance === 'gold' && <Trophy size={14} color={colors.prGold} />}
+            {item.pr_seance === 'silver' && <Trophy size={14} color={colors.prSilver} />}
+            {item.pr_seance === 'bronze' && <Trophy size={14} color={colors.prBronze} />}
             <Text
               style={[
                 typography.body,
@@ -264,68 +217,15 @@ export default function HistoryScreen() {
   const { colors } = useTheme()
   const router = useRouter()
 
-  const [sections, setSections] = useState<HistorySection[]>([])
-  const [loading, setLoading] = useState(true)
-
-  const fetchHistory = useCallback(async () => {
-    const { data: authData } = await supabase.auth.getUser()
-    const uid = authData.user?.id
-    if (!uid) return
-
-    const { data, error } = await supabase
-      .from('workouts')
-      .select(`
-        id,
-        title,
-        started_at,
-        duration_sec,
-        total_volume_kg,
-        pr_seance,
-        workout_exercises (
-          workout_sets ( id )
-        )
-      `)
-      .eq('user_id', uid)
-      .order('started_at', { ascending: false })
-      .limit(200)
-
-    if (error || !data) return
-
-    const rows: WorkoutRow[] = (data as Array<{
-      id: string
-      title: string
-      started_at: string
-      duration_sec: number | null
-      total_volume_kg: number | null
-      pr_seance: 'gold' | 'silver' | 'bronze' | null
-      workout_exercises: Array<{ workout_sets: Array<{ id: string }> }>
-    }>).map(w => {
-      const totalSets = w.workout_exercises.reduce(
-        (acc, ex) => acc + ex.workout_sets.length,
-        0
-      )
-      return {
-        id: w.id,
-        title: w.title ?? '—',
-        started_at: w.started_at,
-        duration_sec: w.duration_sec,
-        total_volume_kg: w.total_volume_kg,
-        total_sets: totalSets,
-        pr_seance: w.pr_seance,
-      }
-    })
-
-    setSections(groupByMonth(rows))
-  }, [])
-
-  useEffect(() => {
-    fetchHistory().finally(() => setLoading(false))
-  }, [fetchHistory])
+  const { sections, loading } = useHistoryData()
 
   // ─── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: colors.background }]}
+      edges={['top']}
+    >
       <Text
         style={[
           typography.title,
@@ -349,7 +249,7 @@ export default function HistoryScreen() {
       ) : (
         <SectionList
           sections={sections}
-          keyExtractor={item => item.id}
+          keyExtractor={(item) => item.id}
           contentContainerStyle={{
             paddingHorizontal: spacing.s5,
             paddingBottom: spacing.s12,
@@ -371,10 +271,7 @@ export default function HistoryScreen() {
             </Text>
           )}
           renderItem={({ item }) => (
-            <HistoryRow
-              item={item}
-              onPress={() => router.push(`/history/${item.id}` as const)}
-            />
+            <HistoryRow item={item} onPress={() => router.push(`/history/${item.id}` as const)} />
           )}
           ItemSeparatorComponent={() => null}
           SectionSeparatorComponent={() => null}

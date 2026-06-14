@@ -1,5 +1,8 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react'
-import { supabase } from '../lib/supabase'
+import { storage } from '../lib/storage'
+import { getExercisePrTop3 } from '../lib/db'
+
+const DRAFT_KEY = 'workout_session_draft'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -13,7 +16,7 @@ export interface WorkoutSet {
   pr_charge: PrLevel
   pr_serie: PrLevel
   rest_seconds: number | null
-  validated_at: number | null  // internal ms timestamp, not persisted
+  validated_at: number | null // internal ms timestamp, not persisted
   validated: boolean
 }
 
@@ -24,9 +27,9 @@ export interface WorkoutExercise {
   equipment_type: string | null
   sets: WorkoutSet[]
   pr_top3_charge: { pr1: number; pr2: number | null; pr3: number | null }
-  pr_top3_serie:  { pr1: number; pr2: number | null; pr3: number | null }
+  pr_top3_serie: { pr1: number; pr2: number | null; pr3: number | null }
   pr_top3_exercice: { pr1: number; pr2: number | null; pr3: number | null }
-  pr_exercice: PrLevel  // computed at save time
+  pr_exercice: PrLevel // computed at save time
 }
 
 export type WorkoutStatus = 'idle' | 'active' | 'done'
@@ -40,7 +43,12 @@ interface WorkoutContextValue {
   startWorkout: () => void
   finishWorkout: () => void
   resetWorkout: () => void
-  addExercise: (id: string, name: string, muscleGroup: string | null, equipmentType?: string | null) => Promise<void>
+  addExercise: (
+    id: string,
+    name: string,
+    muscleGroup: string | null,
+    equipmentType?: string | null
+  ) => Promise<void>
   removeExercise: (index: number) => void
   setCurrentIndex: (i: number) => void
   updateDraftSet: (exerciseIndex: number, field: 'weight_kg' | 'reps', value: number) => void
@@ -53,7 +61,7 @@ interface WorkoutContextValue {
 
 export function computePodium(
   value: number,
-  top3: { pr1: number; pr2: number | null; pr3: number | null },
+  top3: { pr1: number; pr2: number | null; pr3: number | null }
 ): PrLevel {
   if (value <= 0 || top3.pr1 <= 0) return null
   if (value > top3.pr1) return 'gold'
@@ -64,15 +72,6 @@ export function computePodium(
 
 function emptyTop3() {
   return { pr1: 0, pr2: null, pr3: null } as { pr1: number; pr2: number | null; pr3: number | null }
-}
-
-function top3FromValues(values: number[]) {
-  const distinct = [...new Set(values)].sort((a, b) => b - a)
-  return {
-    pr1: distinct[0] ?? 0,
-    pr2: distinct[1] ?? null,
-    pr3: distinct[2] ?? null,
-  }
 }
 
 function lastDraftIndex(sets: WorkoutSet[]): number {
@@ -117,13 +116,42 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const lastValidatedAtRef = useRef<number | null>(null)
 
+  // ORA-006 — réhydrate le brouillon de séance au mount (crash-safe RÉEL).
+  // Le cache storage est déjà peuplé : `_layout.tsx` await hydrateStorage() avant de monter ce provider.
+  // Sans ça, le draft était écrit à chaque mutation mais jamais relu → séance perdue au crash/kill.
+  useEffect(() => {
+    try {
+      const raw = storage.getString(DRAFT_KEY)
+      if (!raw) return
+      const draft = JSON.parse(raw) as {
+        exercises?: WorkoutExercise[]
+        currentIndex?: number
+        startedAt?: string | null
+      }
+      if (!draft.startedAt) return // pas de séance active sauvegardée
+      const started = new Date(draft.startedAt)
+      if (isNaN(started.getTime())) return
+      setExercises(draft.exercises ?? [])
+      setCurrentIndex(draft.currentIndex ?? 0)
+      setStartedAt(started)
+      setElapsedSeconds(Math.max(0, Math.round((Date.now() - started.getTime()) / 1000)))
+      lastValidatedAtRef.current = null // repos recalculé au prochain set validé
+      setStatus('active')
+    } catch {
+      // brouillon corrompu → on l'ignore, séance neuve
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   useEffect(() => {
     if (status === 'active') {
-      timerRef.current = setInterval(() => setElapsedSeconds(s => s + 1), 1000)
+      timerRef.current = setInterval(() => setElapsedSeconds((s) => s + 1), 1000)
     } else {
       if (timerRef.current) clearInterval(timerRef.current)
     }
-    return () => { if (timerRef.current) clearInterval(timerRef.current) }
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current)
+    }
   }, [status])
 
   function startWorkout() {
@@ -152,53 +180,21 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
     id: string,
     name: string,
     muscleGroup: string | null,
-    equipmentType: string | null = null,
+    equipmentType: string | null = null
   ) {
-    let pr_top3_charge  = emptyTop3()
-    let pr_top3_serie   = emptyTop3()
+    // ORA-027 — top3 PR depuis SQLite local (zéro réseau pendant séance active, règle #3).
+    // Fonctionne offline ; SQLite réamorcé depuis Supabase au 1er lancement (ORA-024).
+    let pr_top3_charge = emptyTop3()
+    let pr_top3_serie = emptyTop3()
     let pr_top3_exercice = emptyTop3()
 
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
-        // Fetch all historical sets for this exercise (with workout_id for grouping)
-        const { data } = await supabase
-          .from('workout_sets')
-          .select(`
-            weight_kg, reps,
-            workout_exercises!inner (
-              exercise_id,
-              workout_id,
-              workouts!inner ( user_id )
-            )
-          `)
-          .eq('workout_exercises.exercise_id', id)
-          .eq('workout_exercises.workouts.user_id', user.id)
-
-        if (data && data.length > 0) {
-          const weights: number[] = []
-          const serieValues: number[] = []
-          const sessionVolumeMap: Record<string, number> = {}
-
-          for (const s of data as any[]) {
-            const w: number = s.weight_kg ?? 0
-            const r: number = s.reps ?? 0
-            const workoutId: string = s.workout_exercises?.workout_id
-
-            if (w > 0) weights.push(w)
-            if (w > 0 && r > 0) serieValues.push(w * r)
-            if (workoutId && w > 0 && r > 0) {
-              sessionVolumeMap[workoutId] = (sessionVolumeMap[workoutId] ?? 0) + w * r
-            }
-          }
-
-          pr_top3_charge   = top3FromValues(weights)
-          pr_top3_serie    = top3FromValues(serieValues)
-          pr_top3_exercice = top3FromValues(Object.values(sessionVolumeMap))
-        }
-      }
+      const top3 = await getExercisePrTop3(id)
+      pr_top3_charge = top3.charge
+      pr_top3_serie = top3.serie
+      pr_top3_exercice = top3.exercice
     } catch (_) {
-      // Non-bloquant
+      // Non-bloquant — top3 vides → aucun PR détecté (sûr, pas de faux PR)
     }
 
     const newExercise: WorkoutExercise = {
@@ -214,17 +210,17 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
     }
 
     const newIndex = exercises.length
-    setExercises(prev => [...prev, newExercise])
+    setExercises((prev) => [...prev, newExercise])
     setCurrentIndex(newIndex)
   }
 
   function removeExercise(index: number) {
-    setExercises(prev => prev.filter((_, i) => i !== index))
-    setCurrentIndex(prev => Math.max(0, Math.min(prev, exercises.length - 2)))
+    setExercises((prev) => prev.filter((_, i) => i !== index))
+    setCurrentIndex((prev) => Math.max(0, Math.min(prev, exercises.length - 2)))
   }
 
   function updateDraftSet(exerciseIndex: number, field: 'weight_kg' | 'reps', value: number) {
-    setExercises(prev => {
+    setExercises((prev) => {
       const next = [...prev]
       const ex = { ...next[exerciseIndex], sets: [...next[exerciseIndex].sets] }
       const draftIdx = lastDraftIndex(ex.sets)
@@ -246,16 +242,17 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
     if (draft.weight_kg <= 0 || draft.reps <= 0) return { prCharge: null, prSerie: null }
 
     const prCharge = computePodium(draft.weight_kg, ex.pr_top3_charge)
-    const prSerie  = computePodium(draft.weight_kg * draft.reps, ex.pr_top3_serie)
-    const isAnyPr  = prCharge !== null || prSerie !== null
+    const prSerie = computePodium(draft.weight_kg * draft.reps, ex.pr_top3_serie)
+    const isAnyPr = prCharge !== null || prSerie !== null
 
     const now = Date.now()
-    const rest_seconds = lastValidatedAtRef.current !== null
-      ? Math.round((now - lastValidatedAtRef.current) / 1000)
-      : null
+    const rest_seconds =
+      lastValidatedAtRef.current !== null
+        ? Math.round((now - lastValidatedAtRef.current) / 1000)
+        : null
     lastValidatedAtRef.current = now
 
-    setExercises(prev => {
+    setExercises((prev) => {
       const next = [...prev]
       const exCopy = { ...next[exerciseIndex], sets: [...next[exerciseIndex].sets] }
       const dIdx = lastDraftIndex(exCopy.sets)
@@ -271,7 +268,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
         validated_at: now,
       }
 
-      const validatedCount = exCopy.sets.filter(s => s.validated).length
+      const validatedCount = exCopy.sets.filter((s) => s.validated).length
       exCopy.sets.push(makeDraft(validatedCount + 1, draft.weight_kg, draft.reps))
 
       next[exerciseIndex] = exCopy
@@ -282,14 +279,17 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
   }
 
   function removeSet(exerciseIndex: number, setIndex: number) {
-    setExercises(prev => {
+    setExercises((prev) => {
       const next = [...prev]
       const ex = { ...next[exerciseIndex] }
       const sets = ex.sets.filter((_, i) => i !== setIndex)
 
       let counter = 0
-      ex.sets = sets.map(s => {
-        if (s.validated) { counter++; return { ...s, set_number: counter } }
+      ex.sets = sets.map((s) => {
+        if (s.validated) {
+          counter++
+          return { ...s, set_number: counter }
+        }
         return { ...s, set_number: counter + 1 }
       })
 
@@ -299,7 +299,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
   }
 
   function editSet(exerciseIndex: number, setIndex: number) {
-    setExercises(prev => {
+    setExercises((prev) => {
       const next = [...prev]
       const ex = { ...next[exerciseIndex], sets: [...next[exerciseIndex].sets] }
       const target = ex.sets[setIndex]
@@ -307,8 +307,11 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
 
       const filtered = ex.sets.filter((_, i) => i !== setIndex)
       let counter = 0
-      ex.sets = filtered.map(s => {
-        if (s.validated) { counter++; return { ...s, set_number: counter } }
+      ex.sets = filtered.map((s) => {
+        if (s.validated) {
+          counter++
+          return { ...s, set_number: counter }
+        }
         return { ...s, set_number: counter + 1, weight_kg: target.weight_kg, reps: target.reps }
       })
 
@@ -318,12 +321,25 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <WorkoutContext.Provider value={{
-      status, startedAt, exercises, currentIndex, elapsedSeconds,
-      startWorkout, finishWorkout, resetWorkout,
-      addExercise, removeExercise, setCurrentIndex,
-      updateDraftSet, validateSet, removeSet, editSet,
-    }}>
+    <WorkoutContext.Provider
+      value={{
+        status,
+        startedAt,
+        exercises,
+        currentIndex,
+        elapsedSeconds,
+        startWorkout,
+        finishWorkout,
+        resetWorkout,
+        addExercise,
+        removeExercise,
+        setCurrentIndex,
+        updateDraftSet,
+        validateSet,
+        removeSet,
+        editSet,
+      }}
+    >
       {children}
     </WorkoutContext.Provider>
   )

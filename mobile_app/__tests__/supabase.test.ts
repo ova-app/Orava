@@ -8,19 +8,19 @@
  */
 
 jest.mock('../lib/supabase', () => {
-  const mockSelect  = jest.fn().mockReturnThis()
-  const mockEq      = jest.fn().mockReturnThis()
-  const mockOrder   = jest.fn().mockResolvedValue({ data: [], error: null })
-  const mockFrom    = jest.fn().mockReturnValue({
+  const mockSelect = jest.fn().mockReturnThis()
+  const mockEq = jest.fn().mockReturnThis()
+  const mockOrder = jest.fn().mockResolvedValue({ data: [], error: null })
+  const mockFrom = jest.fn().mockReturnValue({
     select: mockSelect,
-    eq:     mockEq,
-    order:  mockOrder,
+    eq: mockEq,
+    order: mockOrder,
   })
-  const mockSignIn  = jest.fn().mockResolvedValue({
+  const mockSignIn = jest.fn().mockResolvedValue({
     data: { user: { id: 'test-user-id', email: 'test@example.com' } },
     error: null,
   })
-  const mockSignUp  = jest.fn().mockResolvedValue({
+  const mockSignUp = jest.fn().mockResolvedValue({
     data: { user: { id: 'new-user-id', email: 'newuser@example.com' } },
     error: null,
   })
@@ -35,11 +35,20 @@ jest.mock('../lib/supabase', () => {
       from: mockFrom,
       auth: {
         signInWithPassword: mockSignIn,
-        signUp:             mockSignUp,
-        getUser:            mockGetUser,
-        signOut:            mockSignOut,
+        signUp: mockSignUp,
+        getUser: mockGetUser,
+        signOut: mockSignOut,
       },
-      _mocks: { mockFrom, mockSelect, mockEq, mockOrder, mockSignIn, mockSignUp, mockGetUser, mockSignOut },
+      _mocks: {
+        mockFrom,
+        mockSelect,
+        mockEq,
+        mockOrder,
+        mockSignIn,
+        mockSignUp,
+        mockGetUser,
+        mockSignOut,
+      },
     },
   }
 })
@@ -47,16 +56,17 @@ jest.mock('../lib/supabase', () => {
 import { supabase } from '../lib/supabase'
 
 // Récupère les mocks depuis la factory via le module mocké
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const mocks = (supabase as any)._mocks as Record<string, any>
+const mocks = (supabase as unknown as { _mocks: Record<string, jest.Mock> })._mocks
 
 // ─── Tests ───────────────────────────────────────────────────────────────────
 
 describe('supabase auth — signInWithPassword', () => {
-  beforeEach(() => { jest.clearAllMocks() })
+  beforeEach(() => {
+    jest.clearAllMocks()
+  })
 
   it('should call signInWithPassword with email and password', async () => {
-    const email    = 'user@example.com'
+    const email = 'user@example.com'
     const password = 'securePassword123'
 
     await supabase.auth.signInWithPassword({ email, password })
@@ -91,10 +101,12 @@ describe('supabase auth — signInWithPassword', () => {
 })
 
 describe('supabase auth — signUp', () => {
-  beforeEach(() => { jest.clearAllMocks() })
+  beforeEach(() => {
+    jest.clearAllMocks()
+  })
 
   it('should call signUp with email and password', async () => {
-    const email    = 'newuser@example.com'
+    const email = 'newuser@example.com'
     const password = 'newPassword123'
 
     await supabase.auth.signUp({ email, password })
@@ -121,7 +133,9 @@ describe('supabase auth — getUser', () => {
 })
 
 describe('supabase auth — signOut', () => {
-  beforeEach(() => { jest.clearAllMocks() })
+  beforeEach(() => {
+    jest.clearAllMocks()
+  })
 
   it('should call signOut and return no error', async () => {
     const result = await supabase.auth.signOut()
@@ -131,7 +145,9 @@ describe('supabase auth — signOut', () => {
 })
 
 describe('supabase — from / query builder', () => {
-  beforeEach(() => { jest.clearAllMocks() })
+  beforeEach(() => {
+    jest.clearAllMocks()
+  })
 
   it('should call from with the correct table name', () => {
     supabase.from('workouts')
@@ -143,7 +159,11 @@ describe('supabase — from / query builder', () => {
     mocks.mockEq.mockReturnThis()
     mocks.mockOrder.mockResolvedValue({ data: [{ id: '1' }], error: null })
 
-    const result = await supabase.from('workouts').select('*').eq('user_id', 'abc').order('started_at')
+    const result = await supabase
+      .from('workouts')
+      .select('*')
+      .eq('user_id', 'abc')
+      .order('started_at')
     expect(mocks.mockSelect).toHaveBeenCalledWith('*')
     expect(mocks.mockEq).toHaveBeenCalledWith('user_id', 'abc')
     expect(mocks.mockOrder).toHaveBeenCalledWith('started_at')

@@ -30,62 +30,37 @@ import Animated, {
   cancelAnimation,
 } from 'react-native-reanimated'
 import Svg, { Path, Circle } from 'react-native-svg'
-import { Canvas, Circle as SkiaCircle, Path as SkiaPath, RadialGradient, Skia, LinearGradient as SkiaLinearGradient, vec } from '@shopify/react-native-skia'
+import {
+  Canvas,
+  Circle as SkiaCircle,
+  Path as SkiaPath,
+  RadialGradient,
+  Skia,
+  LinearGradient as SkiaLinearGradient,
+  vec,
+} from '@shopify/react-native-skia'
 import MyoChart from '@/app/workout/myo-chart'
-import { sessionValuesFromSignature } from '@/lib/myo'
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle)
 const AnimatedPath = Animated.createAnimatedComponent(Path)
-const RNAnimatedSvgPath = RNAnimated.createAnimatedComponent(Path)
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Heart, MessageCircle, RefreshCw, MapPin, X, Zap, Flame, Trophy } from 'lucide-react-native'
 import { useTheme } from '@/context/ThemeContext'
 import { useRouter } from 'expo-router'
 import { useFocusEffect } from '@react-navigation/core'
-import { spacing, typography, radius } from '@/constants/theme'
+import { spacing, typography, radius, dark, avatarColors, scrim } from '@/constants/theme'
 import { emptyStateRecipe } from '@/constants/recipes'
 import { supabase } from '@/lib/supabase'
+import { formatVolume, formatDuration } from '@/lib/utils'
+import oravaLogo from '@/assets/orava_logo.png'
+import {
+  useFeedData,
+  type FeedWorkout,
+  type PRLevel,
+  type WorkoutPRSummary,
+} from '@/lib/hooks/useFeedData'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
-
-interface FeedWorkout {
-  id: string
-  title: string
-  total_volume_kg: number | null
-  started_at: string
-  ended_at: string | null
-  pr_seance: 'gold' | 'silver' | 'bronze' | null
-  location_city: string | null
-  gym_id: string | null
-  user: {
-    id: string
-    username: string | null
-    full_name: string | null
-  }
-  likes_count: number
-  comments_count: number
-  user_has_liked: boolean
-  first_comment: {
-    content: string
-    username: string | null
-    user_id: string
-  } | null
-  prs: WorkoutPRSummary
-  sessionValues?: number[][]
-  photo_url: string | null
-}
-
-type PRLevel = 'gold' | 'silver' | 'bronze'
-
-interface WorkoutPRSummary {
-  // meilleur niveau par type (null = aucun PR de ce type)
-  charge: PRLevel | null
-  serie: PRLevel | null
-  exercice: PRLevel | null
-  seance: PRLevel | null
-  // total de PRs individuels (sets + exercices)
-  total: number
-}
 
 interface LikeUser {
   id: string
@@ -119,35 +94,18 @@ interface Comment {
 
 // ─── Avatar colors (stable par user id) ──────────────────────────────────────
 
-const AVATAR_COLORS = [
-  '#6C63FF', // violet
-  '#E9567A', // rose
-  '#38B2AC', // teal
-  '#F6A623', // orange
-  '#48BB78', // vert
-  '#667EEA', // indigo
-  '#ED8936', // orange chaud
-  '#9F7AEA', // purple
-]
-
 function avatarColor(userId: string): string {
   let hash = 0
   for (let i = 0; i < userId.length; i++) {
     hash = userId.charCodeAt(i) + ((hash << 5) - hash)
   }
-  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length]
+  return avatarColors[Math.abs(hash) % avatarColors.length]
 }
 
 // ─── Logo Orava ───────────────────────────────────────────────────────────────
 
 function OravaLogo() {
-  return (
-    <Image
-      source={require('@/assets/orava_logo.png')}
-      style={{ width: 40, height: 40 }}
-      resizeMode="contain"
-    />
-  )
+  return <Image source={oravaLogo} style={{ width: 40, height: 40 }} resizeMode="contain" />
 }
 
 // ─── Temps relatif ────────────────────────────────────────────────────────────
@@ -162,36 +120,13 @@ function timeAgo(dateStr: string): string {
   return `${mins}min`
 }
 
-// ─── Format volume avec espace milliers ──────────────────────────────────────
-
-function formatVolume(kg: number | null): string {
-  if (kg == null) return '—'
-  const rounded = Math.round(kg)
-  if (rounded >= 1000) {
-    const thousands = Math.floor(rounded / 1000)
-    const rest = rounded % 1000
-    return `${thousands} ${rest.toString().padStart(3, '0')}`
-  }
-  return `${rounded}`
-}
-
-// ─── Format durée (secondes → "1h 45min") ────────────────────────────────────
-
-function formatDuration(seconds: number | null): string {
-  if (seconds == null || seconds <= 0) return '—'
-  const hours = Math.floor(seconds / 3600)
-  const mins = Math.floor((seconds % 3600) / 60)
-  if (hours > 0) return `${hours}h ${mins}min`
-  return `${mins}min`
-}
-
 // ─── PR Badge color ──────────────────────────────────────────────────────────
 
 function prBadgeColor(level: 'gold' | 'silver' | 'bronze'): string {
   const map: Record<'gold' | 'silver' | 'bronze', string> = {
-    gold: '#FAC775',
-    silver: '#C0C0C0',
-    bronze: '#CD7F32',
+    gold: dark.prGold,
+    silver: dark.prSilver,
+    bronze: dark.prBronze,
   }
   return map[level]
 }
@@ -201,10 +136,10 @@ function prBadgeColor(level: 'gold' | 'silver' | 'bronze'): string {
 
 // Icône exercice = Dumbbell (lucide), couleur violet fixe, pas de niveau
 const PR_ICON_DEFS = [
-  { key: 'seance'  as const, Icon: Trophy, colorFn: (l: PRLevel) => prBadgeColor(l) },
-  { key: 'charge'  as const, Icon: Zap,    colorFn: (l: PRLevel) => prBadgeColor(l) },
-  { key: 'serie'   as const, Icon: Flame,  colorFn: (l: PRLevel) => prBadgeColor(l) },
-  { key: 'exercice'as const, Icon: Trophy, colorFn: (_: PRLevel) => '#9B59B6'        },
+  { key: 'seance' as const, Icon: Trophy, colorFn: (l: PRLevel) => prBadgeColor(l) },
+  { key: 'charge' as const, Icon: Zap, colorFn: (l: PRLevel) => prBadgeColor(l) },
+  { key: 'serie' as const, Icon: Flame, colorFn: (l: PRLevel) => prBadgeColor(l) },
+  { key: 'exercice' as const, Icon: Trophy, colorFn: (_: PRLevel) => dark.prExercice },
 ]
 
 // Wrapper sans hooks — return null légal car aucun hook avant lui
@@ -217,13 +152,13 @@ function PRSkiaChip({ prs }: { prs: WorkoutPRSummary }) {
 function PRSkiaChipInner({ prs }: { prs: WorkoutPRSummary }) {
   const PR_RANK: Record<PRLevel, number> = { gold: 3, silver: 2, bronze: 1 }
   const topCandidates = (['charge', 'serie', 'seance'] as const)
-    .map(k => prs[k])
+    .map((k) => prs[k])
     .filter((l): l is PRLevel => l !== null)
   const topLevel: PRLevel = topCandidates.sort((a, b) => PR_RANK[b] - PR_RANK[a])[0] ?? 'bronze'
   const dominantColor = prBadgeColor(topLevel)
   const hasGold = topLevel === 'gold'
 
-  const gemTypes = (['seance', 'charge', 'serie', 'exercice'] as const).filter(k => !!prs[k])
+  const gemTypes = (['seance', 'charge', 'serie', 'exercice'] as const).filter((k) => !!prs[k])
 
   const CHIP_H = 40
   const ICON_SIZE = 13
@@ -250,16 +185,19 @@ function PRSkiaChipInner({ prs }: { prs: WorkoutPRSummary }) {
   useEffect(() => {
     entryScale.value = withSpring(1, { damping: 14, stiffness: 280 })
 
-    const shimTimer = setTimeout(() => {
-      shimX.value = withRepeat(
-        withTiming(CHIP_W + 10, {
-          duration: hasGold ? 1800 : 2600,
-          easing: Easing.bezier(0.37, 0, 0.63, 1),
-        }),
-        -1,
-        false
-      )
-    }, 900 + Math.floor(Math.random() * 700))
+    const shimTimer = setTimeout(
+      () => {
+        shimX.value = withRepeat(
+          withTiming(CHIP_W + 10, {
+            duration: hasGold ? 1800 : 2600,
+            easing: Easing.bezier(0.37, 0, 0.63, 1),
+          }),
+          -1,
+          false
+        )
+      },
+      900 + Math.floor(Math.random() * 700)
+    )
 
     let pulseTimer: ReturnType<typeof setTimeout> | null = null
     if (hasGold) {
@@ -325,7 +263,7 @@ function PRSkiaChipInner({ prs }: { prs: WorkoutPRSummary }) {
               const level = prs[type] as PRLevel
               const cx = gemCentersX[i]
               const gr = GLOW_R[level]
-              const c = type === 'exercice' ? '#9B59B6' : prBadgeColor(level)
+              const c = type === 'exercice' ? dark.prExercice : prBadgeColor(level)
               return (
                 <SkiaCircle key={type} cx={cx} cy={GEM_Y} r={gr}>
                   <RadialGradient c={vec(cx, GEM_Y)} r={gr} colors={[c + '72', c + '00']} />
@@ -333,22 +271,27 @@ function PRSkiaChipInner({ prs }: { prs: WorkoutPRSummary }) {
               )
             })}
             {/* Halo étendu gold — même draw call, pas de Canvas séparé */}
-            {hasGold ? gemTypes.map((type, i) => {
-              if (prs[type] !== 'gold') return null
-              const cx = gemCentersX[i]
-              const c = type === 'exercice' ? '#9B59B6' : '#FAC775'
-              return (
-                <SkiaCircle key={`h${type}`} cx={cx} cy={GEM_Y} r={24}>
-                  <RadialGradient c={vec(cx, GEM_Y)} r={24} colors={[c + '45', c + '00']} />
-                </SkiaCircle>
-              )
-            }) : null}
+            {hasGold
+              ? gemTypes.map((type, i) => {
+                  if (prs[type] !== 'gold') return null
+                  const cx = gemCentersX[i]
+                  const c = type === 'exercice' ? dark.prExercice : dark.prGold
+                  return (
+                    <SkiaCircle key={`h${type}`} cx={cx} cy={GEM_Y} r={24}>
+                      <RadialGradient c={vec(cx, GEM_Y)} r={24} colors={[c + '45', c + '00']} />
+                    </SkiaCircle>
+                  )
+                })
+              : null}
           </Canvas>
         </Animated.View>
 
         {/* Shimmer sweep — clip par overflow:hidden du parent pill */}
         <Animated.View
-          style={[{ position: 'absolute', top: 0, left: 0, width: BEAM_W, height: CHIP_H }, shimStyle]}
+          style={[
+            { position: 'absolute', top: 0, left: 0, width: BEAM_W, height: CHIP_H },
+            shimStyle,
+          ]}
           pointerEvents="none"
         >
           <Canvas style={{ width: BEAM_W, height: CHIP_H }}>
@@ -371,7 +314,10 @@ function PRSkiaChipInner({ prs }: { prs: WorkoutPRSummary }) {
         <View
           style={{
             position: 'absolute',
-            top: 0, left: 0, right: 0, bottom: 0,
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
             flexDirection: 'row',
             alignItems: 'center',
             paddingHorizontal: PADDING,
@@ -415,9 +361,9 @@ function PRSkiaChipInner({ prs }: { prs: WorkoutPRSummary }) {
 
 function SkeletonCard() {
   const { colors } = useTheme()
-  const CARD_W  = Dimensions.get('window').width - spacing.s4 * 2
-  const CARD_H  = 88
-  const BEAM_W  = 220
+  const CARD_W = Dimensions.get('window').width - spacing.s4 * 2
+  const CARD_H = 88
+  const BEAM_W = 220
 
   const shimX = useSharedValue(-(BEAM_W + 16))
 
@@ -426,7 +372,7 @@ function SkeletonCard() {
     shimX.value = withRepeat(
       withTiming(CARD_W + 16, { duration: 1100, easing: Easing.bezier(0.37, 0, 0.63, 1) }),
       -1,
-      false,
+      false
     )
   }, [])
 
@@ -445,16 +391,34 @@ function SkeletonCard() {
   }, [])
 
   return (
-    <View style={[styles.skeletonCard, { backgroundColor: colors.backgroundSecondary, overflow: 'hidden' }]}>
+    <View
+      style={[
+        styles.skeletonCard,
+        { backgroundColor: colors.backgroundSecondary, overflow: 'hidden' },
+      ]}
+    >
       <View style={styles.skeletonRow}>
         <View style={[styles.skeletonAvatar, { backgroundColor: colors.backgroundTertiary }]} />
         <View style={{ flex: 1, gap: 8 }}>
-          <View style={[styles.skeletonLine, { width: '55%', backgroundColor: colors.backgroundTertiary }]} />
-          <View style={[styles.skeletonLine, { width: '35%', height: 10, backgroundColor: colors.backgroundTertiary }]} />
+          <View
+            style={[
+              styles.skeletonLine,
+              { width: '55%', backgroundColor: colors.backgroundTertiary },
+            ]}
+          />
+          <View
+            style={[
+              styles.skeletonLine,
+              { width: '35%', height: 10, backgroundColor: colors.backgroundTertiary },
+            ]}
+          />
         </View>
       </View>
       <Animated.View
-        style={[{ position: 'absolute', top: 0, left: 0, width: BEAM_W, height: CARD_H }, shimStyle]}
+        style={[
+          { position: 'absolute', top: 0, left: 0, width: BEAM_W, height: CARD_H },
+          shimStyle,
+        ]}
         pointerEvents="none"
       >
         <Canvas style={{ width: BEAM_W, height: CARD_H }}>
@@ -484,17 +448,17 @@ function LikesModal({ visible, likes, onClose }: LikesModalProps) {
   const { colors } = useTheme()
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={onClose}
-    >
-      <View style={[styles.modalOverlay, { backgroundColor: 'rgba(0, 0, 0, 0.5)' }]}>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={[styles.modalOverlay, { backgroundColor: scrim }]}>
         <View style={[styles.likesModalContent, { backgroundColor: colors.backgroundSecondary }]}>
           {/* Header */}
           <View style={[styles.likesModalHeader, { borderBottomColor: colors.separator }]}>
-            <Text style={[typography.subtitle, { color: colors.textPrimary, fontFamily: 'Barlow_700Bold' }]}>
+            <Text
+              style={[
+                typography.subtitle,
+                { color: colors.textPrimary, fontFamily: 'Barlow_700Bold' },
+              ]}
+            >
               Aimé par
             </Text>
             <TouchableOpacity onPress={onClose} hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}>
@@ -515,10 +479,19 @@ function LikesModal({ visible, likes, onClose }: LikesModalProps) {
                 <View style={[styles.likeRow, { borderBottomColor: colors.separator }]}>
                   <View style={[styles.avatarSmall, { backgroundColor: bgColor }]}>
                     <Text style={[styles.avatarInitialsSmall, { color: colors.textPrimary }]}>
-                      {displayName.split(' ').slice(0, 2).map((p: string) => p.charAt(0).toUpperCase()).join('')}
+                      {displayName
+                        .split(' ')
+                        .slice(0, 2)
+                        .map((p: string) => p.charAt(0).toUpperCase())
+                        .join('')}
                     </Text>
                   </View>
-                  <Text style={[typography.body, { color: colors.textPrimary, fontFamily: 'Barlow_600SemiBold' }]}>
+                  <Text
+                    style={[
+                      typography.body,
+                      { color: colors.textPrimary, fontFamily: 'Barlow_600SemiBold' },
+                    ]}
+                  >
                     {displayName}
                   </Text>
                 </View>
@@ -619,13 +592,11 @@ function CommentsModal({
     if (!text.trim() || !currentUserId) return
     setSubmitting(true)
     try {
-      await supabase
-        .from('comments')
-        .insert({
-          workout_id: workoutId,
-          user_id: currentUserId,
-          content: text,
-        })
+      await supabase.from('comments').insert({
+        workout_id: workoutId,
+        user_id: currentUserId,
+        content: text,
+      })
       setText('')
       onCommentAdded()
     } catch (err) {
@@ -645,14 +616,9 @@ function CommentsModal({
   }
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="none"
-      onRequestClose={onClose}
-    >
+    <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
       <KeyboardAvoidingView
-        style={{ flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)' }}
+        style={{ flex: 1, backgroundColor: scrim }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <Pressable style={{ flex: 1 }} onPress={onClose} />
@@ -669,7 +635,12 @@ function CommentsModal({
 
           {/* Header — hors du pan responder */}
           <View style={[styles.modalHeader, { borderBottomColor: colors.separator }]}>
-            <Text style={[typography.subtitle, { color: colors.textPrimary, fontFamily: 'Barlow_700Bold' }]}>
+            <Text
+              style={[
+                typography.subtitle,
+                { color: colors.textPrimary, fontFamily: 'Barlow_700Bold' },
+              ]}
+            >
               Commentaires
             </Text>
             <TouchableOpacity onPress={onClose} hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}>
@@ -691,12 +662,21 @@ function CommentsModal({
                 <View style={[styles.commentRow, { borderBottomColor: colors.separator }]}>
                   <View style={[styles.avatarSmall, { backgroundColor: bgColor }]}>
                     <Text style={[styles.avatarInitialsSmall, { color: colors.textPrimary }]}>
-                      {displayName.split(' ').slice(0, 2).map((p: string) => p.charAt(0).toUpperCase()).join('')}
+                      {displayName
+                        .split(' ')
+                        .slice(0, 2)
+                        .map((p: string) => p.charAt(0).toUpperCase())
+                        .join('')}
                     </Text>
                   </View>
                   <View style={{ flex: 1, minWidth: 0 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s2 }}>
-                      <Text style={[typography.body, { color: colors.textPrimary, fontFamily: 'Barlow_600SemiBold' }]}>
+                      <Text
+                        style={[
+                          typography.body,
+                          { color: colors.textPrimary, fontFamily: 'Barlow_600SemiBold' },
+                        ]}
+                      >
                         {displayName}
                       </Text>
                       <Text style={[typography.caption, { color: colors.textTertiary }]}>
@@ -704,7 +684,10 @@ function CommentsModal({
                       </Text>
                     </View>
                     <Text
-                      style={[typography.body, { color: colors.textSecondary, marginTop: spacing.s1 }]}
+                      style={[
+                        typography.body,
+                        { color: colors.textSecondary, marginTop: spacing.s1 },
+                      ]}
                       numberOfLines={3}
                     >
                       {item.content}
@@ -722,12 +705,17 @@ function CommentsModal({
                       />
                     </TouchableOpacity>
                     {item.likes_count > 0 && (
-                      <Text style={[typography.caption, { color: colors.textTertiary, fontSize: 10 }]}>
+                      <Text
+                        style={[typography.caption, { color: colors.textTertiary, fontSize: 10 }]}
+                      >
                         {item.likes_count}
                       </Text>
                     )}
                     {isOwner && (
-                      <TouchableOpacity onPress={() => handleDeleteComment(item.id)} hitSlop={{ top: 4, right: 8, bottom: 8, left: 8 }}>
+                      <TouchableOpacity
+                        onPress={() => handleDeleteComment(item.id)}
+                        hitSlop={{ top: 4, right: 8, bottom: 8, left: 8 }}
+                      >
                         <X size={14} color={colors.textTertiary} />
                       </TouchableOpacity>
                     )}
@@ -746,7 +734,16 @@ function CommentsModal({
           />
 
           {/* Input footer */}
-          <View style={[styles.commentInputContainer, { borderTopColor: colors.separator, backgroundColor: colors.backgroundSecondary, paddingBottom: Math.max(insets.bottom, spacing.s3) }]}>
+          <View
+            style={[
+              styles.commentInputContainer,
+              {
+                borderTopColor: colors.separator,
+                backgroundColor: colors.backgroundSecondary,
+                paddingBottom: Math.max(insets.bottom, spacing.s3),
+              },
+            ]}
+          >
             <TextInput
               placeholder="Commenter..."
               placeholderTextColor={colors.textTertiary}
@@ -774,7 +771,12 @@ function CommentsModal({
                 },
               ]}
             >
-              <Text style={[typography.caption, { color: colors.background, fontFamily: 'Barlow_700Bold' }]}>
+              <Text
+                style={[
+                  typography.caption,
+                  { color: colors.background, fontFamily: 'Barlow_700Bold' },
+                ]}
+              >
                 Envoyer
               </Text>
             </TouchableOpacity>
@@ -785,8 +787,6 @@ function CommentsModal({
   )
 }
 
-
-
 // ─── Feed Item ────────────────────────────────────────────────────────────────
 
 interface FeedItemProps {
@@ -796,7 +796,7 @@ interface FeedItemProps {
   onNavigateDetail: (workoutId: string) => void
 }
 
-function FeedItem({ item, currentUserId, onLike, onNavigateDetail }: FeedItemProps) {
+function FeedItemBase({ item, currentUserId, onLike, onNavigateDetail }: FeedItemProps) {
   const sessionValues = item.sessionValues
   const { colors } = useTheme()
   const { width: screenW } = Dimensions.get('window')
@@ -814,7 +814,9 @@ function FeedItem({ item, currentUserId, onLike, onNavigateDetail }: FeedItemPro
   const bgColor = avatarColor(item.user.id || item.id)
   const volumeStr = formatVolume(item.total_volume_kg)
   const durationStr = formatDuration(
-    item.ended_at ? (new Date(item.ended_at).getTime() - new Date(item.started_at).getTime()) / 1000 : null
+    item.ended_at
+      ? (new Date(item.ended_at).getTime() - new Date(item.started_at).getTime()) / 1000
+      : null
   )
 
   const fetchLikes = async () => {
@@ -825,11 +827,13 @@ function FeedItem({ item, currentUserId, onLike, onNavigateDetail }: FeedItemPro
         .eq('workout_id', item.id)
       if (!error && data) {
         // Supabase returns users as array, convert to single object
-        const mapped = (data as unknown as Array<{
-          user_id: string
-          created_at: string
-          users: Array<LikeUser> | null
-        }>).map(like => ({
+        const mapped = (
+          data as unknown as Array<{
+            user_id: string
+            created_at: string
+            users: Array<LikeUser> | null
+          }>
+        ).map((like) => ({
           user_id: like.user_id,
           created_at: like.created_at,
           users: like.users?.[0] ?? null,
@@ -848,16 +852,22 @@ function FeedItem({ item, currentUserId, onLike, onNavigateDetail }: FeedItemPro
 
       const { data, error } = await supabase
         .from('comments')
-        .select(`id, content, created_at, user_id, users:user_id(id, username, full_name, avatar_url)`)
+        .select(
+          `id, content, created_at, user_id, users:user_id(id, username, full_name, avatar_url)`
+        )
         .eq('workout_id', item.id)
         .order('created_at', { ascending: false })
       if (!error && data) {
-        const commentIds = (data as unknown as Array<{ id: string }>).map(c => c.id)
+        const commentIds = (data as unknown as Array<{ id: string }>).map((c) => c.id)
 
         const [likesRes, userLikesRes] = await Promise.all([
           supabase.from('comment_likes').select('comment_id').in('comment_id', commentIds),
           uid
-            ? supabase.from('comment_likes').select('comment_id').eq('user_id', uid).in('comment_id', commentIds)
+            ? supabase
+                .from('comment_likes')
+                .select('comment_id')
+                .eq('user_id', uid)
+                .in('comment_id', commentIds)
             : Promise.resolve({ data: [] }),
         ])
 
@@ -867,16 +877,20 @@ function FeedItem({ item, currentUserId, onLike, onNavigateDetail }: FeedItemPro
           likesCount.set(cid, (likesCount.get(cid) ?? 0) + 1)
         }
         const likedSet = new Set(
-          ((userLikesRes as { data: Array<{ comment_id: string }> | null }).data ?? []).map(l => l.comment_id)
+          ((userLikesRes as { data: Array<{ comment_id: string }> | null }).data ?? []).map(
+            (l) => l.comment_id
+          )
         )
 
-        const mapped = (data as unknown as Array<{
-          id: string
-          content: string
-          created_at: string
-          user_id: string
-          users: Array<CommentUser> | null
-        }>).map(comment => ({
+        const mapped = (
+          data as unknown as Array<{
+            id: string
+            content: string
+            created_at: string
+            user_id: string
+            users: Array<CommentUser> | null
+          }>
+        ).map((comment) => ({
           id: comment.id,
           content: comment.content,
           created_at: comment.created_at,
@@ -895,8 +909,8 @@ function FeedItem({ item, currentUserId, onLike, onNavigateDetail }: FeedItemPro
   const handleCommentLike = async (commentId: string, hasLiked: boolean) => {
     if (!currentUserId) return
 
-    setComments(prev =>
-      prev.map(c =>
+    setComments((prev) =>
+      prev.map((c) =>
         c.id === commentId
           ? {
               ...c,
@@ -914,9 +928,7 @@ function FeedItem({ item, currentUserId, onLike, onNavigateDetail }: FeedItemPro
         .eq('user_id', currentUserId)
         .eq('comment_id', commentId)
     } else {
-      await supabase
-        .from('comment_likes')
-        .insert({ user_id: currentUserId, comment_id: commentId })
+      await supabase.from('comment_likes').insert({ user_id: currentUserId, comment_id: commentId })
     }
   }
 
@@ -934,180 +946,260 @@ function FeedItem({ item, currentUserId, onLike, onNavigateDetail }: FeedItemPro
 
   return (
     <>
-      <View
-        style={{ marginBottom: spacing.s3 }}
-      >
-      <TouchableOpacity
-        activeOpacity={0.7}
-        onPress={() => onNavigateDetail(item.id)}
-        style={[styles.feedItem, { backgroundColor: colors.backgroundSecondary, marginBottom: 0 }]}
-      >
-        {/* Row 1 — Avatar + Meta + PR Pill en haut-droit */}
-        <View style={styles.row1}>
-          <View style={[styles.avatarMed, { backgroundColor: bgColor }]}>
-            <Text style={[styles.avatarInitials, { color: colors.textPrimary }]}>{initials}</Text>
-          </View>
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <Text
-              style={[typography.caption, { color: colors.textPrimary, fontFamily: 'Barlow_700Bold', textTransform: 'uppercase' }]}
-              numberOfLines={1}
-            >
-              {displayName}
-            </Text>
-            <Text style={[typography.caption, { color: colors.textSecondary, fontSize: 12 }]}>
-              {timeAgo(item.started_at)}
-            </Text>
-          </View>
-          {hasPR && <PRSkiaChip prs={item.prs} />}
-        </View>
-
-        {/* Row 2 — Titre */}
-        <Text
-          style={[typography.subtitle, { color: colors.textPrimary, fontFamily: 'Barlow_700Bold', marginTop: spacing.s3 }]}
-          numberOfLines={2}
+      <View style={{ marginBottom: spacing.s3 }}>
+        <TouchableOpacity
+          activeOpacity={0.7}
+          onPress={() => onNavigateDetail(item.id)}
+          style={[
+            styles.feedItem,
+            { backgroundColor: colors.backgroundSecondary, marginBottom: 0 },
+          ]}
         >
-          {item.title}
-        </Text>
-
-        {/* Row 4 — Lieu */}
-        {item.location_city && (
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s2, marginTop: spacing.s3 }}>
-            <MapPin size={16} color={colors.textSecondary} />
-            <Text style={[typography.caption, { color: colors.textSecondary }]} numberOfLines={1}>
-              {item.location_city}
-            </Text>
-          </View>
-        )}
-
-        {/* Row 4 — Métriques (3 colonnes) */}
-        <View style={styles.metricsRow}>
-          <View style={styles.metricCol}>
-            <Text style={[typography.caption, { color: colors.textTertiary }]}>Volume</Text>
-            <Text
-              style={[
-                typography.body,
-                {
-                  color: colors.textPrimary,
-                  fontFamily: 'Barlow_700Bold',
-                  fontVariant: ['tabular-nums'],
-                },
-              ]}
-            >
-              {volumeStr}
-              {volumeStr !== '—' && <Text style={{ fontSize: 12, color: colors.textSecondary }}> kg</Text>}
-            </Text>
-          </View>
-          <View style={styles.metricCol}>
-            <Text style={[typography.caption, { color: colors.textTertiary }]}>Durée</Text>
-            <Text style={[typography.body, { color: colors.textPrimary, fontFamily: 'Barlow_700Bold' }]}>
-              {durationStr}
-            </Text>
-          </View>
-          <View style={styles.metricCol}>
-            <Text style={[typography.caption, { color: colors.textTertiary }]}>Score</Text>
-            <Text style={[typography.body, { color: colors.textPrimary, fontFamily: 'Barlow_700Bold' }]}>
-              —
-            </Text>
-          </View>
-        </View>
-
-        {/* Row 5 — Myo + photo swipeable */}
-        {(() => {
-          const cardW = screenW - spacing.s4 * 2
-          const pageW = cardW - spacing.s3 * 2
-          const hasPhoto = !!item.photo_url
-          return (
-            <View style={{ marginTop: spacing.s4, overflow: 'hidden' }}>
-              <ScrollView
-                horizontal
-                pagingEnabled
-                showsHorizontalScrollIndicator={false}
-                decelerationRate="fast"
-                scrollEnabled={hasPhoto}
-                nestedScrollEnabled
-                style={{ width: pageW, height: pageW }}
+          {/* Row 1 — Avatar + Meta + PR Pill en haut-droit */}
+          <View style={styles.row1}>
+            <View style={[styles.avatarMed, { backgroundColor: bgColor }]}>
+              <Text style={[styles.avatarInitials, { color: colors.textPrimary }]}>{initials}</Text>
+            </View>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text
+                style={[
+                  typography.caption,
+                  {
+                    color: colors.textPrimary,
+                    fontFamily: 'Barlow_700Bold',
+                    textTransform: 'uppercase',
+                  },
+                ]}
+                numberOfLines={1}
               >
-                {/* Page 0 — Myo */}
-                <View style={{ width: pageW, height: pageW, alignItems: 'center', justifyContent: 'center' }} pointerEvents="none">
-                  <MyoChart
-                    sessionValues={sessionValues}
-                    size={pageW}
-                    selectedFamily={null}
-                    onFamilySelect={() => {}}
-                    showScore={false}
-                    showLabels={false}
-                  />
-                </View>
-                {/* Page 1 — Photo */}
+                {displayName}
+              </Text>
+              <Text style={[typography.caption, { color: colors.textSecondary, fontSize: 12 }]}>
+                {timeAgo(item.started_at)}
+              </Text>
+            </View>
+            {hasPR && <PRSkiaChip prs={item.prs} />}
+          </View>
+
+          {/* Row 2 — Titre */}
+          <Text
+            style={[
+              typography.subtitle,
+              { color: colors.textPrimary, fontFamily: 'Barlow_700Bold', marginTop: spacing.s3 },
+            ]}
+            numberOfLines={2}
+          >
+            {item.title}
+          </Text>
+
+          {/* Row 4 — Lieu */}
+          {item.location_city && (
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: spacing.s2,
+                marginTop: spacing.s3,
+              }}
+            >
+              <MapPin size={16} color={colors.textSecondary} />
+              <Text style={[typography.caption, { color: colors.textSecondary }]} numberOfLines={1}>
+                {item.location_city}
+              </Text>
+            </View>
+          )}
+
+          {/* Row 4 — Métriques (3 colonnes) */}
+          <View style={styles.metricsRow}>
+            <View style={styles.metricCol}>
+              <Text style={[typography.caption, { color: colors.textTertiary }]}>Volume</Text>
+              <Text
+                style={[
+                  typography.body,
+                  {
+                    color: colors.textPrimary,
+                    fontFamily: 'Barlow_700Bold',
+                    fontVariant: ['tabular-nums'],
+                  },
+                ]}
+              >
+                {volumeStr}
+                {volumeStr !== '—' && (
+                  <Text style={{ fontSize: 12, color: colors.textSecondary }}> kg</Text>
+                )}
+              </Text>
+            </View>
+            <View style={styles.metricCol}>
+              <Text style={[typography.caption, { color: colors.textTertiary }]}>Durée</Text>
+              <Text
+                style={[
+                  typography.body,
+                  { color: colors.textPrimary, fontFamily: 'Barlow_700Bold' },
+                ]}
+              >
+                {durationStr}
+              </Text>
+            </View>
+            <View style={styles.metricCol}>
+              <Text style={[typography.caption, { color: colors.textTertiary }]}>Score</Text>
+              <Text
+                style={[
+                  typography.body,
+                  { color: colors.textPrimary, fontFamily: 'Barlow_700Bold' },
+                ]}
+              >
+                —
+              </Text>
+            </View>
+          </View>
+
+          {/* Row 5 — Myo + photo swipeable */}
+          {(() => {
+            const cardW = screenW - spacing.s4 * 2
+            const pageW = cardW - spacing.s3 * 2
+            const hasPhoto = !!item.photo_url
+            return (
+              <View style={{ marginTop: spacing.s4, overflow: 'hidden' }}>
+                <ScrollView
+                  horizontal
+                  pagingEnabled
+                  showsHorizontalScrollIndicator={false}
+                  decelerationRate="fast"
+                  scrollEnabled={hasPhoto}
+                  nestedScrollEnabled
+                  style={{ width: pageW, height: pageW }}
+                >
+                  {/* Page 0 — Myo */}
+                  <View
+                    style={{
+                      width: pageW,
+                      height: pageW,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                    pointerEvents="none"
+                  >
+                    <MyoChart
+                      sessionValues={sessionValues}
+                      size={pageW}
+                      selectedFamily={null}
+                      onFamilySelect={() => {}}
+                      showScore={false}
+                      showLabels={false}
+                    />
+                  </View>
+                  {/* Page 1 — Photo */}
+                  {hasPhoto && (
+                    <View
+                      style={{
+                        width: pageW,
+                        height: pageW,
+                        borderRadius: radius.md,
+                        overflow: 'hidden',
+                      }}
+                    >
+                      <Image
+                        source={{ uri: item.photo_url! }}
+                        style={{ width: pageW, height: pageW }}
+                        resizeMode="cover"
+                      />
+                    </View>
+                  )}
+                </ScrollView>
+                {/* Dots indicateurs */}
                 {hasPhoto && (
-                  <View style={{ width: pageW, height: pageW, borderRadius: radius.md, overflow: 'hidden' }}>
-                    <Image
-                      source={{ uri: item.photo_url! }}
-                      style={{ width: pageW, height: pageW }}
-                      resizeMode="cover"
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      justifyContent: 'center',
+                      gap: 5,
+                      marginTop: spacing.s2,
+                    }}
+                  >
+                    <View
+                      style={{
+                        width: 5,
+                        height: 5,
+                        borderRadius: 3,
+                        backgroundColor: colors.accent,
+                      }}
+                    />
+                    <View
+                      style={{
+                        width: 5,
+                        height: 5,
+                        borderRadius: 3,
+                        backgroundColor: colors.textTertiary,
+                        opacity: 0.4,
+                      }}
                     />
                   </View>
                 )}
-              </ScrollView>
-              {/* Dots indicateurs */}
-              {hasPhoto && (
-                <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 5, marginTop: spacing.s2 }}>
-                  <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: colors.accent }} />
-                  <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: colors.textTertiary, opacity: 0.4 }} />
-                </View>
-              )}
-            </View>
-          )
-        })()}
-
-        {/* Row 6 — Actions + premier commentaire */}
-        <View style={[styles.actionsRow, { borderTopColor: colors.separator }]}>
-          <TouchableOpacity
-            onPress={() => onLike(item.id, item.user_has_liked)}
-            onLongPress={openLikesModal}
-            style={styles.actionBtn}
-          >
-            <Heart
-              size={16}
-              color={item.user_has_liked ? colors.error : colors.textTertiary}
-              fill={item.user_has_liked ? colors.error : 'transparent'}
-            />
-            <Text style={[typography.caption, { color: colors.textTertiary, marginLeft: spacing.s1 }]}>
-              {item.likes_count}
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={openCommentsModal}
-            onLongPress={openCommentsModal}
-            style={styles.actionBtn}
-          >
-            <MessageCircle size={16} color={colors.textTertiary} />
-            <Text style={[typography.caption, { color: colors.textTertiary, marginLeft: spacing.s1 }]}>
-              {item.comments_count}
-            </Text>
-          </TouchableOpacity>
-
-          {item.first_comment && (
-            <View style={styles.firstCommentInline}>
-              <View style={[styles.firstCommentAvatar, { backgroundColor: avatarColor(item.first_comment.user_id) }]}>
-                <Text style={{ fontSize: 9, fontFamily: 'Barlow_700Bold', color: '#fff' }}>
-                  {(item.first_comment.username ?? '·').charAt(0).toUpperCase()}
-                </Text>
               </View>
-              <View style={styles.firstCommentText}>
-                <Text style={[typography.caption, { color: colors.textSecondary }]} numberOfLines={1}>
-                  <Text style={{ fontFamily: 'Barlow_700Bold', color: colors.textPrimary }}>
-                    {item.first_comment.username ?? '·'}{' '}
+            )
+          })()}
+
+          {/* Row 6 — Actions + premier commentaire */}
+          <View style={[styles.actionsRow, { borderTopColor: colors.separator }]}>
+            <TouchableOpacity
+              onPress={() => onLike(item.id, item.user_has_liked)}
+              onLongPress={openLikesModal}
+              style={styles.actionBtn}
+            >
+              <Heart
+                size={16}
+                color={item.user_has_liked ? colors.error : colors.textTertiary}
+                fill={item.user_has_liked ? colors.error : 'transparent'}
+              />
+              <Text
+                style={[typography.caption, { color: colors.textTertiary, marginLeft: spacing.s1 }]}
+              >
+                {item.likes_count}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={openCommentsModal}
+              onLongPress={openCommentsModal}
+              style={styles.actionBtn}
+            >
+              <MessageCircle size={16} color={colors.textTertiary} />
+              <Text
+                style={[typography.caption, { color: colors.textTertiary, marginLeft: spacing.s1 }]}
+              >
+                {item.comments_count}
+              </Text>
+            </TouchableOpacity>
+
+            {item.first_comment && (
+              <View style={styles.firstCommentInline}>
+                <View
+                  style={[
+                    styles.firstCommentAvatar,
+                    { backgroundColor: avatarColor(item.first_comment.user_id) },
+                  ]}
+                >
+                  <Text
+                    style={{ fontSize: 9, fontFamily: 'Barlow_700Bold', color: dark.textPrimary }}
+                  >
+                    {(item.first_comment.username ?? '·').charAt(0).toUpperCase()}
                   </Text>
-                  {item.first_comment.content}
-                </Text>
+                </View>
+                <View style={styles.firstCommentText}>
+                  <Text
+                    style={[typography.caption, { color: colors.textSecondary }]}
+                    numberOfLines={1}
+                  >
+                    <Text style={{ fontFamily: 'Barlow_700Bold', color: colors.textPrimary }}>
+                      {item.first_comment.username ?? '·'}{' '}
+                    </Text>
+                    {item.first_comment.content}
+                  </Text>
+                </View>
               </View>
-            </View>
-          )}
-        </View>
-
-      </TouchableOpacity>
+            )}
+          </View>
+        </TouchableOpacity>
       </View>
 
       {/* Modals */}
@@ -1129,12 +1221,20 @@ function FeedItem({ item, currentUserId, onLike, onNavigateDetail }: FeedItemPro
   )
 }
 
+// Mémoïsé (ORA-029) — une cellule ne re-render que si son item/handlers changent.
+// Couplé à removeClippedSubviews : les MyoChart Skia hors-viewport sont démontés.
+const FeedItem = React.memo(FeedItemBase)
+
 // ─── KPIs Bandeau ────────────────────────────────────────────────────────────
 
 // TrendArrow — reproduit exactement TrendingUp/TrendingDown Lucide (viewBox 0 0 24 24)
 // 3 paths séparés tracés en séquence : polyligne → branche H → branche V
 // Longueurs mesurées : polyligne ≈ 30, branche H = 6, branche V = 6
-function TrendArrow({ color, up, drawProgress }: {
+function TrendArrow({
+  color,
+  up,
+  drawProgress,
+}: {
   color: string
   up: boolean
   drawProgress: ReturnType<typeof useSharedValue<number>>
@@ -1171,20 +1271,33 @@ function TrendArrow({ color, up, drawProgress }: {
           {/* polyligne : 1,17 → 9,9 → 14,14 → 23,5 */}
           <AnimatedPath
             d="M1 17 L9 9 L14 14 L23 5"
-            stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"
-            fill="none" strokeDasharray={L1} animatedProps={props1}
+            stroke={color}
+            strokeWidth={2}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            fill="none"
+            strokeDasharray={L1}
+            animatedProps={props1}
           />
           {/* branche H : 17,5 → 23,5 */}
           <AnimatedPath
             d="M17 5 L23 5"
-            stroke={color} strokeWidth={2} strokeLinecap="round"
-            fill="none" strokeDasharray={L2} animatedProps={props2}
+            stroke={color}
+            strokeWidth={2}
+            strokeLinecap="round"
+            fill="none"
+            strokeDasharray={L2}
+            animatedProps={props2}
           />
           {/* branche V : 23,5 → 23,11 */}
           <AnimatedPath
             d="M23 5 L23 11"
-            stroke={color} strokeWidth={2} strokeLinecap="round"
-            fill="none" strokeDasharray={L3} animatedProps={props3}
+            stroke={color}
+            strokeWidth={2}
+            strokeLinecap="round"
+            fill="none"
+            strokeDasharray={L3}
+            animatedProps={props3}
           />
         </>
       ) : (
@@ -1192,20 +1305,33 @@ function TrendArrow({ color, up, drawProgress }: {
           {/* polyligne down : 1,7 → 9,15 → 14,10 → 23,19 */}
           <AnimatedPath
             d="M1 7 L9 15 L14 10 L23 19"
-            stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"
-            fill="none" strokeDasharray={L1} animatedProps={props1}
+            stroke={color}
+            strokeWidth={2}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            fill="none"
+            strokeDasharray={L1}
+            animatedProps={props1}
           />
           {/* branche H : 17,19 → 23,19 */}
           <AnimatedPath
             d="M17 19 L23 19"
-            stroke={color} strokeWidth={2} strokeLinecap="round"
-            fill="none" strokeDasharray={L2} animatedProps={props2}
+            stroke={color}
+            strokeWidth={2}
+            strokeLinecap="round"
+            fill="none"
+            strokeDasharray={L2}
+            animatedProps={props2}
           />
           {/* branche V : 23,13 → 23,19 */}
           <AnimatedPath
             d="M23 13 L23 19"
-            stroke={color} strokeWidth={2} strokeLinecap="round"
-            fill="none" strokeDasharray={L3} animatedProps={props3}
+            stroke={color}
+            strokeWidth={2}
+            strokeLinecap="round"
+            fill="none"
+            strokeDasharray={L3}
+            animatedProps={props3}
           />
         </>
       )}
@@ -1213,9 +1339,15 @@ function TrendArrow({ color, up, drawProgress }: {
   )
 }
 
-function MapPinIcon({ color, drawProgress }: { color: string; drawProgress: ReturnType<typeof useSharedValue<number>> }) {
-  const L_SHAPE = 70   // teardrop bezier (overestimate)
-  const L_CIRCLE = 19  // 2π×3
+function MapPinIcon({
+  color,
+  drawProgress,
+}: {
+  color: string
+  drawProgress: ReturnType<typeof useSharedValue<number>>
+}) {
+  const L_SHAPE = 70 // teardrop bezier (overestimate)
+  const L_CIRCLE = 19 // 2π×3
 
   const shapeProps = useAnimatedProps(() => {
     'worklet'
@@ -1232,19 +1364,35 @@ function MapPinIcon({ color, drawProgress }: { color: string; drawProgress: Retu
     <Svg width={20} height={20} viewBox="0 0 24 24">
       <AnimatedPath
         d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"
-        stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"
-        fill="none" strokeDasharray={L_SHAPE} animatedProps={shapeProps}
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
+        strokeDasharray={L_SHAPE}
+        animatedProps={shapeProps}
       />
       <AnimatedCircle
-        cx={12} cy={10} r={3}
-        stroke={color} strokeWidth={2}
-        fill="none" strokeDasharray={L_CIRCLE} animatedProps={circleProps}
+        cx={12}
+        cy={10}
+        r={3}
+        stroke={color}
+        strokeWidth={2}
+        fill="none"
+        strokeDasharray={L_CIRCLE}
+        animatedProps={circleProps}
       />
     </Svg>
   )
 }
 
-function DumbbellIcon({ color, drawProgress }: { color: string; drawProgress: ReturnType<typeof useSharedValue<number>> }) {
+function DumbbellIcon({
+  color,
+  drawProgress,
+}: {
+  color: string
+  drawProgress: ReturnType<typeof useSharedValue<number>>
+}) {
   const L_BAR = 10
   const L_RIGHT = 100
   const L_LEFT = 100
@@ -1280,34 +1428,62 @@ function DumbbellIcon({ color, drawProgress }: { color: string; drawProgress: Re
     <Svg width={20} height={20} viewBox="0 0 24 24">
       <AnimatedPath
         d="M9.6 14.4 L14.4 9.6"
-        stroke={color} strokeWidth={2} strokeLinecap="round"
-        fill="none" strokeDasharray={L_BAR} animatedProps={barProps}
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+        fill="none"
+        strokeDasharray={L_BAR}
+        animatedProps={barProps}
       />
       <AnimatedPath
         d="M17.596 12.768a2 2 0 1 0 2.829-2.829l-1.768-1.767a2 2 0 0 0 2.828-2.829l-2.828-2.828a2 2 0 0 0-2.829 2.828l-1.767-1.768a2 2 0 1 0-2.829 2.829z"
-        stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"
-        fill="none" strokeDasharray={L_RIGHT} animatedProps={rightProps}
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
+        strokeDasharray={L_RIGHT}
+        animatedProps={rightProps}
       />
       <AnimatedPath
         d="M20.1 3.9 L21.5 2.5"
-        stroke={color} strokeWidth={2} strokeLinecap="round"
-        fill="none" strokeDasharray={L_ACCENT} animatedProps={accentRProps}
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+        fill="none"
+        strokeDasharray={L_ACCENT}
+        animatedProps={accentRProps}
       />
       <AnimatedPath
         d="M5.343 21.485a2 2 0 1 0 2.829-2.828l1.767 1.768a2 2 0 1 0 2.829-2.829l-6.364-6.364a2 2 0 1 0-2.829 2.829l1.768 1.767a2 2 0 0 0-2.828 2.829z"
-        stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"
-        fill="none" strokeDasharray={L_LEFT} animatedProps={leftProps}
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
+        strokeDasharray={L_LEFT}
+        animatedProps={leftProps}
       />
       <AnimatedPath
         d="M2.5 21.5 L3.9 20.1"
-        stroke={color} strokeWidth={2} strokeLinecap="round"
-        fill="none" strokeDasharray={L_ACCENT} animatedProps={accentLProps}
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+        fill="none"
+        strokeDasharray={L_ACCENT}
+        animatedProps={accentLProps}
       />
     </Svg>
   )
 }
 
-function ActivityWaveIcon({ color, drawProgress }: { color: string; drawProgress: ReturnType<typeof useSharedValue<number>> }) {
+function ActivityWaveIcon({
+  color,
+  drawProgress,
+}: {
+  color: string
+  drawProgress: ReturnType<typeof useSharedValue<number>>
+}) {
   const L = 42
   const waveProps = useAnimatedProps(() => {
     'worklet'
@@ -1317,14 +1493,25 @@ function ActivityWaveIcon({ color, drawProgress }: { color: string; drawProgress
     <Svg width={20} height={20} viewBox="0 0 24 24">
       <AnimatedPath
         d="M2 12 L6 12 L8 6 L10 18 L12 12 L22 12"
-        stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"
-        fill="none" strokeDasharray={L} animatedProps={waveProps}
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
+        strokeDasharray={L}
+        animatedProps={waveProps}
       />
     </Svg>
   )
 }
 
-function TrophyDrawIcon({ color, drawProgress }: { color: string; drawProgress: ReturnType<typeof useSharedValue<number>> }) {
+function TrophyDrawIcon({
+  color,
+  drawProgress,
+}: {
+  color: string
+  drawProgress: ReturnType<typeof useSharedValue<number>>
+}) {
   const L_CUP = 48
   const L_HANDLES = 14
   const L_BASE = 36
@@ -1349,24 +1536,45 @@ function TrophyDrawIcon({ color, drawProgress }: { color: string; drawProgress: 
     <Svg width={20} height={20} viewBox="0 0 24 24">
       <AnimatedPath
         d="M6 2 L18 2 L18 9 A6 6 0 0 1 6 9 Z"
-        stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"
-        fill="none" strokeDasharray={L_CUP} animatedProps={cupProps}
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
+        strokeDasharray={L_CUP}
+        animatedProps={cupProps}
       />
       <AnimatedPath
         d="M6 6 L4 6 A2 2 0 0 0 6 10 M18 6 L20 6 A2 2 0 0 1 18 10"
-        stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"
-        fill="none" strokeDasharray={L_HANDLES} animatedProps={handlesProps}
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
+        strokeDasharray={L_HANDLES}
+        animatedProps={handlesProps}
       />
       <AnimatedPath
         d="M10 14 L10 18 L7 22 M14 14 L14 18 L17 22 M4 22 L20 22"
-        stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"
-        fill="none" strokeDasharray={L_BASE} animatedProps={baseProps}
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
+        strokeDasharray={L_BASE}
+        animatedProps={baseProps}
       />
     </Svg>
   )
 }
 
-function ClockDrawIcon({ color, drawProgress }: { color: string; drawProgress: ReturnType<typeof useSharedValue<number>> }) {
+function ClockDrawIcon({
+  color,
+  drawProgress,
+}: {
+  color: string
+  drawProgress: ReturnType<typeof useSharedValue<number>>
+}) {
   const L_CIRCLE = 65
   const L_HANDS = 12
 
@@ -1385,13 +1593,22 @@ function ClockDrawIcon({ color, drawProgress }: { color: string; drawProgress: R
     <Svg width={20} height={20} viewBox="0 0 24 24">
       <AnimatedPath
         d="M12 2 A10 10 0 0 1 22 12 A10 10 0 0 1 12 22 A10 10 0 0 1 2 12 A10 10 0 0 1 12 2"
-        stroke={color} strokeWidth={2} strokeLinecap="round"
-        fill="none" strokeDasharray={L_CIRCLE} animatedProps={circleProps}
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+        fill="none"
+        strokeDasharray={L_CIRCLE}
+        animatedProps={circleProps}
       />
       <AnimatedPath
         d="M12 7 L12 12 L16 14"
-        stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"
-        fill="none" strokeDasharray={L_HANDS} animatedProps={handsProps}
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
+        strokeDasharray={L_HANDS}
+        animatedProps={handsProps}
       />
     </Svg>
   )
@@ -1416,7 +1633,24 @@ interface KPIBandeauProps {
   drawDuration: ReturnType<typeof useSharedValue<number>>
 }
 
-function KPIBandeau({ workoutsThisMonth, trendPercent, scaleSeances, scaleTrend, drawArrow, drawMapPin, drawDumbbell, volumeThisMonth, prsThisMonth, avgDurationMin, scaleVolume, scalePRs, scaleDuration, drawVolume, drawPRs, drawDuration }: KPIBandeauProps) {
+function KPIBandeau({
+  workoutsThisMonth,
+  trendPercent,
+  scaleSeances,
+  scaleTrend,
+  drawArrow,
+  drawMapPin,
+  drawDumbbell,
+  volumeThisMonth,
+  prsThisMonth,
+  avgDurationMin,
+  scaleVolume,
+  scalePRs,
+  scaleDuration,
+  drawVolume,
+  drawPRs,
+  drawDuration,
+}: KPIBandeauProps) {
   const { colors } = useTheme()
   const router = useRouter()
 
@@ -1427,20 +1661,18 @@ function KPIBandeau({ workoutsThisMonth, trendPercent, scaleSeances, scaleTrend,
   const durationStyle = useAnimatedStyle(() => ({ transform: [{ scale: scaleDuration.value }] }))
 
   const trendColor =
-    trendPercent > 5 ? colors.success :
-    trendPercent < -5 ? colors.error :
-    colors.textSecondary
+    trendPercent > 5 ? colors.success : trendPercent < -5 ? colors.error : colors.textSecondary
 
   const showArrow = trendPercent > 5 || trendPercent < -5
   const arrowUp = trendPercent > 5
 
-  const volumeStr = volumeThisMonth >= 1000
-    ? `${(volumeThisMonth / 1000).toFixed(1)}T`
-    : `${volumeThisMonth} kg`
+  const volumeStr =
+    volumeThisMonth >= 1000 ? `${(volumeThisMonth / 1000).toFixed(1)}T` : `${volumeThisMonth} kg`
 
-  const durationStr = avgDurationMin >= 60
-    ? `${Math.floor(avgDurationMin / 60)}h${avgDurationMin % 60 > 0 ? `${avgDurationMin % 60}m` : ''}`
-    : `${avgDurationMin}min`
+  const durationStr =
+    avgDurationMin >= 60
+      ? `${Math.floor(avgDurationMin / 60)}h${avgDurationMin % 60 > 0 ? `${avgDurationMin % 60}m` : ''}`
+      : `${avgDurationMin}min`
 
   return (
     <View>
@@ -1461,13 +1693,21 @@ function KPIBandeau({ workoutsThisMonth, trendPercent, scaleSeances, scaleTrend,
       </Text>
 
       {/* Rangée 1 */}
-      <View style={[styles.kpiBandeau, { paddingHorizontal: spacing.s4, gap: spacing.s3, paddingBottom: 0 }]}>
+      <View
+        style={[
+          styles.kpiBandeau,
+          { paddingHorizontal: spacing.s4, gap: spacing.s3, paddingBottom: 0 },
+        ]}
+      >
         <TouchableOpacity
           onPress={() => router.push('/gyms')}
           style={[styles.kpiItem, { backgroundColor: colors.backgroundSecondary }]}
         >
           <MapPinIcon color={colors.textSecondary} drawProgress={drawMapPin} />
-          <Text style={[typography.caption, { color: colors.textSecondary, textAlign: 'center' }]} numberOfLines={1}>
+          <Text
+            style={[typography.caption, { color: colors.textSecondary, textAlign: 'center' }]}
+            numberOfLines={1}
+          >
             Voir les salles
           </Text>
         </TouchableOpacity>
@@ -1475,11 +1715,24 @@ function KPIBandeau({ workoutsThisMonth, trendPercent, scaleSeances, scaleTrend,
         <View style={[styles.kpiItem, { backgroundColor: colors.backgroundSecondary }]}>
           <DumbbellIcon color={colors.textSecondary} drawProgress={drawDumbbell} />
           <Animated.View style={seancesStyle}>
-            <Text style={[typography.body, { color: colors.textPrimary, fontFamily: 'Barlow_700Bold', fontVariant: ['tabular-nums'], textAlign: 'center' }]}>
+            <Text
+              style={[
+                typography.body,
+                {
+                  color: colors.textPrimary,
+                  fontFamily: 'Barlow_700Bold',
+                  fontVariant: ['tabular-nums'],
+                  textAlign: 'center',
+                },
+              ]}
+            >
               {workoutsThisMonth}
             </Text>
           </Animated.View>
-          <Text style={[typography.caption, { color: colors.textSecondary, textAlign: 'center' }]} numberOfLines={1}>
+          <Text
+            style={[typography.caption, { color: colors.textSecondary, textAlign: 'center' }]}
+            numberOfLines={1}
+          >
             Séances
           </Text>
         </View>
@@ -1487,26 +1740,58 @@ function KPIBandeau({ workoutsThisMonth, trendPercent, scaleSeances, scaleTrend,
         <View style={[styles.kpiItem, { backgroundColor: colors.backgroundSecondary }]}>
           {showArrow && <TrendArrow color={trendColor} up={arrowUp} drawProgress={drawArrow} />}
           <Animated.View style={trendStyle}>
-            <Text style={[typography.body, { color: trendColor, fontFamily: 'Barlow_700Bold', fontVariant: ['tabular-nums'], textAlign: 'center' }]}>
-              {trendPercent > 0 ? '+' : ''}{Math.round(trendPercent)}%
+            <Text
+              style={[
+                typography.body,
+                {
+                  color: trendColor,
+                  fontFamily: 'Barlow_700Bold',
+                  fontVariant: ['tabular-nums'],
+                  textAlign: 'center',
+                },
+              ]}
+            >
+              {trendPercent > 0 ? '+' : ''}
+              {Math.round(trendPercent)}%
             </Text>
           </Animated.View>
-          <Text style={[typography.caption, { color: colors.textSecondary, textAlign: 'center' }]} numberOfLines={1}>
+          <Text
+            style={[typography.caption, { color: colors.textSecondary, textAlign: 'center' }]}
+            numberOfLines={1}
+          >
             Tendance
           </Text>
         </View>
       </View>
 
       {/* Rangée 2 */}
-      <View style={[styles.kpiBandeau, { paddingHorizontal: spacing.s4, gap: spacing.s3, paddingTop: spacing.s2 }]}>
+      <View
+        style={[
+          styles.kpiBandeau,
+          { paddingHorizontal: spacing.s4, gap: spacing.s3, paddingTop: spacing.s2 },
+        ]}
+      >
         <View style={[styles.kpiItem, { backgroundColor: colors.backgroundSecondary }]}>
           <ActivityWaveIcon color={colors.textSecondary} drawProgress={drawVolume} />
           <Animated.View style={volumeStyle}>
-            <Text style={[typography.body, { color: colors.textPrimary, fontFamily: 'Barlow_700Bold', fontVariant: ['tabular-nums'], textAlign: 'center' }]}>
+            <Text
+              style={[
+                typography.body,
+                {
+                  color: colors.textPrimary,
+                  fontFamily: 'Barlow_700Bold',
+                  fontVariant: ['tabular-nums'],
+                  textAlign: 'center',
+                },
+              ]}
+            >
               {volumeStr}
             </Text>
           </Animated.View>
-          <Text style={[typography.caption, { color: colors.textSecondary, textAlign: 'center' }]} numberOfLines={1}>
+          <Text
+            style={[typography.caption, { color: colors.textSecondary, textAlign: 'center' }]}
+            numberOfLines={1}
+          >
             Volume
           </Text>
         </View>
@@ -1514,11 +1799,24 @@ function KPIBandeau({ workoutsThisMonth, trendPercent, scaleSeances, scaleTrend,
         <View style={[styles.kpiItem, { backgroundColor: colors.backgroundSecondary }]}>
           <TrophyDrawIcon color={colors.prGold} drawProgress={drawPRs} />
           <Animated.View style={prsStyle}>
-            <Text style={[typography.body, { color: colors.textPrimary, fontFamily: 'Barlow_700Bold', fontVariant: ['tabular-nums'], textAlign: 'center' }]}>
+            <Text
+              style={[
+                typography.body,
+                {
+                  color: colors.textPrimary,
+                  fontFamily: 'Barlow_700Bold',
+                  fontVariant: ['tabular-nums'],
+                  textAlign: 'center',
+                },
+              ]}
+            >
               {prsThisMonth}
             </Text>
           </Animated.View>
-          <Text style={[typography.caption, { color: colors.textSecondary, textAlign: 'center' }]} numberOfLines={1}>
+          <Text
+            style={[typography.caption, { color: colors.textSecondary, textAlign: 'center' }]}
+            numberOfLines={1}
+          >
             PRs
           </Text>
         </View>
@@ -1526,11 +1824,24 @@ function KPIBandeau({ workoutsThisMonth, trendPercent, scaleSeances, scaleTrend,
         <View style={[styles.kpiItem, { backgroundColor: colors.backgroundSecondary }]}>
           <ClockDrawIcon color={colors.textSecondary} drawProgress={drawDuration} />
           <Animated.View style={durationStyle}>
-            <Text style={[typography.body, { color: colors.textPrimary, fontFamily: 'Barlow_700Bold', fontVariant: ['tabular-nums'], textAlign: 'center' }]}>
+            <Text
+              style={[
+                typography.body,
+                {
+                  color: colors.textPrimary,
+                  fontFamily: 'Barlow_700Bold',
+                  fontVariant: ['tabular-nums'],
+                  textAlign: 'center',
+                },
+              ]}
+            >
               {durationStr}
             </Text>
           </Animated.View>
-          <Text style={[typography.caption, { color: colors.textSecondary, textAlign: 'center' }]} numberOfLines={1}>
+          <Text
+            style={[typography.caption, { color: colors.textSecondary, textAlign: 'center' }]}
+            numberOfLines={1}
+          >
             Durée moy.
           </Text>
         </View>
@@ -1557,16 +1868,12 @@ function FeedEmptyState() {
 export default function FeedScreen() {
   const { colors } = useTheme()
   const router = useRouter()
-  const [workouts, setWorkouts] = useState<FeedWorkout[]>([])
+  // Couche data extraite — ORA-034
+  const { workouts, currentUserId, currentUserFirstName, kpis, fetchFeed, handleLike } =
+    useFeedData()
+  const { workoutsThisMonth, trendPercent, volumeThisMonth, prsThisMonth, avgDurationMin } = kpis
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
-  const [currentUserFirstName, setCurrentUserFirstName] = useState<string>('')
-  const [workoutsThisMonth, setWorkoutsThisMonth] = useState(0)
-  const [trendPercent, setTrendPercent] = useState(0)
-  const [volumeThisMonth, setVolumeThisMonth] = useState(0)
-  const [prsThisMonth, setPrsThisMonth] = useState(0)
-  const [avgDurationMin, setAvgDurationMin] = useState(0)
   const greetingOpacity = useSharedValue(0)
   const greetingTranslate = useSharedValue(8)
   const logoScale = useSharedValue(1)
@@ -1613,12 +1920,21 @@ export default function FeedScreen() {
       if (hideTimerRef.current) clearTimeout(hideTimerRef.current)
       greetingOpacity.value = 0
       greetingTranslate.value = 8
-      greetingOpacity.value = withTiming(1, { duration: 500, easing: Easing.bezier(0.16, 1, 0.3, 1) })
+      greetingOpacity.value = withTiming(1, {
+        duration: 500,
+        easing: Easing.bezier(0.16, 1, 0.3, 1),
+      })
       greetingTranslate.value = withSpring(0, { damping: 25, stiffness: 120 })
 
       hideTimerRef.current = setTimeout(() => {
-        greetingOpacity.value = withTiming(0, { duration: 450, easing: Easing.bezier(0.37, 0, 0.63, 1) })
-        greetingTranslate.value = withTiming(-4, { duration: 400, easing: Easing.bezier(0.37, 0, 0.63, 1) })
+        greetingOpacity.value = withTiming(0, {
+          duration: 450,
+          easing: Easing.bezier(0.37, 0, 0.63, 1),
+        })
+        greetingTranslate.value = withTiming(-4, {
+          duration: 400,
+          easing: Easing.bezier(0.37, 0, 0.63, 1),
+        })
       }, 4000)
     }
 
@@ -1646,16 +1962,28 @@ export default function FeedScreen() {
       drawMapPin.value = 0
       drawMapPin.value = withTiming(1, { duration: 1100, easing: Easing.bezier(0.37, 0, 0.63, 1) })
       drawDumbbell.value = 0
-      drawDumbbell.value = withTiming(1, { duration: 1100, easing: Easing.bezier(0.37, 0, 0.63, 1) })
+      drawDumbbell.value = withTiming(1, {
+        duration: 1100,
+        easing: Easing.bezier(0.37, 0, 0.63, 1),
+      })
       drawArrow.value = 0
       drawArrow.value = withTiming(1, { duration: 1100, easing: Easing.bezier(0.37, 0, 0.63, 1) })
       // Rangée 2 — décalées en cascade (500ms / 900ms / 1300ms)
       drawVolume.value = 0
-      drawVolume.value = withDelay(500, withTiming(1, { duration: 1100, easing: Easing.bezier(0.37, 0, 0.63, 1) }))
+      drawVolume.value = withDelay(
+        500,
+        withTiming(1, { duration: 1100, easing: Easing.bezier(0.37, 0, 0.63, 1) })
+      )
       drawPRs.value = 0
-      drawPRs.value = withDelay(900, withTiming(1, { duration: 1100, easing: Easing.bezier(0.37, 0, 0.63, 1) }))
+      drawPRs.value = withDelay(
+        900,
+        withTiming(1, { duration: 1100, easing: Easing.bezier(0.37, 0, 0.63, 1) })
+      )
       drawDuration.value = 0
-      drawDuration.value = withDelay(1300, withTiming(1, { duration: 1100, easing: Easing.bezier(0.37, 0, 0.63, 1) }))
+      drawDuration.value = withDelay(
+        1300,
+        withTiming(1, { duration: 1100, easing: Easing.bezier(0.37, 0, 0.63, 1) })
+      )
       if (kpiTimerRef.current) clearTimeout(kpiTimerRef.current)
       kpiTimerRef.current = setTimeout(() => {
         scaleTrend.value = 1
@@ -1665,20 +1993,29 @@ export default function FeedScreen() {
         )
         // Nombres rangée 2 — même décalage que les icônes
         scaleVolume.value = 1
-        scaleVolume.value = withDelay(350, withSequence(
-          withTiming(1.18, { duration: 120, easing: Easing.bezier(0.34, 1.56, 0.64, 1) }),
-          withTiming(1.0, { duration: 200, easing: Easing.bezier(0.37, 0, 0.63, 1) })
-        ))
+        scaleVolume.value = withDelay(
+          350,
+          withSequence(
+            withTiming(1.18, { duration: 120, easing: Easing.bezier(0.34, 1.56, 0.64, 1) }),
+            withTiming(1.0, { duration: 200, easing: Easing.bezier(0.37, 0, 0.63, 1) })
+          )
+        )
         scalePRs.value = 1
-        scalePRs.value = withDelay(750, withSequence(
-          withTiming(1.18, { duration: 120, easing: Easing.bezier(0.34, 1.56, 0.64, 1) }),
-          withTiming(1.0, { duration: 200, easing: Easing.bezier(0.37, 0, 0.63, 1) })
-        ))
+        scalePRs.value = withDelay(
+          750,
+          withSequence(
+            withTiming(1.18, { duration: 120, easing: Easing.bezier(0.34, 1.56, 0.64, 1) }),
+            withTiming(1.0, { duration: 200, easing: Easing.bezier(0.37, 0, 0.63, 1) })
+          )
+        )
         scaleDuration.value = 1
-        scaleDuration.value = withDelay(1150, withSequence(
-          withTiming(1.18, { duration: 120, easing: Easing.bezier(0.34, 1.56, 0.64, 1) }),
-          withTiming(1.0, { duration: 200, easing: Easing.bezier(0.37, 0, 0.63, 1) })
-        ))
+        scaleDuration.value = withDelay(
+          1150,
+          withSequence(
+            withTiming(1.18, { duration: 120, easing: Easing.bezier(0.34, 1.56, 0.64, 1) }),
+            withTiming(1.0, { duration: 200, easing: Easing.bezier(0.37, 0, 0.63, 1) })
+          )
+        )
       }, 150)
     }
 
@@ -1738,263 +2075,6 @@ export default function FeedScreen() {
     }
   }, [refreshing])
 
-  // ─── Auth ───────────────────────────────────────────────────────────────────
-
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      setCurrentUserId(data.user?.id ?? null)
-    })
-  }, [])
-
-  // ─── Compute KPI metrics ─────────────────────────────────────────────────────
-
-  const computeKPIs = useCallback((allWorkouts: FeedWorkout[]) => {
-    const now = new Date()
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
-    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0)
-
-    const thisMonth = allWorkouts.filter(w => {
-      const d = new Date(w.started_at)
-      return d >= monthStart && d <= monthEnd
-    }).length
-
-    setWorkoutsThisMonth(thisMonth)
-
-    // Tendance : δ volume mois courant vs mois précédent
-    const prevMonthStart = new Date(monthStart)
-    prevMonthStart.setMonth(prevMonthStart.getMonth() - 1)
-    const prevMonthEnd = new Date(monthStart)
-    prevMonthEnd.setDate(0)
-
-    const currVolume = allWorkouts
-      .filter(w => {
-        const d = new Date(w.started_at)
-        return d >= monthStart && d <= monthEnd
-      })
-      .reduce((sum, w) => sum + (w.total_volume_kg ?? 0), 0)
-
-    const prevVolume = allWorkouts
-      .filter(w => {
-        const d = new Date(w.started_at)
-        return d >= prevMonthStart && d <= prevMonthEnd
-      })
-      .reduce((sum, w) => sum + (w.total_volume_kg ?? 0), 0)
-
-    const trend = prevVolume > 0 ? ((currVolume - prevVolume) / prevVolume) * 100 : 0
-    setTrendPercent(trend)
-
-    setVolumeThisMonth(Math.round(currVolume))
-
-    const thisMonthWorkouts = allWorkouts.filter(w => {
-      const d = new Date(w.started_at)
-      return d >= monthStart && d <= monthEnd
-    })
-
-    const prsMonth = thisMonthWorkouts.reduce((sum, w) => sum + w.prs.total, 0)
-    setPrsThisMonth(prsMonth)
-
-    const withDuration = thisMonthWorkouts.filter(w => !!w.ended_at)
-    const avgDur = withDuration.length > 0
-      ? withDuration.reduce((sum, w) => {
-          return sum + (new Date(w.ended_at!).getTime() - new Date(w.started_at).getTime()) / 60000
-        }, 0) / withDuration.length
-      : 0
-    setAvgDurationMin(Math.round(avgDur))
-  }, [])
-
-  // ─── Fetch ──────────────────────────────────────────────────────────────────
-
-  const fetchFeed = useCallback(async () => {
-    const { data: authData } = await supabase.auth.getUser()
-    const uid = authData.user?.id
-    if (!uid) return
-
-    // Get current user profile
-    const { data: userData } = await supabase
-      .from('users')
-      .select('id, full_name, username')
-      .eq('id', uid)
-      .single()
-
-    if (userData) {
-      const firstName = (userData.full_name ?? userData.username ?? 'Athlète').split(' ')[0]
-      setCurrentUserFirstName(firstName)
-    }
-
-    // Workouts publics
-    const { data, error } = await supabase
-      .from('workouts')
-      .select(`
-        id,
-        title,
-        total_volume_kg,
-        started_at,
-        ended_at,
-        pr_seance,
-        location_city,
-        gym_id,
-        photo_url,
-        user:user_id (
-          id,
-          username,
-          full_name
-        )
-      `)
-      .eq('is_public', true)
-      .order('started_at', { ascending: false })
-      .limit(50)
-
-    if (error || !data) return
-
-    type RawWorkout = {
-      id: string
-      title: string
-      total_volume_kg: number | null
-      started_at: string
-      ended_at: string | null
-      pr_seance: 'gold' | 'silver' | 'bronze' | null
-      location_city: string | null
-      gym_id: string | null
-      photo_url: string | null
-      user: Array<{ id: string; username: string | null; full_name: string | null }>
-    }
-
-    const workoutIds = (data as unknown as RawWorkout[]).map(w => w.id)
-
-    const [likesRes, commentsRes, userLikesRes, firstCommentsRes, prExercicesRes, prSetsRes, myoRes] = await Promise.all([
-      supabase.from('likes').select('workout_id').in('workout_id', workoutIds),
-      supabase.from('comments').select('workout_id').in('workout_id', workoutIds),
-      supabase.from('likes').select('workout_id').eq('user_id', uid).in('workout_id', workoutIds),
-      supabase
-        .from('comments')
-        .select('workout_id, content, user_id, users:user_id(username, full_name)')
-        .in('workout_id', workoutIds)
-        .order('created_at', { ascending: true }),
-      supabase
-        .from('workout_exercises')
-        .select('workout_id, pr_exercice')
-        .in('workout_id', workoutIds)
-        .not('pr_exercice', 'is', null),
-      supabase
-        .from('workout_sets')
-        .select('workout_exercise_id, pr_charge, pr_serie, workout_exercises!inner(workout_id)')
-        .in('workout_exercises.workout_id', workoutIds)
-        .or('pr_charge.not.is.null,pr_serie.not.is.null'),
-      supabase
-        .from('myo_signatures')
-        .select('workout_id, z_volume, z_intensite, z_structure, z_recovery, z_performance, z_regularite, z_extended')
-        .in('workout_id', workoutIds),
-    ])
-
-    // Agrégation PRs par workout
-    const PR_RANK: Record<PRLevel, number> = { gold: 3, silver: 2, bronze: 1 }
-
-    type PrMap = Map<string, PRLevel>
-    const exChargeMap: PrMap = new Map()
-    const exSerieMap: PrMap = new Map()
-    const exExerciceMap: PrMap = new Map()
-
-    // Sets : pr_charge + pr_serie (groupés par workout via JOIN)
-    type RawPRSet = {
-      pr_charge: PRLevel | null
-      pr_serie: PRLevel | null
-      workout_exercises: Array<{ workout_id: string }> | { workout_id: string } | null
-    }
-    for (const r of (prSetsRes.data ?? []) as unknown as RawPRSet[]) {
-      const we = Array.isArray(r.workout_exercises) ? r.workout_exercises[0] : r.workout_exercises
-      const wid = we?.workout_id
-      if (!wid) continue
-      if (r.pr_charge) {
-        const cur = exChargeMap.get(wid)
-        if (!cur || PR_RANK[r.pr_charge] > PR_RANK[cur]) exChargeMap.set(wid, r.pr_charge)
-      }
-      if (r.pr_serie) {
-        const cur = exSerieMap.get(wid)
-        if (!cur || PR_RANK[r.pr_serie] > PR_RANK[cur]) exSerieMap.set(wid, r.pr_serie)
-      }
-    }
-
-    // Exercices : pr_exercice
-    type RawPREx = { workout_id: string; pr_exercice: PRLevel }
-    for (const r of (prExercicesRes.data ?? []) as unknown as RawPREx[]) {
-      const cur = exExerciceMap.get(r.workout_id)
-      if (!cur || PR_RANK[r.pr_exercice] > PR_RANK[cur]) exExerciceMap.set(r.workout_id, r.pr_exercice)
-    }
-
-    // Myo signatures map
-    type RawMyoRow = {
-      workout_id: string
-      z_volume: number; z_intensite: number; z_structure: number
-      z_recovery: number; z_performance: number; z_regularite: number
-      z_extended: Record<string, unknown>
-    }
-    const myoMap = new Map<string, number[][]>()
-    for (const r of (myoRes.data ?? []) as unknown as RawMyoRow[]) {
-      myoMap.set(r.workout_id, sessionValuesFromSignature(r))
-    }
-
-    const likesCount = new Map<string, number>()
-    const commentsCount = new Map<string, number>()
-    for (const r of likesRes.data ?? []) {
-      const id = (r as { workout_id: string }).workout_id
-      likesCount.set(id, (likesCount.get(id) ?? 0) + 1)
-    }
-    for (const r of commentsRes.data ?? []) {
-      const id = (r as { workout_id: string }).workout_id
-      commentsCount.set(id, (commentsCount.get(id) ?? 0) + 1)
-    }
-    const likedSet = new Set(
-      (userLikesRes.data ?? []).map((l: { workout_id: string }) => l.workout_id)
-    )
-
-    type RawFirstComment = {
-      workout_id: string
-      content: string
-      user_id: string
-      users: Array<{ username: string | null; full_name: string | null }> | null
-    }
-    const firstCommentMap = new Map<string, { content: string; username: string | null; user_id: string }>()
-    for (const r of (firstCommentsRes.data ?? []) as unknown as RawFirstComment[]) {
-      if (!firstCommentMap.has(r.workout_id)) {
-        const u = r.users?.[0]
-        firstCommentMap.set(r.workout_id, {
-          content: r.content,
-          username: u?.username ?? u?.full_name ?? null,
-          user_id: r.user_id,
-        })
-      }
-    }
-
-    const mapped: FeedWorkout[] = (data as unknown as RawWorkout[]).map(w => {
-      const charge = exChargeMap.get(w.id) ?? null
-      const serie = exSerieMap.get(w.id) ?? null
-      const exercice = exExerciceMap.get(w.id) ?? null
-      const seance = w.pr_seance ?? null
-      const total = (charge ? 1 : 0) + (serie ? 1 : 0) + (exercice ? 1 : 0) + (seance ? 1 : 0)
-      return {
-        id: w.id,
-        title: w.title ?? '—',
-        total_volume_kg: w.total_volume_kg,
-        started_at: w.started_at,
-        ended_at: w.ended_at,
-        pr_seance: seance,
-        location_city: w.location_city,
-        gym_id: w.gym_id,
-        user: w.user?.[0] ?? { id: '', username: null, full_name: null },
-        likes_count: likesCount.get(w.id) ?? 0,
-        comments_count: commentsCount.get(w.id) ?? 0,
-        user_has_liked: likedSet.has(w.id),
-        first_comment: firstCommentMap.get(w.id) ?? null,
-        prs: { charge, serie, exercice, seance, total },
-        sessionValues: myoMap.get(w.id),
-        photo_url: w.photo_url,
-      }
-    })
-
-    setWorkouts(mapped)
-    computeKPIs(mapped)
-  }, [computeKPIs])
-
   useFocusEffect(
     useCallback(() => {
       if (isFirstFocus.current) {
@@ -2009,7 +2089,7 @@ export default function FeedScreen() {
         listOpacity.value = withTiming(1, { duration: 220, easing: Easing.bezier(0.16, 1, 0.3, 1) })
         listTranslateY.value = 0
         setRefreshing(true)
-        Promise.all([fetchFeed(), new Promise(r => setTimeout(r, 1500))]).finally(() => {
+        Promise.all([fetchFeed(), new Promise((r) => setTimeout(r, 1500))]).finally(() => {
           setRefreshing(false)
         })
       }
@@ -2022,48 +2102,20 @@ export default function FeedScreen() {
     setRefreshing(true)
     listOpacity.value = 0.6
     listTranslateY.value = 6
-    await Promise.all([fetchFeed(), new Promise(r => setTimeout(r, 1500))])
+    await Promise.all([fetchFeed(), new Promise((r) => setTimeout(r, 1500))])
     setRefreshing(false)
     listOpacity.value = withTiming(1, { duration: 300, easing: Easing.bezier(0.16, 1, 0.3, 1) })
     listTranslateY.value = withSpring(0, { damping: 20, stiffness: 300 })
   }, [fetchFeed])
 
-  // ─── Like toggle ────────────────────────────────────────────────────────────
-
-  const handleLike = useCallback(async (workoutId: string, hasLiked: boolean) => {
-    if (!currentUserId) return
-
-    // Optimistic update
-    setWorkouts(prev =>
-      prev.map(w =>
-        w.id === workoutId
-          ? {
-              ...w,
-              user_has_liked: !hasLiked,
-              likes_count: hasLiked ? w.likes_count - 1 : w.likes_count + 1,
-            }
-          : w
-      )
-    )
-
-    if (hasLiked) {
-      await supabase
-        .from('likes')
-        .delete()
-        .eq('user_id', currentUserId)
-        .eq('workout_id', workoutId)
-    } else {
-      await supabase
-        .from('likes')
-        .insert({ user_id: currentUserId, workout_id: workoutId })
-    }
-  }, [currentUserId])
-
   // ─── Navigate to detail ─────────────────────────────────────────────────────
 
-  const handleNavigateDetail = useCallback((workoutId: string) => {
-    router.push(`/feed/${workoutId}`)
-  }, [router])
+  const handleNavigateDetail = useCallback(
+    (workoutId: string) => {
+      router.push(`/feed/${workoutId}`)
+    },
+    [router]
+  )
 
   // ─── Navigate to profile ─────────────────────────────────────────────────────
 
@@ -2071,10 +2123,28 @@ export default function FeedScreen() {
     router.push('/(tabs)/profile')
   }, [router])
 
+  // ─── FlatList — renderItem stable (ORA-029) ─────────────────────────────────
+
+  const keyExtractor = useCallback((item: FeedWorkout) => item.id, [])
+  const renderFeedItem = useCallback(
+    ({ item }: { item: FeedWorkout }) => (
+      <FeedItem
+        item={item}
+        currentUserId={currentUserId}
+        onLike={handleLike}
+        onNavigateDetail={handleNavigateDetail}
+      />
+    ),
+    [currentUserId, handleLike, handleNavigateDetail]
+  )
+
   // ─── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: colors.background }]}
+      edges={['top']}
+    >
       {/* Header — Logo animé + Greeting émerge + Avatar */}
       <View style={[styles.header, { paddingHorizontal: spacing.s4, paddingVertical: spacing.s3 }]}>
         <Animated.View style={logoAnimStyle}>
@@ -2086,23 +2156,31 @@ export default function FeedScreen() {
         <View style={{ flex: 1, marginLeft: spacing.s3 }}>
           <Animated.View style={greetingAnimStyle}>
             <Text
-              style={[typography.body, { color: colors.textPrimary, fontFamily: 'Barlow_600SemiBold' }]}
+              style={[
+                typography.body,
+                { color: colors.textPrimary, fontFamily: 'Barlow_600SemiBold' },
+              ]}
               numberOfLines={1}
             >
               Bonjour {currentUserFirstName},
             </Text>
-            <Text
-              style={[typography.caption, { color: colors.textSecondary }]}
-              numberOfLines={1}
-            >
+            <Text style={[typography.caption, { color: colors.textSecondary }]} numberOfLines={1}>
               as-tu une question ?
             </Text>
           </Animated.View>
         </View>
-        <TouchableOpacity onPress={handleNavigateProfile} hitSlop={{ top: 4, right: 4, bottom: 4, left: 4 }}>
+        <TouchableOpacity
+          onPress={handleNavigateProfile}
+          hitSlop={{ top: 4, right: 4, bottom: 4, left: 4 }}
+        >
           {/* Wrapper 44×44 — avatar 40×40 centré, SVG overlay pour le point orbital */}
           <View style={styles.avatarHeaderWrap}>
-            <View style={[styles.avatarSmallHeader, { backgroundColor: colors.backgroundSecondary, borderColor: colors.accent }]}>
+            <View
+              style={[
+                styles.avatarSmallHeader,
+                { backgroundColor: colors.backgroundSecondary, borderColor: colors.accent },
+              ]}
+            >
               <Text style={[styles.avatarInitialsSmall, { color: colors.textPrimary }]}>
                 {currentUserFirstName.charAt(0).toUpperCase()}
               </Text>
@@ -2142,7 +2220,12 @@ export default function FeedScreen() {
           <Text
             style={[
               typography.caption,
-              { color: colors.textTertiary, letterSpacing: 1, textTransform: 'uppercase', marginLeft: spacing.s2 },
+              {
+                color: colors.textTertiary,
+                letterSpacing: 1,
+                textTransform: 'uppercase',
+                marginLeft: spacing.s2,
+              },
             ]}
           >
             Actualisation...
@@ -2159,34 +2242,32 @@ export default function FeedScreen() {
         </View>
       ) : (
         <Animated.View style={[{ flex: 1 }, listAnimStyle]}>
-        <FlatList
-          data={workouts}
-          keyExtractor={item => item.id}
-          contentContainerStyle={{
-            paddingHorizontal: spacing.s4,
-            paddingVertical: spacing.s3,
-            paddingBottom: spacing.s12,
-          }}
-          ItemSeparatorComponent={() => null}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              tintColor={colors.accent}
-              colors={[colors.accent]}
-            />
-          }
-          renderItem={({ item }) => (
-            <FeedItem
-              item={item}
-              currentUserId={currentUserId}
-              onLike={handleLike}
-              onNavigateDetail={handleNavigateDetail}
-            />
-          )}
-          ListEmptyComponent={() => <FeedEmptyState />}
-          showsVerticalScrollIndicator={false}
-        />
+          <FlatList
+            data={workouts}
+            keyExtractor={keyExtractor}
+            contentContainerStyle={{
+              paddingHorizontal: spacing.s4,
+              paddingVertical: spacing.s3,
+              paddingBottom: spacing.s12,
+            }}
+            ItemSeparatorComponent={null}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                tintColor={colors.accent}
+                colors={[colors.accent]}
+              />
+            }
+            renderItem={renderFeedItem}
+            ListEmptyComponent={FeedEmptyState}
+            showsVerticalScrollIndicator={false}
+            // ── Perf (ORA-028) — limite le nombre de MyoChart Skia montés ──
+            removeClippedSubviews
+            initialNumToRender={4}
+            maxToRenderPerBatch={4}
+            windowSize={7}
+          />
         </Animated.View>
       )}
     </SafeAreaView>

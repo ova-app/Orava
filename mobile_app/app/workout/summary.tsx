@@ -21,7 +21,6 @@ import Animated, {
   useAnimatedReaction,
   runOnJS,
   Easing,
-  type SharedValue,
 } from 'react-native-reanimated'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
@@ -32,34 +31,42 @@ import { spacing, radius, typography, touchTarget, spring, font } from '@/consta
 import { prBadgeRecipe, type PrType } from '@/constants/recipes'
 import { useWorkout, computePodium, WorkoutExercise, PrLevel } from '@/context/WorkoutContext'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { saveMyoSignature, computeSessionValues, computeMuscleDims, type EmRow } from '@/lib/myo'
+import { saveMyoSignature } from '@/lib/myo'
+import { useSummaryData } from '@/lib/hooks/useSummaryData'
 
-import { Canvas, Path as SkiaPath, Skia, LinearGradient as SkiaLinearGradient, vec } from '@shopify/react-native-skia'
+import {
+  Canvas,
+  Path as SkiaPath,
+  Skia,
+  LinearGradient as SkiaLinearGradient,
+  vec,
+} from '@shopify/react-native-skia'
 import { insertLocalSet, insertLocalSession } from '@/lib/db'
 import { computePrediction } from '@/lib/predictor'
 import { storage } from '@/lib/storage'
 import { supabase } from '@/lib/supabase'
+import { formatDuration, epley1RM } from '@/lib/utils'
 
 const { width: SCREEN_W } = Dimensions.get('window')
 
 // ─── PR Icons ────────────────────────────────────────────────────────────────
 
 const PR_ICON: Record<PrType, React.ComponentType<{ size?: number; color?: string }>> = {
-  charge:   Zap,
-  serie:    Flame,
+  charge: Zap,
+  serie: Flame,
   exercice: Dumbbell,
-  seance:   Trophy,
+  seance: Trophy,
 }
 
 const PR_LABEL: Record<PrType, string> = {
-  charge:   'PR CHARGE',
-  serie:    'PR SÉRIE',
+  charge: 'PR CHARGE',
+  serie: 'PR SÉRIE',
   exercice: 'PR EXERCICE',
-  seance:   'PR SÉANCE',
+  seance: 'PR SÉANCE',
 }
 
 const PR_LEVEL_LABEL: Record<string, string> = {
-  gold:   'OR',
+  gold: 'OR',
   silver: 'ARGENT',
   bronze: 'BRONZE',
 }
@@ -85,7 +92,8 @@ function PrRow({
 }) {
   const { colors } = useTheme()
   const Icon = PR_ICON[type]
-  const tint = level === 'gold' ? colors.prGold : level === 'silver' ? colors.prSilver : colors.prBronze
+  const tint =
+    level === 'gold' ? colors.prGold : level === 'silver' ? colors.prSilver : colors.prBronze
   const anim = useSharedValue(0)
 
   useEffect(() => {
@@ -115,17 +123,18 @@ function PrRow({
           <Text style={[styles.prRowTypeLabel, { color: tint }]}>{PR_LABEL[type]}</Text>
           <Text style={[styles.prRowValueText, { color: colors.textPrimary }]}>{value}</Text>
           <Text style={[styles.prRowSubtitle, { color: colors.textSecondary }]} numberOfLines={1}>
-            {exerciseName}{setNumber != null ? ` · Série ${setNumber}` : ''}
+            {exerciseName}
+            {setNumber != null ? ` · Série ${setNumber}` : ''}
           </Text>
         </View>
         {/* Badge niveau + chevron */}
         <View style={styles.prRowRight}>
-          <View style={[styles.prLevelPill, { borderColor: `${tint}45`, backgroundColor: `${tint}12` }]}>
+          <View
+            style={[styles.prLevelPill, { borderColor: `${tint}45`, backgroundColor: `${tint}12` }]}
+          >
             <Text style={[styles.prLevelPillText, { color: tint }]}>{PR_LEVEL_LABEL[level]}</Text>
           </View>
-          {onPress && (
-            <Text style={[styles.prRowChevron, { color: colors.textTertiary }]}>›</Text>
-          )}
+          {onPress && <Text style={[styles.prRowChevron, { color: colors.textTertiary }]}>›</Text>}
         </View>
       </TouchableOpacity>
     </Animated.View>
@@ -134,7 +143,15 @@ function PrRow({
 
 // ─── Stat Pill ────────────────────────────────────────────────────────────────
 
-function StatPill({ label, value, colors }: { label: string; value: string; colors: ReturnType<typeof useTheme>['colors'] }) {
+function StatPill({
+  label,
+  value,
+  colors,
+}: {
+  label: string
+  value: string
+  colors: ReturnType<typeof useTheme>['colors']
+}) {
   return (
     <View style={[styles.statPill, { backgroundColor: colors.backgroundSecondary }]}>
       <Text style={[styles.statPillValue, { color: colors.textPrimary }]} allowFontScaling={false}>
@@ -164,7 +181,7 @@ function MuscleLegend({ colors }: { colors: ReturnType<typeof useTheme>['colors'
 
 // ─── Muscle Bar ───────────────────────────────────────────────────────────────
 
-const MUSCLE_BAR_H      = 7
+const MUSCLE_BAR_H = 7
 const MUSCLE_BAR_RADIUS = 3.5
 
 function MuscleBar({
@@ -184,7 +201,10 @@ function MuscleBar({
 
   const progress = useSharedValue(0)
   useEffect(() => {
-    progress.value = withDelay(delay, withTiming(pct, { duration: 620, easing: Easing.bezier(0.16, 1, 0.3, 1) }))
+    progress.value = withDelay(
+      delay,
+      withTiming(pct, { duration: 620, easing: Easing.bezier(0.16, 1, 0.3, 1) })
+    )
   }, [])
 
   const barStyle = useAnimatedStyle(() => ({
@@ -193,16 +213,26 @@ function MuscleBar({
 
   const barPath = React.useMemo(() => {
     const p = Skia.Path.Make()
-    p.addRRect({ rect: { x: 0, y: 0, width: trackW, height: MUSCLE_BAR_H }, rx: MUSCLE_BAR_RADIUS, ry: MUSCLE_BAR_RADIUS })
+    p.addRRect({
+      rect: { x: 0, y: 0, width: trackW, height: MUSCLE_BAR_H },
+      rx: MUSCLE_BAR_RADIUS,
+      ry: MUSCLE_BAR_RADIUS,
+    })
     return p
   }, [trackW])
 
-  const gradStart = isPrimary ? colors.accent : '#7A7A8C'
-  const gradEnd   = isPrimary ? '#FAC775'    : '#3A3A4A'
+  const gradStart = isPrimary ? colors.accent : colors.textSecondary
+  const gradEnd = isPrimary ? colors.prGold : '#3A3A4A'
 
   return (
     <View style={styles.muscleRow}>
-      <Text style={[styles.muscleLabel, { color: isPrimary ? colors.textPrimary : colors.textSecondary }]} numberOfLines={1}>
+      <Text
+        style={[
+          styles.muscleLabel,
+          { color: isPrimary ? colors.textPrimary : colors.textSecondary },
+        ]}
+        numberOfLines={1}
+      >
         {label}
       </Text>
       <View style={[styles.muscleBarTrack, { width: trackW }]}>
@@ -232,7 +262,13 @@ function MuscleBar({
 
 // ─── Section Header ───────────────────────────────────────────────────────────
 
-function SectionHeader({ label, colors }: { label: string; colors: ReturnType<typeof useTheme>['colors'] }) {
+function SectionHeader({
+  label,
+  colors,
+}: {
+  label: string
+  colors: ReturnType<typeof useTheme>['colors']
+}) {
   return (
     <View style={styles.sectionHeader}>
       <View style={[styles.sectionDot, { backgroundColor: colors.accent }]} />
@@ -242,13 +278,6 @@ function SectionHeader({ label, colors }: { label: string; colors: ReturnType<ty
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function formatDuration(sec: number): string {
-  const h = Math.floor(sec / 3600)
-  const m = Math.floor((sec % 3600) / 60)
-  if (h > 0) return `${h}h ${m}min`
-  return `${m}min`
-}
 
 function formatDate(date: Date | null): string {
   if (!date) return "AUJOURD'HUI"
@@ -261,19 +290,25 @@ function formatDate(date: Date | null): string {
 function generateWorkoutName(exercises: WorkoutExercise[], startedAt: Date | null): string {
   const hour = startedAt ? startedAt.getHours() : 12
   const slot = hour < 6 ? 'Nuit' : hour < 12 ? 'Matin' : hour < 18 ? 'Après-midi' : 'Soir'
-  const groups = [...new Set(exercises.map(e => e.muscle_group).filter(Boolean))]
+  const groups = [...new Set(exercises.map((e) => e.muscle_group).filter(Boolean))]
   if (groups.length === 0) return `Séance du ${slot}`
   const groupLabels: Record<string, string> = {
-    pectoraux: 'Pecs', dos: 'Dos', epaules: 'Épaules',
-    biceps: 'Biceps', triceps: 'Triceps', quadriceps: 'Jambes',
-    ischio_jambiers: 'Ischio', fessiers: 'Fessiers', mollets: 'Mollets', abdominaux: 'Abdos',
+    pectoraux: 'Pecs',
+    dos: 'Dos',
+    epaules: 'Épaules',
+    biceps: 'Biceps',
+    triceps: 'Triceps',
+    quadriceps: 'Jambes',
+    ischio_jambiers: 'Ischio',
+    fessiers: 'Fessiers',
+    mollets: 'Mollets',
+    abdominaux: 'Abdos',
   }
-  const label = groups.slice(0, 2).map(g => groupLabels[g ?? ''] ?? g ?? '').join(' & ')
+  const label = groups
+    .slice(0, 2)
+    .map((g) => groupLabels[g ?? ''] ?? g ?? '')
+    .join(' & ')
   return `${label} — ${slot}`
-}
-
-function epley1RM(w: number, r: number): number {
-  return r === 1 ? w : w * (1 + r / 30)
 }
 
 function formatRestTimeSummary(sec: number): string {
@@ -285,23 +320,25 @@ function formatRestTimeSummary(sec: number): string {
 
 function muscleLabelFr(key: string): string {
   const map: Record<string, string> = {
-    pectoraux: 'Pectoraux', dos: 'Dos', epaules: 'Épaules',
-    biceps: 'Biceps', triceps: 'Triceps', quadriceps: 'Quadriceps',
-    ischio_jambiers: 'Ischio', fessiers: 'Fessiers', mollets: 'Mollets',
-    abdominaux: 'Abdominaux', autre: 'Autre',
+    pectoraux: 'Pectoraux',
+    dos: 'Dos',
+    epaules: 'Épaules',
+    biceps: 'Biceps',
+    triceps: 'Triceps',
+    quadriceps: 'Quadriceps',
+    ischio_jambiers: 'Ischio',
+    fessiers: 'Fessiers',
+    mollets: 'Mollets',
+    abdominaux: 'Abdominaux',
+    autre: 'Autre',
   }
   return map[key] ?? key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, ' ')
 }
 
 // ─── Volume Trend Sparkline ───────────────────────────────────────────────────
 
-function VolumeTrendSparkline({
-  history,
-  current,
-}: {
-  history: number[]
-  current: number
-}) {
+function VolumeTrendSparkline({ history, current }: { history: number[]; current: number }) {
+  const { colors } = useTheme()
   const all = useMemo(() => [...history, current], [history, current])
   const W = SCREEN_W - spacing.s4 * 2
   const H = 52
@@ -316,14 +353,18 @@ function VolumeTrendSparkline({
     return Math.max(0, Math.min(n - 1, Math.round(t * (n - 1))))
   }
 
-  const panResponder = useMemo(() => PanResponder.create({
-    onStartShouldSetPanResponder: () => true,
-    onMoveShouldSetPanResponder: () => true,
-    onPanResponderGrant: (e) => setActiveIdx(findIdx(e.nativeEvent.locationX)),
-    onPanResponderMove: (e) => setActiveIdx(findIdx(e.nativeEvent.locationX)),
-    onPanResponderRelease: () => setActiveIdx(null),
-    onPanResponderTerminate: () => setActiveIdx(null),
-  }), [n, W])
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: () => true,
+        onPanResponderGrant: (e) => setActiveIdx(findIdx(e.nativeEvent.locationX)),
+        onPanResponderMove: (e) => setActiveIdx(findIdx(e.nativeEvent.locationX)),
+        onPanResponderRelease: () => setActiveIdx(null),
+        onPanResponderTerminate: () => setActiveIdx(null),
+      }),
+    [n, W]
+  )
 
   const { linePath, fillPath, pts } = useMemo(() => {
     if (all.length < 2) return { linePath: null, fillPath: null, pts: [] }
@@ -352,7 +393,10 @@ function VolumeTrendSparkline({
   const lineReveal = useSharedValue(0)
   useEffect(() => {
     lineReveal.value = 0
-    lineReveal.value = withDelay(600, withTiming(1, { duration: 820, easing: Easing.bezier(0.16, 1, 0.3, 1) }))
+    lineReveal.value = withDelay(
+      600,
+      withTiming(1, { duration: 820, easing: Easing.bezier(0.16, 1, 0.3, 1) })
+    )
   }, [all.length])
 
   const revealStyle = useAnimatedStyle(() => ({ width: lineReveal.value * W }))
@@ -360,17 +404,39 @@ function VolumeTrendSparkline({
   if (!linePath || !fillPath) return null
 
   const activeVal = activeIdx !== null ? all[activeIdx] : null
-  const activePt  = activeIdx !== null ? pts[activeIdx] : null
-  const isLast    = activeIdx === n - 1
+  const activePt = activeIdx !== null ? pts[activeIdx] : null
+  const isLast = activeIdx === n - 1
 
   return (
     <View style={{ width: W, marginTop: spacing.s3 }}>
       {/* En-tête explicatif */}
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.s2 }}>
-        <Text style={{ color: 'rgba(255,255,255,0.28)', fontSize: 9, fontFamily: font.medium, letterSpacing: 1.2, textTransform: 'uppercase' }}>
+      <View
+        style={{
+          flexDirection: 'row',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: spacing.s2,
+        }}
+      >
+        <Text
+          style={{
+            color: 'rgba(255,255,255,0.28)',
+            fontSize: 9,
+            fontFamily: font.medium,
+            letterSpacing: 1.2,
+            textTransform: 'uppercase',
+          }}
+        >
           VOLUME · {n} séances
         </Text>
-        <Text style={{ color: 'rgba(255,255,255,0.28)', fontSize: 9, fontFamily: font.medium, letterSpacing: 0.5 }}>
+        <Text
+          style={{
+            color: 'rgba(255,255,255,0.28)',
+            fontSize: 9,
+            fontFamily: font.medium,
+            letterSpacing: 0.5,
+          }}
+        >
           cette séance →
         </Text>
       </View>
@@ -378,15 +444,28 @@ function VolumeTrendSparkline({
       <View style={{ width: W, height: H }} {...panResponder.panHandlers}>
         {/* Zone remplie */}
         <Canvas style={{ width: W, height: H, position: 'absolute' }}>
-          <SkiaPath path={fillPath} style="fill" opacity={0.10}>
-            <SkiaLinearGradient start={vec(0, 0)} end={vec(0, H)} colors={['#FFDD00', 'rgba(255,221,0,0)']} />
+          <SkiaPath path={fillPath} style="fill" opacity={0.1}>
+            <SkiaLinearGradient
+              start={vec(0, 0)}
+              end={vec(0, H)}
+              colors={[colors.accent, 'rgba(255,221,0,0)']}
+            />
           </SkiaPath>
         </Canvas>
         {/* Ligne */}
-        <View style={{ overflow: 'hidden', position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}>
+        <View
+          style={{ overflow: 'hidden', position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+        >
           <Animated.View style={[{ height: H }, revealStyle]}>
             <Canvas style={{ width: W, height: H }}>
-              <SkiaPath path={linePath} style="stroke" strokeWidth={1.8} strokeCap="round" strokeJoin="round" color="#FFDD00" />
+              <SkiaPath
+                path={linePath}
+                style="stroke"
+                strokeWidth={1.8}
+                strokeCap="round"
+                strokeJoin="round"
+                color={colors.accent}
+              />
             </Canvas>
           </Animated.View>
         </View>
@@ -402,46 +481,60 @@ function VolumeTrendSparkline({
               return p
             })()}
             style="fill"
-            color="#FFDD00"
+            color={colors.accent}
           />
         </Canvas>
         {/* Curseur actif */}
         {activeIdx !== null && activePt && (
           <View pointerEvents="none" style={[StyleSheet.absoluteFill]}>
             {/* Ligne verticale */}
-            <View style={{
-              position: 'absolute',
-              left: activePt.x - 0.5,
-              top: 0,
-              width: 1,
-              height: H,
-              backgroundColor: 'rgba(255,255,255,0.18)',
-            }} />
+            <View
+              style={{
+                position: 'absolute',
+                left: activePt.x - 0.5,
+                top: 0,
+                width: 1,
+                height: H,
+                backgroundColor: 'rgba(255,255,255,0.18)',
+              }}
+            />
             {/* Dot */}
-            <View style={{
-              position: 'absolute',
-              left: activePt.x - 4,
-              top: activePt.y - 4,
-              width: 8,
-              height: 8,
-              borderRadius: 4,
-              backgroundColor: isLast ? '#FFDD00' : 'rgba(255,255,255,0.70)',
-              borderWidth: 1.5,
-              borderColor: '#0A0A0F',
-            }} />
+            <View
+              style={{
+                position: 'absolute',
+                left: activePt.x - 4,
+                top: activePt.y - 4,
+                width: 8,
+                height: 8,
+                borderRadius: 4,
+                backgroundColor: isLast ? colors.accent : 'rgba(255,255,255,0.70)',
+                borderWidth: 1.5,
+                borderColor: colors.background,
+              }}
+            />
             {/* Bulle valeur */}
-            <View style={{
-              position: 'absolute',
-              left: Math.max(0, Math.min(activePt.x - 36, W - 72)),
-              top: activePt.y < H / 2 ? activePt.y + 10 : activePt.y - 28,
-              backgroundColor: 'rgba(26,26,36,0.92)',
-              paddingHorizontal: 8,
-              paddingVertical: 3,
-              borderRadius: 6,
-              borderWidth: 1,
-              borderColor: 'rgba(255,255,255,0.10)',
-            }}>
-              <Text style={{ color: isLast ? '#FFDD00' : '#F0F0F5', fontSize: 11, fontFamily: font.bold, fontVariant: ['tabular-nums'], letterSpacing: -0.2 }}>
+            <View
+              style={{
+                position: 'absolute',
+                left: Math.max(0, Math.min(activePt.x - 36, W - 72)),
+                top: activePt.y < H / 2 ? activePt.y + 10 : activePt.y - 28,
+                backgroundColor: 'rgba(26,26,36,0.92)',
+                paddingHorizontal: 8,
+                paddingVertical: 3,
+                borderRadius: 6,
+                borderWidth: 1,
+                borderColor: 'rgba(255,255,255,0.10)',
+              }}
+            >
+              <Text
+                style={{
+                  color: isLast ? colors.accent : colors.textPrimary,
+                  fontSize: 11,
+                  fontFamily: font.bold,
+                  fontVariant: ['tabular-nums'],
+                  letterSpacing: -0.2,
+                }}
+              >
                 {Math.round(activeVal!).toLocaleString('fr-FR')} kg
               </Text>
             </View>
@@ -464,89 +557,28 @@ export default function SummaryScreen() {
   const [photoUri, setPhotoUri] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
-  const [histVolumes, setHistVolumes] = useState<number[]>([])
 
   const scrollViewRef = useRef<ScrollView>(null)
   const recapSectionY = useRef(0)
   const recapCardRelY = useRef<Record<string, number>>({})
 
+  // ORA-007 — workoutId généré UNE seule fois. Un retry après échec réutilise le même id
+  // → la RPC create_workout est idempotente (ne réinsère pas) et SQLite ne double pas la séance.
+  const workoutIdRef = useRef<string | null>(null)
+
   const scrollToExercise = useCallback((exerciseId: string) => {
     const rel = recapCardRelY.current[exerciseId]
     if (rel == null) return
-    scrollViewRef.current?.scrollTo({ y: Math.max(0, recapSectionY.current + rel - 16), animated: true })
-  }, [])
-
-  const [sessionValues, setSessionValues] = useState<number[][]>(() => {
-    const sets = exercises.flatMap(ex =>
-      ex.sets.filter(s => s.validated && s.weight_kg > 0 && s.reps > 0)
-    )
-    const vol = sets.reduce((s, set) => s + set.weight_kg * set.reps, 0)
-    const pMax = sets.length ? Math.max(...sets.map(s => s.weight_kg)) : 0
-    const densite = elapsedSeconds > 0 ? (vol / elapsedSeconds) * 60 : 0
-    return computeSessionValues({
-      volume_kg: vol, densite, nb_series: sets.length,
-      nb_exercices: exercises.length,
-      nb_pr: sets.filter(s => s.pr_charge !== null || s.pr_serie !== null).length,
-      streak: 0, frequence_hebdo: 0, nb_seances_30j: 0, duree_sec: elapsedSeconds,
-      temps_repos_moy_sec: 120, ratio_actif: 0.5, poids_max_kg: pMax, charge_relative: 65,
+    scrollViewRef.current?.scrollTo({
+      y: Math.max(0, recapSectionY.current + rel - 16),
+      animated: true,
     })
-  })
-
-  // Enrichit la famille 6 (muscles) dès le mount sans attendre le save
-  useEffect(() => {
-    const exerciseIds = exercises.map(ex => ex.exercise_id).filter(Boolean)
-    if (!exerciseIds.length) return
-    void (async () => {
-      const { data } = await supabase
-        .from('exercise_muscles')
-        .select('exercise_id, muscle, fascicle, activation_pct')
-        .in('exercise_id', exerciseIds)
-        .in('role', ['primary', 'secondary'])
-      if (!data?.length) return
-      const setsByEx: Record<string, Array<{ weight_kg: number; reps: number }>> =
-        Object.fromEntries(exercises.map(ex => [
-          ex.exercise_id,
-          ex.sets.filter(s => s.validated && s.weight_kg > 0 && s.reps > 0).map(s => ({ weight_kg: s.weight_kg, reps: s.reps })),
-        ]))
-      const muscleDims = computeMuscleDims(setsByEx, data as EmRow[])
-      const sets = exercises.flatMap(ex =>
-        ex.sets.filter(s => s.validated && s.weight_kg > 0 && s.reps > 0)
-      )
-      const vol = sets.reduce((s, set) => s + set.weight_kg * set.reps, 0)
-      const pMax = sets.length ? Math.max(...sets.map(s => s.weight_kg)) : 0
-      const densite = elapsedSeconds > 0 ? (vol / elapsedSeconds) * 60 : 0
-      setSessionValues(computeSessionValues({
-        volume_kg: vol, densite, nb_series: sets.length,
-        nb_exercices: exercises.length,
-        nb_pr: sets.filter(s => s.pr_charge !== null || s.pr_serie !== null).length,
-        streak: 0, frequence_hebdo: 0, nb_seances_30j: 0, duree_sec: elapsedSeconds,
-        temps_repos_moy_sec: 120, ratio_actif: 0.5, poids_max_kg: pMax, charge_relative: 65,
-        muscleDims,
-      }))
-    })()
   }, [])
 
-  // Fetch last 8 workout volumes for trend sparkline
-  useEffect(() => {
-    void (async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-      const { data } = await supabase
-        .from('workouts')
-        .select('total_volume_kg')
-        .eq('user_id', user.id)
-        .not('total_volume_kg', 'is', null)
-        .order('started_at', { ascending: false })
-        .limit(8)
-      if (data?.length) {
-        setHistVolumes(
-          (data as { total_volume_kg: number }[])
-            .map(w => w.total_volume_kg)
-            .reverse()
-        )
-      }
-    })()
-  }, [])
+  // Couche data lecture extraite — ORA-034 (sessionValues Myo + historique volume).
+  // sessionValues calculé par le hook mais pas encore rendu (Myo preview = Phase 1,
+  // cf. rules/myo.md) ; setSessionValues alimente la vraie signature post-save.
+  const { setSessionValues, histVolumes } = useSummaryData(exercises, elapsedSeconds)
 
   // Reveal animations — sequential 80ms
   const anim0 = useSharedValue(0)
@@ -557,35 +589,48 @@ export default function SummaryScreen() {
   const volumeAnimValue = useSharedValue(0)
   const [displayVolume, setDisplayVolume] = useState(0)
 
-  const makeRevealStyle = (anim: SharedValue<number>) =>
-    useAnimatedStyle(() => ({
-      opacity: anim.value,
-      transform: [{ translateY: (1 - anim.value) * 16 }],
-    }))
-
-  const style0 = makeRevealStyle(anim0)
-  const style1 = makeRevealStyle(anim1)
-  const style2 = makeRevealStyle(anim2)
-  const style3 = makeRevealStyle(anim3)
-  const style4 = makeRevealStyle(anim4)
-
+  const style0 = useAnimatedStyle(() => ({
+    opacity: anim0.value,
+    transform: [{ translateY: (1 - anim0.value) * 16 }],
+  }))
+  const style1 = useAnimatedStyle(() => ({
+    opacity: anim1.value,
+    transform: [{ translateY: (1 - anim1.value) * 16 }],
+  }))
+  const style2 = useAnimatedStyle(() => ({
+    opacity: anim2.value,
+    transform: [{ translateY: (1 - anim2.value) * 16 }],
+  }))
+  const style3 = useAnimatedStyle(() => ({
+    opacity: anim3.value,
+    transform: [{ translateY: (1 - anim3.value) * 16 }],
+  }))
+  const style4 = useAnimatedStyle(() => ({
+    opacity: anim4.value,
+    transform: [{ translateY: (1 - anim4.value) * 16 }],
+  }))
 
   useAnimatedReaction(
     () => volumeAnimValue.value,
-    (value) => { runOnJS(setDisplayVolume)(Math.round(value)) }
+    (value) => {
+      runOnJS(setDisplayVolume)(Math.round(value))
+    }
   )
 
   useEffect(() => {
-    void AsyncStorage.getItem('settings_public_workouts').then(v => {
+    void AsyncStorage.getItem('settings_public_workouts').then((v) => {
       if (v === 'true') setIsPublic(true)
     })
   }, [])
 
   useEffect(() => {
-    if (status !== 'done') { router.replace('/workout/session'); return }
+    if (status !== 'done') {
+      router.replace('/workout/session')
+      return
+    }
     setWorkoutName(generateWorkoutName(exercises, startedAt))
-    anim0.value = withDelay(0,   withSpring(1, spring.standard))
-    anim1.value = withDelay(80,  withSpring(1, spring.standard))
+    anim0.value = withDelay(0, withSpring(1, spring.standard))
+    anim1.value = withDelay(80, withSpring(1, spring.standard))
     anim2.value = withDelay(160, withSpring(1, spring.standard))
     anim3.value = withDelay(240, withSpring(1, spring.standard))
     anim4.value = withDelay(320, withSpring(1, spring.standard))
@@ -597,33 +642,44 @@ export default function SummaryScreen() {
 
   // ─── Métriques ─────────────────────────────────────────────────────────────
 
-  const validSets = exercises.flatMap(ex =>
-    ex.sets.filter(s => s.validated && s.weight_kg > 0 && s.reps > 0)
+  const validSets = exercises.flatMap((ex) =>
+    ex.sets.filter((s) => s.validated && s.weight_kg > 0 && s.reps > 0)
   )
   const totalVolume = validSets.reduce((s, set) => s + set.weight_kg * set.reps, 0)
   const nbSeries = validSets.length
   const nbExercices = exercises.length
-  const poidsMaxSeance = validSets.length ? Math.max(...validSets.map(s => s.weight_kg)) : 0
+  const poidsMaxSeance = validSets.length ? Math.max(...validSets.map((s) => s.weight_kg)) : 0
 
-  const prChargeDetected = validSets.filter(s => s.pr_charge !== null)
-  const prSerieDetected = validSets.filter(s => s.pr_serie !== null)
+  const prChargeDetected = validSets.filter((s) => s.pr_charge !== null)
+  const prSerieDetected = validSets.filter((s) => s.pr_serie !== null)
   const hasPrs = prChargeDetected.length > 0 || prSerieDetected.length > 0
 
-  const prChargeLevels: PrLevel[] = prChargeDetected.map(s => s.pr_charge)
-  const bestPrCharge: PrLevel = prChargeLevels.includes('gold') ? 'gold' :
-    prChargeLevels.includes('silver') ? 'silver' :
-    prChargeLevels.includes('bronze') ? 'bronze' : null
+  const prChargeLevels: PrLevel[] = prChargeDetected.map((s) => s.pr_charge)
+  const bestPrCharge: PrLevel = prChargeLevels.includes('gold')
+    ? 'gold'
+    : prChargeLevels.includes('silver')
+      ? 'silver'
+      : prChargeLevels.includes('bronze')
+        ? 'bronze'
+        : null
 
-  const prSerieMax = prSerieDetected.reduce((best, s) => Math.max(best, Math.round(s.weight_kg * s.reps)), 0)
-  const prSerieLevels: PrLevel[] = prSerieDetected.map(s => s.pr_serie)
-  const bestPrSerie: PrLevel = prSerieLevels.includes('gold') ? 'gold' :
-    prSerieLevels.includes('silver') ? 'silver' :
-    prSerieLevels.includes('bronze') ? 'bronze' : null
+  const prSerieMax = prSerieDetected.reduce(
+    (best, s) => Math.max(best, Math.round(s.weight_kg * s.reps)),
+    0
+  )
+  const prSerieLevels: PrLevel[] = prSerieDetected.map((s) => s.pr_serie)
+  const bestPrSerie: PrLevel = prSerieLevels.includes('gold')
+    ? 'gold'
+    : prSerieLevels.includes('silver')
+      ? 'silver'
+      : prSerieLevels.includes('bronze')
+        ? 'bronze'
+        : null
 
   const muscleVolumes = exercises.reduce<Record<string, number>>((acc, ex) => {
     const key = ex.muscle_group ?? 'autre'
     const vol = ex.sets
-      .filter(s => s.validated && s.weight_kg > 0 && s.reps > 0)
+      .filter((s) => s.validated && s.weight_kg > 0 && s.reps > 0)
       .reduce((s, set) => s + set.weight_kg * set.reps, 0)
     acc[key] = (acc[key] ?? 0) + vol
     return acc
@@ -635,11 +691,13 @@ export default function SummaryScreen() {
   // ─── computeAndSave ─────────────────────────────────────────────────────────
 
   async function computeAndSave(): Promise<{ workoutId: string; prSeance: PrLevel }> {
-    const { data: { user } } = await supabase.auth.getUser()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
     if (!user) throw new Error('Non authentifié')
 
-    const poidsMax = Math.max(0, ...validSets.map(s => s.weight_kg))
-    const volumeMaxSerie = Math.max(0, ...validSets.map(s => s.weight_kg * s.reps))
+    const poidsMax = Math.max(0, ...validSets.map((s) => s.weight_kg))
+    const volumeMaxSerie = Math.max(0, ...validSets.map((s) => s.weight_kg * s.reps))
     const durationSec = elapsedSeconds
 
     const volumeParExercice: Record<string, number> = {}
@@ -650,15 +708,15 @@ export default function SummaryScreen() {
     const restParEx: Record<string, number[]> = {}
 
     for (const ex of exercises) {
-      const sets = ex.sets.filter(s => s.validated && s.weight_kg > 0 && s.reps > 0)
+      const sets = ex.sets.filter((s) => s.validated && s.weight_kg > 0 && s.reps > 0)
       if (sets.length === 0) continue
       const id = ex.exercise_id
       volumeParExercice[id] = sets.reduce((s, set) => s + set.weight_kg * set.reps, 0)
-      volumeMaxSerieParEx[id] = Math.max(...sets.map(s => s.weight_kg * s.reps))
-      poidsMaxParEx[id] = Math.max(...sets.map(s => s.weight_kg))
+      volumeMaxSerieParEx[id] = Math.max(...sets.map((s) => s.weight_kg * s.reps))
+      poidsMaxParEx[id] = Math.max(...sets.map((s) => s.weight_kg))
       nbSeriesParEx[id] = sets.length
-      estimated1rmParEx[id] = Math.max(...sets.map(s => epley1RM(s.weight_kg, s.reps)))
-      restParEx[id] = sets.map(s => s.rest_seconds ?? 0).filter(r => r > 0)
+      estimated1rmParEx[id] = Math.max(...sets.map((s) => epley1RM(s.weight_kg, s.reps)))
+      restParEx[id] = sets.map((s) => s.rest_seconds ?? 0).filter((r) => r > 0)
     }
 
     const allRests = Object.values(restParEx).flat()
@@ -677,90 +735,230 @@ export default function SummaryScreen() {
     const densiteKgParMin = durationSec > 0 ? (totalVolume / durationSec) * 60 : 0
 
     const { data: topWorkouts } = await supabase
-      .from('workouts').select('total_volume_kg').eq('user_id', user.id)
-      .not('total_volume_kg', 'is', null).order('total_volume_kg', { ascending: false }).limit(3)
+      .from('workouts')
+      .select('total_volume_kg')
+      .eq('user_id', user.id)
+      .not('total_volume_kg', 'is', null)
+      .order('total_volume_kg', { ascending: false })
+      .limit(3)
 
-    const topVols: number[] = ((topWorkouts ?? []) as { total_volume_kg: number }[]).map(w => w.total_volume_kg ?? 0)
+    const topVols: number[] = ((topWorkouts ?? []) as { total_volume_kg: number }[]).map(
+      (w) => w.total_volume_kg ?? 0
+    )
     const top3seance = { pr1: topVols[0] ?? 0, pr2: topVols[1] ?? null, pr3: topVols[2] ?? null }
     const prSeance = computePodium(totalVolume, top3seance)
 
     const prParExercice: Record<string, boolean> = {}
-    for (const ex of exercises) prParExercice[ex.exercise_id] = ex.sets.some(s => s.is_pr)
-    const nbPrSeance = validSets.filter(s => s.is_pr).length
+    for (const ex of exercises) prParExercice[ex.exercise_id] = ex.sets.some((s) => s.is_pr)
+    const nbPrSeance = validSets.filter((s) => s.is_pr).length
 
-    let streakSemaines = 0, nbSeances30j = 0, frequenceHebdo = 0, volume7j = 0
+    let streakSemaines = 0,
+      nbSeances30j = 0,
+      frequenceHebdo = 0,
+      volume7j = 0
     let tempsDerniere: number | null = null
     const evolutionRepos: number | null = null
     try {
       const since90 = new Date(Date.now() - 90 * 86400000).toISOString()
       const since30 = new Date(Date.now() - 30 * 86400000).toISOString()
-      const { data: recent } = await supabase.from('workouts')
+      const { data: recent } = await supabase
+        .from('workouts')
         .select('started_at, total_volume_kg, avg_rest_seconds')
-        .eq('user_id', user.id).gte('started_at', since90)
+        .eq('user_id', user.id)
+        .gte('started_at', since90)
         .order('started_at', { ascending: false })
       if (recent?.length) {
-        nbSeances30j = (recent as { started_at: string }[]).filter(w => w.started_at >= since30).length
+        nbSeances30j = (recent as { started_at: string }[]).filter(
+          (w) => w.started_at >= since30
+        ).length
         frequenceHebdo = nbSeances30j / 4
         const last = (recent as { started_at: string }[])[0]
-        if (last?.started_at) tempsDerniere = Math.round((Date.now() - new Date(last.started_at).getTime()) / 1000)
-        const weeks = new Set((recent as { started_at: string }[]).map(w => {
-          const d = new Date(w.started_at)
-          return `${d.getFullYear()}-${Math.floor((d.getTime() - new Date(d.getFullYear(), 0, 1).getTime()) / 604800000)}`
-        }))
+        if (last?.started_at)
+          tempsDerniere = Math.round((Date.now() - new Date(last.started_at).getTime()) / 1000)
+        const weeks = new Set(
+          (recent as { started_at: string }[]).map((w) => {
+            const d = new Date(w.started_at)
+            return `${d.getFullYear()}-${Math.floor((d.getTime() - new Date(d.getFullYear(), 0, 1).getTime()) / 604800000)}`
+          })
+        )
         streakSemaines = weeks.size
       }
-    } catch (_) {}
+    } catch (e) {
+      console.error('[summary] rolling 30j/streak', e)
+    }
 
     try {
       const since7 = new Date(Date.now() - 7 * 86400000).toISOString()
-      const { data: wIds7j } = await supabase.from('workouts').select('id, total_volume_kg')
-        .eq('user_id', user.id).gte('started_at', since7)
-      volume7j = ((wIds7j ?? []) as { total_volume_kg: number }[]).reduce((s, w) => s + (w.total_volume_kg ?? 0), 0)
-    } catch (_) {}
+      const { data: wIds7j } = await supabase
+        .from('workouts')
+        .select('id, total_volume_kg')
+        .eq('user_id', user.id)
+        .gte('started_at', since7)
+      volume7j = ((wIds7j ?? []) as { total_volume_kg: number }[]).reduce(
+        (s, w) => s + (w.total_volume_kg ?? 0),
+        0
+      )
+    } catch (e) {
+      console.error('[summary] volume 7j', e)
+    }
 
-    let poidsCorps: number | null = null, ageAns: number | null = null
+    let poidsCorps: number | null = null,
+      ageAns: number | null = null
     try {
-      const { data: userProfile } = await supabase.from('users').select('date_naissance').eq('id', user.id).single()
-      const { data: bodyM } = await supabase.from('body_metrics').select('weight_kg')
-        .eq('user_id', user.id).order('measured_at', { ascending: false }).limit(1).single()
+      const { data: userProfile } = await supabase
+        .from('users')
+        .select('date_naissance')
+        .eq('id', user.id)
+        .single()
+      const { data: bodyM } = await supabase
+        .from('body_metrics')
+        .select('weight_kg')
+        .eq('user_id', user.id)
+        .order('measured_at', { ascending: false })
+        .limit(1)
+        .single()
       if (bodyM) poidsCorps = (bodyM as { weight_kg: number }).weight_kg
       if ((userProfile as { date_naissance?: string } | null)?.date_naissance) {
         const dob = new Date((userProfile as { date_naissance: string }).date_naissance)
         ageAns = Math.floor((Date.now() - dob.getTime()) / (365.25 * 86400000))
       }
-    } catch (_) {}
+    } catch (e) {
+      console.error('[summary] profil poids/âge', e)
+    }
 
-    const chargeRelSeance = poidsCorps && poidsMax > 0 ? (poidsMax / (poidsCorps * 0.8)) * 100 : null
+    const chargeRelSeance =
+      poidsCorps && poidsMax > 0 ? (poidsMax / (poidsCorps * 0.8)) * 100 : null
     const chargeRelParEx: Record<string, number | null> = {}
     for (const [id, pm] of Object.entries(poidsMaxParEx)) {
       chargeRelParEx[id] = poidsCorps ? (pm / (poidsCorps * 0.8)) * 100 : null
     }
 
-    const dominantMuscle = exercises.length > 0
-      ? [...new Set(exercises.map(e => e.muscle_group).filter(Boolean))].sort(
-          (a, b) =>
-            (volumeParExercice[exercises.find(e => e.muscle_group === b)?.exercise_id ?? ''] ?? 0) -
-            (volumeParExercice[exercises.find(e => e.muscle_group === a)?.exercise_id ?? ''] ?? 0)
-        )[0] ?? null
-      : null
+    const dominantMuscle =
+      exercises.length > 0
+        ? ([...new Set(exercises.map((e) => e.muscle_group).filter(Boolean))].sort(
+            (a, b) =>
+              (volumeParExercice[exercises.find((e) => e.muscle_group === b)?.exercise_id ?? ''] ??
+                0) -
+              (volumeParExercice[exercises.find((e) => e.muscle_group === a)?.exercise_id ?? ''] ??
+                0)
+          )[0] ?? null)
+        : null
 
-    const setsByExercise: Record<string, Array<{ weight_kg: number; reps: number }>> =
-      Object.fromEntries(exercises.map(ex => [
+    const setsByExercise: Record<
+      string,
+      Array<{ weight_kg: number; reps: number }>
+    > = Object.fromEntries(
+      exercises.map((ex) => [
         ex.exercise_id,
-        ex.sets.filter(s => s.validated && s.weight_kg > 0 && s.reps > 0).map(s => ({ weight_kg: s.weight_kg, reps: s.reps })),
-      ]))
+        ex.sets
+          .filter((s) => s.validated && s.weight_kg > 0 && s.reps > 0)
+          .map((s) => ({ weight_kg: s.weight_kg, reps: s.reps })),
+      ])
+    )
 
-    const workoutId = crypto.randomUUID()
+    // ORA-007 — id idempotent (réutilisé tel quel en cas de retry)
+    if (!workoutIdRef.current) workoutIdRef.current = crypto.randomUUID()
+    const workoutId = workoutIdRef.current
     const startedAtIso = startedAt?.toISOString() ?? new Date().toISOString()
+    const endedAtIso = new Date().toISOString()
 
-    const { error: wErr } = await supabase.from('workouts').insert({
-      id: workoutId, user_id: user.id, title: workoutName,
-      started_at: startedAtIso, ended_at: new Date().toISOString(),
-      duration_sec: durationSec, total_volume_kg: totalVolume,
-      is_public: isPublic, poids_corps_kg: poidsCorps, pr_seance: prSeance,
+    // Construit le payload complet workout + exercises + sets pour la RPC transactionnelle.
+    // Échec partiel impossible : tout est inséré dans une seule transaction Postgres (ou rien).
+    type SetPayload = {
+      id: string
+      set_number: number
+      reps: number
+      weight_kg: number
+      rest_seconds: number | null
+      is_pr: boolean
+      pr_charge: PrLevel
+      pr_serie: PrLevel
+      logged_at: string
+    }
+    const exercisesPayload: Array<{
+      id: string
+      exercise_id: string
+      order_index: number
+      pr_exercice: PrLevel
+      sets: SetPayload[]
+    }> = []
+    // Sets à écrire en SQLite — UNIQUEMENT après succès complet Supabase (ORA-007)
+    const localSets: Array<{
+      id: string
+      exercise_id: string
+      weight_kg: number
+      reps: number
+      session_id: string
+      logged_at: number
+    }> = []
+
+    for (let ei = 0; ei < exercises.length; ei++) {
+      const ex = exercises[ei]
+      const validatedSets = ex.sets.filter((s) => s.validated && s.reps > 0)
+      if (validatedSets.length === 0) continue
+      const exVolume = volumeParExercice[ex.exercise_id] ?? 0
+      const prExercice = computePodium(exVolume, ex.pr_top3_exercice)
+      const weId = crypto.randomUUID()
+      exercisesPayload.push({
+        id: weId,
+        exercise_id: ex.exercise_id,
+        order_index: ei,
+        pr_exercice: prExercice,
+        sets: validatedSets.map((s) => ({
+          id: crypto.randomUUID(),
+          set_number: s.set_number,
+          reps: s.reps,
+          weight_kg: s.weight_kg,
+          rest_seconds: s.rest_seconds,
+          is_pr: s.is_pr,
+          pr_charge: s.pr_charge,
+          pr_serie: s.pr_serie,
+          logged_at: s.validated_at ? new Date(s.validated_at).toISOString() : endedAtIso,
+        })),
+      })
+      for (const s of validatedSets) {
+        localSets.push({
+          id: `${workoutId}-${ex.exercise_id}-${s.set_number}`,
+          exercise_id: ex.exercise_id,
+          weight_kg: s.weight_kg,
+          reps: s.reps,
+          session_id: workoutId,
+          logged_at: s.validated_at ?? Date.now(),
+        })
+      }
+    }
+
+    const { error: rpcErr } = await supabase.rpc('create_workout', {
+      payload: {
+        id: workoutId,
+        title: workoutName,
+        started_at: startedAtIso,
+        ended_at: endedAtIso,
+        duration_sec: durationSec,
+        total_volume_kg: totalVolume,
+        is_public: isPublic,
+        poids_corps_kg: poidsCorps,
+        pr_seance: prSeance,
+        exercises: exercisesPayload,
+      },
     })
-    if (wErr) throw new Error(wErr.message)
+    if (rpcErr) throw new Error(rpcErr.message)
 
+    // ── Tout Supabase est commité → on alimente SQLite (idempotent via id déterministe) ──
+    // Best-effort : la séance est déjà la source de vérité côté Supabase ; un échec du cache
+    // local (ghost/predictor) ne doit pas faire apparaître le save comme échoué.
+    try {
+      for (const ls of localSets) await insertLocalSet(ls)
+      await insertLocalSession({
+        id: workoutId,
+        total_volume_kg: totalVolume,
+        logged_at: Date.now(),
+      })
+    } catch (e) {
+      console.error('[summary] SQLite local insert', e)
+    }
+
+    // Photo : best-effort APRÈS le save atomique (la séance est déjà persistée sans elle)
     if (photoUri) {
       try {
         const response = await fetch(photoUri)
@@ -768,91 +966,119 @@ export default function SummaryScreen() {
         const arrayBuffer = await blob.arrayBuffer()
         const uint8 = new Uint8Array(arrayBuffer)
         const { data: uploadData } = await supabase.storage
-          .from('workout-photos').upload(`${user.id}/${workoutId}.jpg`, uint8, { contentType: 'image/jpeg', upsert: true })
+          .from('workout-photos')
+          .upload(`${user.id}/${workoutId}.jpg`, uint8, { contentType: 'image/jpeg', upsert: true })
         if (uploadData) {
-          const { data: publicUrl } = supabase.storage.from('workout-photos').getPublicUrl(`${user.id}/${workoutId}.jpg`)
-          if (publicUrl?.publicUrl) await supabase.from('workouts').update({ photo_url: publicUrl.publicUrl }).eq('id', workoutId)
+          const { data: publicUrl } = supabase.storage
+            .from('workout-photos')
+            .getPublicUrl(`${user.id}/${workoutId}.jpg`)
+          if (publicUrl?.publicUrl)
+            await supabase
+              .from('workouts')
+              .update({ photo_url: publicUrl.publicUrl })
+              .eq('id', workoutId)
         }
-      } catch (_) {}
-    }
-
-    for (let ei = 0; ei < exercises.length; ei++) {
-      const ex = exercises[ei]
-      const validatedSets = ex.sets.filter(s => s.validated && s.reps > 0)
-      if (validatedSets.length === 0) continue
-      const exVolume = volumeParExercice[ex.exercise_id] ?? 0
-      const prExercice = computePodium(exVolume, ex.pr_top3_exercice)
-      const weId = crypto.randomUUID()
-      const { error: weErr } = await supabase.from('workout_exercises').insert({
-        id: weId, workout_id: workoutId, exercise_id: ex.exercise_id, order_index: ei, pr_exercice: prExercice,
-      })
-      if (weErr) throw new Error(weErr.message)
-      const setsInsert = validatedSets.map((s) => ({
-        id: crypto.randomUUID(), workout_exercise_id: weId, set_type: 'working' as const,
-        set_number: s.set_number, reps: s.reps, weight_kg: s.weight_kg, rest_seconds: s.rest_seconds,
-        is_pr: s.is_pr, pr_charge: s.pr_charge, pr_serie: s.pr_serie,
-        logged_at: s.validated_at ? new Date(s.validated_at).toISOString() : new Date().toISOString(),
-      }))
-      const { error: wsErr } = await supabase.from('workout_sets').insert(setsInsert)
-      if (wsErr) throw new Error(wsErr.message)
-      for (const s of validatedSets) {
-        await insertLocalSet({
-          id: `${workoutId}-${ex.exercise_id}-${s.set_number}`,
-          exercise_id: ex.exercise_id, weight_kg: s.weight_kg, reps: s.reps,
-          session_id: workoutId, logged_at: s.validated_at ?? Date.now(),
-        })
+      } catch (e) {
+        console.error('[summary] upload photo', e)
       }
     }
-
-    await insertLocalSession({ id: workoutId, total_volume_kg: totalVolume, logged_at: Date.now() })
 
     try {
       const metricsData = {
-        volume_total_kg: totalVolume, duree_totale_seance: durationSec,
-        nb_exercices: nbExercices, nb_series_total: nbSeries,
-        poids_max_seance_kg: poidsMax, volume_max_serie_kg: volumeMaxSerie,
-        volume_par_exercice_kg: volumeParExercice, nb_series_par_exercice: nbSeriesParEx,
-        poids_max_par_exercice_kg: poidsMaxParEx, estimated_1rm_par_exercice_kg: estimated1rmParEx,
-        pr_par_exercice: prParExercice, temps_repos_total_sec: tempsReposTotal,
-        temps_repos_moyen_seance_sec: tempsReposMoyen, temps_actif_sec: tempsActif,
-        ratio_actif_repos: ratioActif, densite_kg_par_min: densiteKgParMin, slot_horaire: slotHoraire,
-        heure_debut: startedAtIso, poids_corps_kg: poidsCorps, age_ans: ageAns,
-        nb_pr_seance: nbPrSeance, streak_semaines_actives: streakSemaines,
-        nb_seances_30_derniers_jours: nbSeances30j, frequence_hebdo_moyenne: frequenceHebdo,
-        volume_7_derniers_jours_kg: volume7j, temps_depuis_derniere_seance_sec: tempsDerniere,
-        charge_relative_seance: chargeRelSeance, charge_relative_par_exercice: chargeRelParEx,
-        temps_repos_moyen_par_exercice_sec: tempsReposMoyParEx, muscle_primaire_dominant: dominantMuscle,
-        volume_max_serie_par_exercice_kg: volumeMaxSerieParEx, muscles_sollicites: [],
+        volume_total_kg: totalVolume,
+        duree_totale_seance: durationSec,
+        nb_exercices: nbExercices,
+        nb_series_total: nbSeries,
+        poids_max_seance_kg: poidsMax,
+        volume_max_serie_kg: volumeMaxSerie,
+        volume_par_exercice_kg: volumeParExercice,
+        nb_series_par_exercice: nbSeriesParEx,
+        poids_max_par_exercice_kg: poidsMaxParEx,
+        estimated_1rm_par_exercice_kg: estimated1rmParEx,
+        pr_par_exercice: prParExercice,
+        temps_repos_total_sec: tempsReposTotal,
+        temps_repos_moyen_seance_sec: tempsReposMoyen,
+        temps_actif_sec: tempsActif,
+        ratio_actif_repos: ratioActif,
+        densite_kg_par_min: densiteKgParMin,
+        slot_horaire: slotHoraire,
+        heure_debut: startedAtIso,
+        poids_corps_kg: poidsCorps,
+        age_ans: ageAns,
+        nb_pr_seance: nbPrSeance,
+        streak_semaines_actives: streakSemaines,
+        nb_seances_30_derniers_jours: nbSeances30j,
+        frequence_hebdo_moyenne: frequenceHebdo,
+        volume_7_derniers_jours_kg: volume7j,
+        temps_depuis_derniere_seance_sec: tempsDerniere,
+        charge_relative_seance: chargeRelSeance,
+        charge_relative_par_exercice: chargeRelParEx,
+        temps_repos_moyen_par_exercice_sec: tempsReposMoyParEx,
+        muscle_primaire_dominant: dominantMuscle,
+        volume_max_serie_par_exercice_kg: volumeMaxSerieParEx,
+        muscles_sollicites: [],
       }
       await supabase.from('workout_metrics').insert({
-        workout_id: workoutId, data: metricsData, computed_at: new Date().toISOString(),
+        workout_id: workoutId,
+        data: metricsData,
+        computed_at: new Date().toISOString(),
       })
-    } catch (_) {}
+    } catch (e) {
+      console.error('[summary] insert workout_metrics', e)
+    }
 
     try {
       const sv = await saveMyoSignature({
-        userId: user.id, workoutId, startedAtIso, volume_total_kg: totalVolume,
-        densite_kg_par_min: densiteKgParMin, nb_series_total: nbSeries,
-        score_recuperation_estime: null, nb_pr_seance: nbPrSeance,
-        streak_semaines_actives: streakSemaines, volume_max_serie_kg: volumeMaxSerie,
-        poids_max_seance_kg: poidsMax, charge_relative_seance: chargeRelSeance,
-        nb_exercices: nbExercices, nb_series_par_exercise_moy: nbExercices > 0 ? nbSeries / nbExercices : 0,
-        duree_totale_seance: durationSec, temps_repos_total_sec: tempsReposTotal,
-        temps_repos_moyen_seance_sec: tempsReposMoyen, temps_actif_sec: tempsActif,
-        ratio_actif_repos: ratioActif, heure_debut: startedAtIso, slot_horaire: slotHoraire,
-        muscle_primaire_dominant: dominantMuscle, poids_corps_kg: poidsCorps, age_ans: ageAns,
-        temps_depuis_derniere_seance_sec: tempsDerniere, volume_7_derniers_jours_kg: volume7j,
-        evolution_repos_moyen_seance_sec: evolutionRepos, nb_seances_30_derniers_jours: nbSeances30j,
-        frequence_hebdo_moyenne: frequenceHebdo, volume_par_exercice_kg: volumeParExercice,
-        volume_max_serie_par_exercice_kg: volumeMaxSerieParEx, poids_max_par_exercice_kg: poidsMaxParEx,
-        charge_relative_par_exercice: chargeRelParEx, nb_series_par_exercice: nbSeriesParEx,
-        temps_repos_moyen_par_exercice_sec: tempsReposMoyParEx, estimated_1rm_par_exercice_kg: estimated1rmParEx,
-        pr_par_exercice: prParExercice, volume_par_muscle_kg: {}, evolution_volume_par_exercice: {},
-        evolution_1rm_par_exercice: {}, volume_par_muscle_30j_kg: {}, volume_par_muscle_90j_kg: {},
-        frequence_sollicitation_par_muscle_7j: {}, muscles_sollicites: [], setsByExercise,
+        userId: user.id,
+        workoutId,
+        startedAtIso,
+        volume_total_kg: totalVolume,
+        densite_kg_par_min: densiteKgParMin,
+        nb_series_total: nbSeries,
+        score_recuperation_estime: null,
+        nb_pr_seance: nbPrSeance,
+        streak_semaines_actives: streakSemaines,
+        volume_max_serie_kg: volumeMaxSerie,
+        poids_max_seance_kg: poidsMax,
+        charge_relative_seance: chargeRelSeance,
+        nb_exercices: nbExercices,
+        nb_series_par_exercise_moy: nbExercices > 0 ? nbSeries / nbExercices : 0,
+        duree_totale_seance: durationSec,
+        temps_repos_total_sec: tempsReposTotal,
+        temps_repos_moyen_seance_sec: tempsReposMoyen,
+        temps_actif_sec: tempsActif,
+        ratio_actif_repos: ratioActif,
+        heure_debut: startedAtIso,
+        slot_horaire: slotHoraire,
+        muscle_primaire_dominant: dominantMuscle,
+        poids_corps_kg: poidsCorps,
+        age_ans: ageAns,
+        temps_depuis_derniere_seance_sec: tempsDerniere,
+        volume_7_derniers_jours_kg: volume7j,
+        evolution_repos_moyen_seance_sec: evolutionRepos,
+        nb_seances_30_derniers_jours: nbSeances30j,
+        frequence_hebdo_moyenne: frequenceHebdo,
+        volume_par_exercice_kg: volumeParExercice,
+        volume_max_serie_par_exercice_kg: volumeMaxSerieParEx,
+        poids_max_par_exercice_kg: poidsMaxParEx,
+        charge_relative_par_exercice: chargeRelParEx,
+        nb_series_par_exercice: nbSeriesParEx,
+        temps_repos_moyen_par_exercice_sec: tempsReposMoyParEx,
+        estimated_1rm_par_exercice_kg: estimated1rmParEx,
+        pr_par_exercice: prParExercice,
+        volume_par_muscle_kg: {},
+        evolution_volume_par_exercice: {},
+        evolution_1rm_par_exercice: {},
+        volume_par_muscle_30j_kg: {},
+        volume_par_muscle_90j_kg: {},
+        frequence_sollicitation_par_muscle_7j: {},
+        muscles_sollicites: [],
+        setsByExercise,
       })
       if (sv) setSessionValues(sv)
-    } catch (_) {}
+    } catch (e) {
+      console.error('[summary] saveMyoSignature', e)
+    }
 
     return { workoutId, prSeance }
   }
@@ -869,8 +1095,8 @@ export default function SummaryScreen() {
         try {
           const preds = await Promise.all(
             exercises
-              .filter(ex => ex.sets.some(s => s.validated && s.weight_kg > 0))
-              .map(ex => computePrediction(ex.exercise_id, ex.name))
+              .filter((ex) => ex.sets.some((s) => s.validated && s.weight_kg > 0))
+              .map((ex) => computePrediction(ex.exercise_id, ex.name))
           )
           const valid = preds.filter((p): p is NonNullable<typeof p> => p !== null)
           if (valid.length > 0) {
@@ -878,12 +1104,14 @@ export default function SummaryScreen() {
             const prev: typeof valid = existing ? JSON.parse(existing) : []
             // Écrase les entrées du même exercice, garde les autres
             const merged = [
-              ...prev.filter(p => !valid.some(v => v.exerciseId === p.exerciseId)),
+              ...prev.filter((p) => !valid.some((v) => v.exerciseId === p.exerciseId)),
               ...valid,
             ]
             await AsyncStorage.setItem('predictions_cache', JSON.stringify(merged))
           }
-        } catch (_) {}
+        } catch (e) {
+          console.error('[summary] cache prédictions', e)
+        }
       })()
       storage.delete('workout_session_draft')
       resetWorkout()
@@ -898,7 +1126,8 @@ export default function SummaryScreen() {
     Alert.alert('Annuler ?', 'La séance sera perdue.', [
       { text: 'Non', style: 'cancel' },
       {
-        text: 'Oui, annuler', style: 'destructive',
+        text: 'Oui, annuler',
+        style: 'destructive',
         onPress: () => {
           storage.delete('workout_session_draft')
           resetWorkout()
@@ -913,7 +1142,9 @@ export default function SummaryScreen() {
     if (!permission.granted) return
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true, aspect: [4, 3], quality: 0.8,
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 0.8,
     })
     if (!result.canceled && result.assets[0]) setPhotoUri(result.assets[0].uri)
   }
@@ -921,7 +1152,10 @@ export default function SummaryScreen() {
   // ─── Render ──────────────────────────────────────────────────────────────────
 
   return (
-    <SafeAreaView style={[styles.root, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
+    <SafeAreaView
+      style={[styles.root, { backgroundColor: colors.background }]}
+      edges={['top', 'bottom']}
+    >
       <ScrollView
         ref={scrollViewRef}
         style={styles.scroll}
@@ -929,7 +1163,6 @@ export default function SummaryScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-
         {/* ── Header ── */}
         <Animated.View style={style0}>
           <Text style={[styles.dateCaption, { color: colors.textTertiary }]}>
@@ -944,10 +1177,7 @@ export default function SummaryScreen() {
         <Animated.View style={[styles.heroBlock, style1]}>
           <Text style={[styles.heroLabel, { color: colors.textTertiary }]}>VOLUME TOTAL</Text>
           <View style={styles.heroRow}>
-            <Text
-              style={[styles.heroValue, { color: colors.accent }]}
-              allowFontScaling={false}
-            >
+            <Text style={[styles.heroValue, { color: colors.accent }]} allowFontScaling={false}>
               {displayVolume.toLocaleString('fr-FR')}
             </Text>
             <Text style={[styles.heroUnit, { color: colors.accent }]}>kg</Text>
@@ -977,38 +1207,50 @@ export default function SummaryScreen() {
           <Animated.View style={[styles.section, style2]}>
             <SectionHeader label="PRs DÉTECTÉS" colors={colors} />
             <View style={styles.prList}>
-              {bestPrCharge !== null && (() => {
-                const best = prChargeDetected.reduce((b, s) => s.weight_kg > (b?.weight_kg ?? 0) ? s : b, null as typeof prChargeDetected[0] | null)
-                if (!best) return null
-                const exForCharge = exercises.find(ex => ex.sets.some(s => s === best))
-                return (
-                  <PrRow
-                    level={bestPrCharge}
-                    type="charge"
-                    value={`${best.weight_kg} kg`}
-                    delay={80}
-                    exerciseName={exForCharge?.name ?? ''}
-                    setNumber={best.set_number}
-                    onPress={exForCharge ? () => scrollToExercise(exForCharge.exercise_id) : undefined}
-                  />
-                )
-              })()}
-              {bestPrSerie !== null && (() => {
-                const best = prSerieDetected.reduce((b, s) => (s.weight_kg * s.reps) > ((b?.weight_kg ?? 0) * (b?.reps ?? 0)) ? s : b, null as typeof prSerieDetected[0] | null)
-                if (!best) return null
-                const exForSerie = exercises.find(ex => ex.sets.some(s => s === best))
-                return (
-                  <PrRow
-                    level={bestPrSerie}
-                    type="serie"
-                    value={`${best.weight_kg} kg × ${best.reps}`}
-                    delay={160}
-                    exerciseName={exForSerie?.name ?? ''}
-                    setNumber={best.set_number}
-                    onPress={exForSerie ? () => scrollToExercise(exForSerie.exercise_id) : undefined}
-                  />
-                )
-              })()}
+              {bestPrCharge !== null &&
+                (() => {
+                  const best = prChargeDetected.reduce(
+                    (b, s) => (s.weight_kg > (b?.weight_kg ?? 0) ? s : b),
+                    null as (typeof prChargeDetected)[0] | null
+                  )
+                  if (!best) return null
+                  const exForCharge = exercises.find((ex) => ex.sets.some((s) => s === best))
+                  return (
+                    <PrRow
+                      level={bestPrCharge}
+                      type="charge"
+                      value={`${best.weight_kg} kg`}
+                      delay={80}
+                      exerciseName={exForCharge?.name ?? ''}
+                      setNumber={best.set_number}
+                      onPress={
+                        exForCharge ? () => scrollToExercise(exForCharge.exercise_id) : undefined
+                      }
+                    />
+                  )
+                })()}
+              {bestPrSerie !== null &&
+                (() => {
+                  const best = prSerieDetected.reduce(
+                    (b, s) => (s.weight_kg * s.reps > (b?.weight_kg ?? 0) * (b?.reps ?? 0) ? s : b),
+                    null as (typeof prSerieDetected)[0] | null
+                  )
+                  if (!best) return null
+                  const exForSerie = exercises.find((ex) => ex.sets.some((s) => s === best))
+                  return (
+                    <PrRow
+                      level={bestPrSerie}
+                      type="serie"
+                      value={`${best.weight_kg} kg × ${best.reps}`}
+                      delay={160}
+                      exerciseName={exForSerie?.name ?? ''}
+                      setNumber={best.set_number}
+                      onPress={
+                        exForSerie ? () => scrollToExercise(exForSerie.exercise_id) : undefined
+                      }
+                    />
+                  )
+                })()}
             </View>
           </Animated.View>
         )}
@@ -1037,19 +1279,23 @@ export default function SummaryScreen() {
         {exercises.length > 0 && (
           <Animated.View
             style={[styles.section, style4]}
-            onLayout={(e) => { recapSectionY.current = e.nativeEvent.layout.y }}
+            onLayout={(e) => {
+              recapSectionY.current = e.nativeEvent.layout.y
+            }}
           >
             <SectionHeader label="RÉCAP SÉANCE" colors={colors} />
             {exercises.map((ex, exIdx) => {
-              const exSets = ex.sets.filter(s => s.validated && s.reps > 0)
+              const exSets = ex.sets.filter((s) => s.validated && s.reps > 0)
               if (exSets.length === 0) return null
-              const maxW = Math.max(...exSets.map(s => s.weight_kg), 0)
+              const maxW = Math.max(...exSets.map((s) => s.weight_kg), 0)
               const exVol = exSets.reduce((sum, s) => sum + s.weight_kg * s.reps, 0)
               return (
                 <View
                   key={ex.exercise_id}
                   style={[styles.recapCard, { backgroundColor: colors.backgroundSecondary }]}
-                  onLayout={(e) => { recapCardRelY.current[ex.exercise_id] = e.nativeEvent.layout.y }}
+                  onLayout={(e) => {
+                    recapCardRelY.current[ex.exercise_id] = e.nativeEvent.layout.y
+                  }}
                 >
                   <View style={styles.recapExHeader}>
                     <View style={[styles.recapIdx, { backgroundColor: colors.backgroundTertiary }]}>
@@ -1058,7 +1304,10 @@ export default function SummaryScreen() {
                       </Text>
                     </View>
                     <View style={styles.recapExInfo}>
-                      <Text style={[styles.recapExName, { color: colors.textPrimary }]} numberOfLines={1}>
+                      <Text
+                        style={[styles.recapExName, { color: colors.textPrimary }]}
+                        numberOfLines={1}
+                      >
                         {ex.name}
                       </Text>
                       <Text style={[styles.recapExMeta, { color: colors.textTertiary }]}>
@@ -1070,30 +1319,71 @@ export default function SummaryScreen() {
                   </View>
                   <View style={styles.recapSetsList}>
                     <View style={styles.recapSetHeader}>
-                      <Text style={[styles.recapSetHeaderCell, { color: colors.textTertiary, width: 28 }]}>#</Text>
-                      <Text style={[styles.recapSetHeaderCell, { color: colors.textTertiary, flex: 1 }]}>POIDS</Text>
-                      <Text style={[styles.recapSetHeaderCell, { color: colors.textTertiary, width: 52, textAlign: 'right' }]}>REPS</Text>
-                      <Text style={[styles.recapSetHeaderCell, { color: colors.textTertiary, width: 28, textAlign: 'center' }]}>PR</Text>
+                      <Text
+                        style={[
+                          styles.recapSetHeaderCell,
+                          { color: colors.textTertiary, width: 28 },
+                        ]}
+                      >
+                        #
+                      </Text>
+                      <Text
+                        style={[styles.recapSetHeaderCell, { color: colors.textTertiary, flex: 1 }]}
+                      >
+                        POIDS
+                      </Text>
+                      <Text
+                        style={[
+                          styles.recapSetHeaderCell,
+                          { color: colors.textTertiary, width: 52, textAlign: 'right' },
+                        ]}
+                      >
+                        REPS
+                      </Text>
+                      <Text
+                        style={[
+                          styles.recapSetHeaderCell,
+                          { color: colors.textTertiary, width: 28, textAlign: 'center' },
+                        ]}
+                      >
+                        PR
+                      </Text>
                     </View>
                     {exSets.map((s, si) => {
                       const prLevel = s.pr_charge ?? s.pr_serie
-                      const prColor = prLevel === 'gold' ? colors.prGold : prLevel === 'silver' ? colors.prSilver : colors.prBronze
+                      const prColor =
+                        prLevel === 'gold'
+                          ? colors.prGold
+                          : prLevel === 'silver'
+                            ? colors.prSilver
+                            : colors.prBronze
                       return (
                         <View
                           key={s.set_number}
                           style={[
                             styles.recapSetRow,
-                            si < exSets.length - 1 && { borderBottomWidth: 1, borderBottomColor: colors.separator },
+                            si < exSets.length - 1 && {
+                              borderBottomWidth: 1,
+                              borderBottomColor: colors.separator,
+                            },
                             prLevel != null && { backgroundColor: `${prColor}10` },
                           ]}
                         >
-                          <Text style={[styles.recapSetNum, { color: colors.textSecondary }]}>{s.set_number}</Text>
-                          <Text style={[styles.recapSetWeight, { color: colors.textPrimary, flex: 1 }]}>
+                          <Text style={[styles.recapSetNum, { color: colors.textSecondary }]}>
+                            {s.set_number}
+                          </Text>
+                          <Text
+                            style={[styles.recapSetWeight, { color: colors.textPrimary, flex: 1 }]}
+                          >
                             {s.weight_kg > 0 ? `${s.weight_kg} kg` : 'Poids corps'}
                           </Text>
-                          <Text style={[styles.recapSetReps, { color: colors.textPrimary }]}>{s.reps}</Text>
+                          <Text style={[styles.recapSetReps, { color: colors.textPrimary }]}>
+                            {s.reps}
+                          </Text>
                           <View style={styles.recapSetPr}>
-                            {prLevel != null && <View style={[styles.recapPrDot, { backgroundColor: prColor }]} />}
+                            {prLevel != null && (
+                              <View style={[styles.recapPrDot, { backgroundColor: prColor }]} />
+                            )}
                           </View>
                         </View>
                       )
@@ -1121,7 +1411,9 @@ export default function SummaryScreen() {
               <Image source={{ uri: photoUri }} style={styles.photoPreview} resizeMode="cover" />
             ) : (
               <View style={styles.photoPlaceholder}>
-                <View style={[styles.photoIconWrap, { backgroundColor: colors.backgroundTertiary }]}>
+                <View
+                  style={[styles.photoIconWrap, { backgroundColor: colors.backgroundTertiary }]}
+                >
                   <Camera size={22} color={colors.textSecondary} />
                 </View>
                 <Text style={[styles.photoPlaceholderText, { color: colors.textSecondary }]}>
@@ -1156,7 +1448,12 @@ export default function SummaryScreen() {
 
         {/* ── Erreur ── */}
         {saveError && (
-          <View style={[styles.errorBox, { backgroundColor: `${colors.error}18`, borderColor: `${colors.error}35` }]}>
+          <View
+            style={[
+              styles.errorBox,
+              { backgroundColor: `${colors.error}18`, borderColor: `${colors.error}35` },
+            ]}
+          >
             <Text style={[styles.errorText, { color: colors.error }]}>{saveError}</Text>
           </View>
         )}
@@ -1164,7 +1461,11 @@ export default function SummaryScreen() {
         {/* ── Footer ── */}
         <View style={styles.footer}>
           <TouchableOpacity
-            style={[styles.saveButton, { backgroundColor: colors.accent }, saving && styles.saveButtonDisabled]}
+            style={[
+              styles.saveButton,
+              { backgroundColor: colors.accent },
+              saving && styles.saveButtonDisabled,
+            ]}
             onPress={handleSave}
             disabled={saving}
             activeOpacity={0.85}
@@ -1181,10 +1482,11 @@ export default function SummaryScreen() {
             disabled={saving}
             activeOpacity={0.7}
           >
-            <Text style={[styles.cancelButtonText, { color: colors.textTertiary }]}>ANNULER LA SÉANCE</Text>
+            <Text style={[styles.cancelButtonText, { color: colors.textTertiary }]}>
+              ANNULER LA SÉANCE
+            </Text>
           </TouchableOpacity>
         </View>
-
       </ScrollView>
     </SafeAreaView>
   )
@@ -1419,17 +1721,17 @@ const styles = StyleSheet.create({
     // width set inline
   },
   muscleBarBg: {
-    height      : MUSCLE_BAR_H,
+    height: MUSCLE_BAR_H,
     borderRadius: MUSCLE_BAR_RADIUS,
-    overflow    : 'hidden',
+    overflow: 'hidden',
   },
   muscleBarAnimWrap: {
-    height      : MUSCLE_BAR_H,
-    overflow    : 'hidden',
+    height: MUSCLE_BAR_H,
+    overflow: 'hidden',
     borderRadius: MUSCLE_BAR_RADIUS,
   },
   muscleBarFill: {
-    height      : '100%',
+    height: '100%',
     borderRadius: MUSCLE_BAR_RADIUS,
   },
   musclePct: {
@@ -1617,7 +1919,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.s2,
   },
-saveButtonDisabled: {
+  saveButtonDisabled: {
     opacity: 0.6,
   },
   saveButtonText: {

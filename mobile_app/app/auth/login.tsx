@@ -17,6 +17,7 @@ import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/context/ThemeContext'
 import { spacing, radius, typography, font } from '@/constants/theme'
 import { inputRecipe, InputState } from '@/constants/recipes'
+import oravaLogo from '@/assets/orava_logo.png'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -34,13 +35,7 @@ interface ErreurFormulaire {
 // ─── Logo Orava ───────────────────────────────────────────────────────────────
 
 function LogoOrava(): React.JSX.Element {
-  return (
-    <Image
-      source={require('@/assets/orava_logo.png')}
-      style={{ width: 48, height: 48 }}
-      resizeMode="contain"
-    />
-  )
+  return <Image source={oravaLogo} style={{ width: 48, height: 48 }} resizeMode="contain" />
 }
 
 // ─── Screen ──────────────────────────────────────────────────────────────────
@@ -111,13 +106,15 @@ export default function LoginScreen(): React.JSX.Element {
 
         {/* Formulaire */}
         <View style={styles.form}>
-
           {/* Email */}
           {(() => {
-            const emailState: InputState =
-              erreurs.email ? 'error' :
-              emailFocused ? 'active' :
-              form.email.length > 0 ? 'filled' : 'default'
+            const emailState: InputState = erreurs.email
+              ? 'error'
+              : emailFocused
+                ? 'active'
+                : form.email.length > 0
+                  ? 'filled'
+                  : 'default'
             const r = inputRecipe(emailState, colors)
             return (
               <View style={styles.champGroupe}>
@@ -125,7 +122,7 @@ export default function LoginScreen(): React.JSX.Element {
                   <TextInput
                     style={r.input}
                     value={form.email}
-                    onChangeText={(v) => setForm(f => ({ ...f, email: v }))}
+                    onChangeText={(v) => setForm((f) => ({ ...f, email: v }))}
                     onFocus={() => setEmailFocused(true)}
                     onBlur={() => setEmailFocused(false)}
                     placeholder="Adresse e-mail"
@@ -142,19 +139,20 @@ export default function LoginScreen(): React.JSX.Element {
                     </View>
                   ) : null}
                 </View>
-                {erreurs.email ? (
-                  <Text style={r.helper}>{erreurs.email}</Text>
-                ) : null}
+                {erreurs.email ? <Text style={r.helper}>{erreurs.email}</Text> : null}
               </View>
             )
           })()}
 
           {/* Mot de passe */}
           {(() => {
-            const mdpState: InputState =
-              erreurs.motDePasse ? 'error' :
-              motDePasseFocused ? 'active' :
-              form.motDePasse.length > 0 ? 'filled' : 'default'
+            const mdpState: InputState = erreurs.motDePasse
+              ? 'error'
+              : motDePasseFocused
+                ? 'active'
+                : form.motDePasse.length > 0
+                  ? 'filled'
+                  : 'default'
             const r = inputRecipe(mdpState, colors)
             return (
               <View style={styles.champGroupe}>
@@ -162,7 +160,7 @@ export default function LoginScreen(): React.JSX.Element {
                   <TextInput
                     style={r.input}
                     value={form.motDePasse}
-                    onChangeText={(v) => setForm(f => ({ ...f, motDePasse: v }))}
+                    onChangeText={(v) => setForm((f) => ({ ...f, motDePasse: v }))}
                     onFocus={() => setMotDePasseFocused(true)}
                     onBlur={() => setMotDePasseFocused(false)}
                     placeholder="Mot de passe"
@@ -172,8 +170,10 @@ export default function LoginScreen(): React.JSX.Element {
                     accessibilityLabel="Champ mot de passe"
                   />
                   <Pressable
-                    onPress={() => setMotDePasseVisible(v => !v)}
-                    accessibilityLabel={motDePasseVisible ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
+                    onPress={() => setMotDePasseVisible((v) => !v)}
+                    accessibilityLabel={
+                      motDePasseVisible ? 'Masquer le mot de passe' : 'Afficher le mot de passe'
+                    }
                     hitSlop={8}
                   >
                     <Text style={styles.texteVisibilite}>
@@ -186,9 +186,7 @@ export default function LoginScreen(): React.JSX.Element {
                     </View>
                   ) : null}
                 </View>
-                {erreurs.motDePasse ? (
-                  <Text style={r.helper}>{erreurs.motDePasse}</Text>
-                ) : null}
+                {erreurs.motDePasse ? <Text style={r.helper}>{erreurs.motDePasse}</Text> : null}
               </View>
             )
           })()}
@@ -227,11 +225,9 @@ export default function LoginScreen(): React.JSX.Element {
             accessibilityLabel="Créer un compte"
           >
             <Text style={styles.lienTexte}>
-              Pas encore de compte ?{' '}
-              <Text style={styles.lienAccent}>Sinscrire</Text>
+              Pas encore de compte ? <Text style={styles.lienAccent}>Sinscrire</Text>
             </Text>
           </Pressable>
-
         </View>
       </ScrollView>
     </KeyboardAvoidingView>

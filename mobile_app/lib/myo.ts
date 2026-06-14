@@ -13,132 +13,252 @@ interface MyoRaw {
   nb_pr: number
   streak: number
   // extended → z_extended JSONB
-  volume_max_par_exercice: number          // max(volume_par_exercice_kg)
+  volume_max_par_exercice: number // max(volume_par_exercice_kg)
   volume_max_serie_kg: number
-  mean_volume_max_serie_par_ex: number     // mean(volume_max_serie_par_exercice_kg)
+  mean_volume_max_serie_par_ex: number // mean(volume_max_serie_par_exercice_kg)
   poids_max_kg: number
-  mean_poids_max_par_ex: number            // mean(poids_max_par_exercice_kg)
+  mean_poids_max_par_ex: number // mean(poids_max_par_exercice_kg)
   charge_relative: number
-  std_charge_relative_par_ex: number       // std(charge_relative_par_exercice) — consistance intensité
+  std_charge_relative_par_ex: number // std(charge_relative_par_exercice) — consistance intensité
   nb_exercices: number
   nb_series_par_ex_moy: number
-  max_nb_series_par_ex: number             // max(nb_series_par_exercice)
+  max_nb_series_par_ex: number // max(nb_series_par_exercice)
   duree_sec: number
   temps_repos_total_sec: number
   temps_repos_moy_sec: number
-  std_temps_repos_par_ex: number           // std(temps_repos_moyen_par_exercice_sec) — consistance repos
+  std_temps_repos_par_ex: number // std(temps_repos_moyen_par_exercice_sec) — consistance repos
   temps_actif_sec: number
   ratio_actif: number
-  heure_debut_h: number                    // heure float 0–23
-  slot_horaire_num: number                 // matin=0 apres_midi=1 soir=2 nuit=3
+  heure_debut_h: number // heure float 0–23
+  slot_horaire_num: number // matin=0 apres_midi=1 soir=2 nuit=3
   max_1rm_kg: number
-  nb_exercices_avec_pr: number             // count(pr_par_exercice === true)
+  nb_exercices_avec_pr: number // count(pr_par_exercice === true)
   nb_muscles: number
-  hhi_muscles: number                      // Σ(vol_i/total)² — concentration musculaire
-  share_dominant: number                   // vol[dominant]/total — spécialisation 0–1
+  hhi_muscles: number // Σ(vol_i/total)² — concentration musculaire
+  share_dominant: number // vol[dominant]/total — spécialisation 0–1
   poids_corps_kg: number
-  age_ans: number                          // toujours z vs population (std≈0 personnelle)
+  age_ans: number // toujours z vs population (std≈0 personnelle)
   temps_depuis_sec: number
   mean_evolution_volume: number
   mean_evolution_1rm: number
   volume_7j_kg: number
-  volume_total_30j_kg: number              // sum(volume_par_muscle_30j_kg)
-  volume_total_90j_kg: number              // sum(volume_par_muscle_90j_kg)
+  volume_total_30j_kg: number // sum(volume_par_muscle_30j_kg)
+  volume_total_90j_kg: number // sum(volume_par_muscle_90j_kg)
   evolution_repos_moy_sec: number
   nb_seances_30j: number
   frequence_hebdo: number
   max_freq_muscle_7j: number
 }
 
-interface Baselines { n: number; mean: MyoRaw; std: MyoRaw }
+interface Baselines {
+  n: number
+  mean: MyoRaw
+  std: MyoRaw
+}
 
 // ─── Fallback population ──────────────────────────────────────────────────────
 
 const POP_MEAN: MyoRaw = {
-  volume_kg: 5000, densite: 80, nb_series: 20, recuperation: 55, nb_pr: 1, streak: 3,
-  volume_max_par_exercice: 2000, volume_max_serie_kg: 500, mean_volume_max_serie_par_ex: 400,
-  poids_max_kg: 80, mean_poids_max_par_ex: 60, charge_relative: 65, std_charge_relative_par_ex: 10,
-  nb_exercices: 5, nb_series_par_ex_moy: 4, max_nb_series_par_ex: 6,
-  duree_sec: 3600, temps_repos_total_sec: 1800, temps_repos_moy_sec: 120, std_temps_repos_par_ex: 30,
-  temps_actif_sec: 1800, ratio_actif: 0.5, heure_debut_h: 18, slot_horaire_num: 2,
-  max_1rm_kg: 100, nb_exercices_avec_pr: 1, nb_muscles: 4, hhi_muscles: 0.35, share_dominant: 0.40,
-  poids_corps_kg: 75, age_ans: 28, temps_depuis_sec: 259200,
-  mean_evolution_volume: 0, mean_evolution_1rm: 0,
-  volume_7j_kg: 10000, volume_total_30j_kg: 40000, volume_total_90j_kg: 120000,
-  evolution_repos_moy_sec: 0, nb_seances_30j: 8, frequence_hebdo: 3, max_freq_muscle_7j: 2,
+  volume_kg: 5000,
+  densite: 80,
+  nb_series: 20,
+  recuperation: 55,
+  nb_pr: 1,
+  streak: 3,
+  volume_max_par_exercice: 2000,
+  volume_max_serie_kg: 500,
+  mean_volume_max_serie_par_ex: 400,
+  poids_max_kg: 80,
+  mean_poids_max_par_ex: 60,
+  charge_relative: 65,
+  std_charge_relative_par_ex: 10,
+  nb_exercices: 5,
+  nb_series_par_ex_moy: 4,
+  max_nb_series_par_ex: 6,
+  duree_sec: 3600,
+  temps_repos_total_sec: 1800,
+  temps_repos_moy_sec: 120,
+  std_temps_repos_par_ex: 30,
+  temps_actif_sec: 1800,
+  ratio_actif: 0.5,
+  heure_debut_h: 18,
+  slot_horaire_num: 2,
+  max_1rm_kg: 100,
+  nb_exercices_avec_pr: 1,
+  nb_muscles: 4,
+  hhi_muscles: 0.35,
+  share_dominant: 0.4,
+  poids_corps_kg: 75,
+  age_ans: 28,
+  temps_depuis_sec: 259200,
+  mean_evolution_volume: 0,
+  mean_evolution_1rm: 0,
+  volume_7j_kg: 10000,
+  volume_total_30j_kg: 40000,
+  volume_total_90j_kg: 120000,
+  evolution_repos_moy_sec: 0,
+  nb_seances_30j: 8,
+  frequence_hebdo: 3,
+  max_freq_muscle_7j: 2,
 }
 
 const POP_STD: MyoRaw = {
-  volume_kg: 3000, densite: 40, nb_series: 8, recuperation: 20, nb_pr: 1.5, streak: 2.5,
-  volume_max_par_exercice: 1000, volume_max_serie_kg: 300, mean_volume_max_serie_par_ex: 250,
-  poids_max_kg: 40, mean_poids_max_par_ex: 30, charge_relative: 15, std_charge_relative_par_ex: 8,
-  nb_exercices: 2, nb_series_par_ex_moy: 2, max_nb_series_par_ex: 3,
-  duree_sec: 1800, temps_repos_total_sec: 900, temps_repos_moy_sec: 60, std_temps_repos_par_ex: 20,
-  temps_actif_sec: 900, ratio_actif: 0.2, heure_debut_h: 4, slot_horaire_num: 1,
-  max_1rm_kg: 50, nb_exercices_avec_pr: 1.5, nb_muscles: 2, hhi_muscles: 0.15, share_dominant: 0.2,
-  poids_corps_kg: 15, age_ans: 8, temps_depuis_sec: 172800,
-  mean_evolution_volume: 1000, mean_evolution_1rm: 10,
-  volume_7j_kg: 5000, volume_total_30j_kg: 20000, volume_total_90j_kg: 60000,
-  evolution_repos_moy_sec: 30, nb_seances_30j: 4, frequence_hebdo: 1.5, max_freq_muscle_7j: 1.5,
+  volume_kg: 3000,
+  densite: 40,
+  nb_series: 8,
+  recuperation: 20,
+  nb_pr: 1.5,
+  streak: 2.5,
+  volume_max_par_exercice: 1000,
+  volume_max_serie_kg: 300,
+  mean_volume_max_serie_par_ex: 250,
+  poids_max_kg: 40,
+  mean_poids_max_par_ex: 30,
+  charge_relative: 15,
+  std_charge_relative_par_ex: 8,
+  nb_exercices: 2,
+  nb_series_par_ex_moy: 2,
+  max_nb_series_par_ex: 3,
+  duree_sec: 1800,
+  temps_repos_total_sec: 900,
+  temps_repos_moy_sec: 60,
+  std_temps_repos_par_ex: 20,
+  temps_actif_sec: 900,
+  ratio_actif: 0.2,
+  heure_debut_h: 4,
+  slot_horaire_num: 1,
+  max_1rm_kg: 50,
+  nb_exercices_avec_pr: 1.5,
+  nb_muscles: 2,
+  hhi_muscles: 0.15,
+  share_dominant: 0.2,
+  poids_corps_kg: 15,
+  age_ans: 8,
+  temps_depuis_sec: 172800,
+  mean_evolution_volume: 1000,
+  mean_evolution_1rm: 10,
+  volume_7j_kg: 5000,
+  volume_total_30j_kg: 20000,
+  volume_total_90j_kg: 60000,
+  evolution_repos_moy_sec: 30,
+  nb_seances_30j: 4,
+  frequence_hebdo: 1.5,
+  max_freq_muscle_7j: 1.5,
 }
 
 const DIM_LABELS: Record<keyof MyoRaw, string> = {
-  volume_kg: 'volume', densite: 'intensité', nb_series: 'structure',
-  recuperation: 'récupération', nb_pr: 'performance', streak: 'régularité',
-  volume_max_par_exercice: 'volume max exercice', volume_max_serie_kg: 'volume max série',
-  mean_volume_max_serie_par_ex: 'vol. max série moy/ex', poids_max_kg: 'force max',
-  mean_poids_max_par_ex: 'force moy/ex', charge_relative: 'charge relative',
-  std_charge_relative_par_ex: 'consistance intensité', nb_exercices: 'diversité',
-  nb_series_par_ex_moy: 'séries/exercice', max_nb_series_par_ex: 'max séries/ex',
-  duree_sec: 'durée', temps_repos_total_sec: 'repos total', temps_repos_moy_sec: 'repos moyen',
-  std_temps_repos_par_ex: 'consistance repos', temps_actif_sec: 'temps actif',
-  ratio_actif: 'ratio actif', heure_debut_h: 'heure début', slot_horaire_num: 'créneau',
-  max_1rm_kg: '1RM max', nb_exercices_avec_pr: 'exercices avec PR', nb_muscles: 'muscles',
-  hhi_muscles: 'concentration musculaire', share_dominant: 'dominance musculaire',
-  poids_corps_kg: 'poids corps', age_ans: 'âge', temps_depuis_sec: 'fraîcheur',
-  mean_evolution_volume: 'progression volume', mean_evolution_1rm: 'progression 1RM',
-  volume_7j_kg: 'charge 7j', volume_total_30j_kg: 'charge 30j', volume_total_90j_kg: 'charge 90j',
-  evolution_repos_moy_sec: 'évol. repos', nb_seances_30j: 'fréquence 30j',
-  frequence_hebdo: 'fréquence hebdo', max_freq_muscle_7j: 'fréq. musculaire',
+  volume_kg: 'volume',
+  densite: 'intensité',
+  nb_series: 'structure',
+  recuperation: 'récupération',
+  nb_pr: 'performance',
+  streak: 'régularité',
+  volume_max_par_exercice: 'volume max exercice',
+  volume_max_serie_kg: 'volume max série',
+  mean_volume_max_serie_par_ex: 'vol. max série moy/ex',
+  poids_max_kg: 'force max',
+  mean_poids_max_par_ex: 'force moy/ex',
+  charge_relative: 'charge relative',
+  std_charge_relative_par_ex: 'consistance intensité',
+  nb_exercices: 'diversité',
+  nb_series_par_ex_moy: 'séries/exercice',
+  max_nb_series_par_ex: 'max séries/ex',
+  duree_sec: 'durée',
+  temps_repos_total_sec: 'repos total',
+  temps_repos_moy_sec: 'repos moyen',
+  std_temps_repos_par_ex: 'consistance repos',
+  temps_actif_sec: 'temps actif',
+  ratio_actif: 'ratio actif',
+  heure_debut_h: 'heure début',
+  slot_horaire_num: 'créneau',
+  max_1rm_kg: '1RM max',
+  nb_exercices_avec_pr: 'exercices avec PR',
+  nb_muscles: 'muscles',
+  hhi_muscles: 'concentration musculaire',
+  share_dominant: 'dominance musculaire',
+  poids_corps_kg: 'poids corps',
+  age_ans: 'âge',
+  temps_depuis_sec: 'fraîcheur',
+  mean_evolution_volume: 'progression volume',
+  mean_evolution_1rm: 'progression 1RM',
+  volume_7j_kg: 'charge 7j',
+  volume_total_30j_kg: 'charge 30j',
+  volume_total_90j_kg: 'charge 90j',
+  evolution_repos_moy_sec: 'évol. repos',
+  nb_seances_30j: 'fréquence 30j',
+  frequence_hebdo: 'fréquence hebdo',
+  max_freq_muscle_7j: 'fréq. musculaire',
 }
 
 const SLOT_MAP: Record<SlotHoraire, number> = { matin: 0, apres_midi: 1, soir: 2, nuit: 3 }
-const CORE_KEYS = new Set<keyof MyoRaw>(['volume_kg', 'densite', 'nb_series', 'recuperation', 'nb_pr', 'streak'])
+const CORE_KEYS = new Set<keyof MyoRaw>([
+  'volume_kg',
+  'densite',
+  'nb_series',
+  'recuperation',
+  'nb_pr',
+  'streak',
+])
 
 // ─── Famille 6 — 17 dims musculaires ─────────────────────────────────────────
 
 export const MUSCLE_17_LABELS: string[] = [
-  'Pec claviculaire', 'Pec sternal',
-  'Deltoïde ant.', 'Deltoïde médial', 'Deltoïde post.',
-  'Grand dorsal', 'Trapèze', 'Grand rond', 'Rhomboïdes', 'Érecteurs rachis',
-  'Biceps', 'Triceps',
-  'Quadriceps', 'Ischio-jambiers', 'Fessiers', 'Mollets', 'Core',
+  'Pec claviculaire',
+  'Pec sternal',
+  'Deltoïde ant.',
+  'Deltoïde médial',
+  'Deltoïde post.',
+  'Grand dorsal',
+  'Trapèze',
+  'Grand rond',
+  'Rhomboïdes',
+  'Érecteurs rachis',
+  'Biceps',
+  'Triceps',
+  'Quadriceps',
+  'Ischio-jambiers',
+  'Fessiers',
+  'Mollets',
+  'Core',
 ]
 
 // Pec + delt : dim résolu par fascicle exact (NULL fascicle → set ignoré)
 const FASCICLE_DIM: Record<string, Record<string, number>> = {
   grand_pectoral: { faisceau_claviculaire: 0, faisceau_sternal: 1, faisceau_abdominal: 1 },
-  deltoide:       { faisceau_anterieur: 2, faisceau_median: 3, faisceau_posterieur: 4 },
+  deltoide: { faisceau_anterieur: 2, faisceau_median: 3, faisceau_posterieur: 4 },
 }
 
 // Autres muscles : toutes fascicules groupées dans le même dim
 const MUSCLE_DIM: Record<string, number> = {
-  grand_dorsal: 5, trapeze: 6, grand_rond: 7, rhomboide: 8, erecteurs_rachis: 9,
-  biceps: 10, triceps: 11,
-  quadriceps: 12, ischio_jambiers: 13,
-  fessier_maximus: 14, fessier_median: 14, fessier_minimus: 14,
-  mollets: 15, abdominaux: 16,
+  grand_dorsal: 5,
+  trapeze: 6,
+  grand_rond: 7,
+  rhomboide: 8,
+  erecteurs_rachis: 9,
+  biceps: 10,
+  triceps: 11,
+  quadriceps: 12,
+  ischio_jambiers: 13,
+  fessier_maximus: 14,
+  fessier_median: 14,
+  fessier_minimus: 14,
+  mollets: 15,
+  abdominaux: 16,
 }
 
 // Population baselines Phase 0 — remplacés par rolling personal en Phase 1
-const MUSCLE_POP_MEAN = [1000, 2000, 800, 600, 400, 2000, 1000, 500, 600, 800, 1000, 1200, 3000, 1500, 2000, 1500, 500]
-const MUSCLE_POP_STD  = [800,  1500, 600, 500, 350, 1500, 800,  400, 500, 600, 800,  1000, 2000, 1200, 1500, 1200, 400]
+const MUSCLE_POP_MEAN = [
+  1000, 2000, 800, 600, 400, 2000, 1000, 500, 600, 800, 1000, 1200, 3000, 1500, 2000, 1500, 500,
+]
+const MUSCLE_POP_STD = [
+  800, 1500, 600, 500, 350, 1500, 800, 400, 500, 600, 800, 1000, 2000, 1200, 1500, 1200, 400,
+]
 
 // ─── Hash déterministe ────────────────────────────────────────────────────────
 
 function djb2(s: string): number {
   let h = 5381 >>> 0
-  for (let i = 0; i < s.length; i++) h = (((h << 5) + h) + s.charCodeAt(i)) >>> 0
+  for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0
   return h
 }
 
@@ -149,14 +269,16 @@ function clampZ(z: number): number {
 }
 
 function rVals(obj: Record<string, number> | null | undefined): number[] {
-  return Object.values(obj ?? {}).filter(v => Number.isFinite(v))
+  return Object.values(obj ?? {}).filter((v) => Number.isFinite(v))
 }
 
 function rValsNN(obj: Record<string, number | null> | null | undefined): number[] {
   return Object.values(obj ?? {}).filter((v): v is number => v !== null && Number.isFinite(v))
 }
 
-function rMax(vals: number[]): number { return vals.length ? Math.max(...vals) : 0 }
+function rMax(vals: number[]): number {
+  return vals.length ? Math.max(...vals) : 0
+}
 function rMean(vals: number[]): number {
   return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0
 }
@@ -165,7 +287,9 @@ function rStd(vals: number[]): number {
   const m = rMean(vals)
   return Math.sqrt(vals.reduce((a, b) => a + (b - m) ** 2, 0) / vals.length)
 }
-function rSum(vals: number[]): number { return vals.reduce((a, b) => a + b, 0) }
+function rSum(vals: number[]): number {
+  return vals.reduce((a, b) => a + b, 0)
+}
 function rCountTrue(obj: Record<string, boolean> | null | undefined): number {
   return Object.values(obj ?? {}).filter(Boolean).length
 }
@@ -195,21 +319,70 @@ export interface EmRow {
 
 export function computeMuscleDims(
   setsByExercise: Record<string, Array<{ weight_kg: number; reps: number }>>,
-  emRows: EmRow[],
+  emRows: EmRow[]
 ): number[] {
   const dims = new Array<number>(17).fill(0)
   for (const row of emRows) {
     const dim = resolveDim(row.muscle, row.fascicle)
     if (dim === -1) continue
     const sets = setsByExercise[row.exercise_id] ?? []
-    dims[dim] += sets.reduce((s, set) => s + set.weight_kg * set.reps * (row.activation_pct / 100), 0)
+    dims[dim] += sets.reduce(
+      (s, set) => s + set.weight_kg * set.reps * (row.activation_pct / 100),
+      0
+    )
   }
   return dims
 }
 
 // ─── Extraction MyoRaw depuis workout_metrics.data ───────────────────────────
 
-function extractRaw(d: any, popMean: MyoRaw): MyoRaw {
+// Forme du blob JSONB workout_metrics.data (cf. rules/database.md). Tous champs
+// optionnels — extractRaw applique un défaut sur chaque accès. (ORA-036)
+interface MetricsData {
+  volume_total_kg?: number
+  muscle_primaire_dominant?: string | null
+  densite_kg_par_min?: number
+  nb_series_total?: number
+  score_recuperation_estime?: number
+  nb_pr_seance?: number
+  streak_semaines_actives?: number
+  volume_par_exercice_kg?: Record<string, number>
+  volume_max_serie_kg?: number
+  volume_max_serie_par_exercice_kg?: Record<string, number>
+  poids_max_seance_kg?: number
+  poids_max_par_exercice_kg?: Record<string, number>
+  charge_relative_seance?: number
+  charge_relative_par_exercice?: Record<string, number | null>
+  nb_exercices?: number
+  nb_series_par_exercise_moy?: number
+  nb_series_par_exercice?: Record<string, number>
+  duree_totale_seance?: number
+  temps_repos_total_sec?: number
+  temps_repos_moyen_seance_sec?: number
+  temps_repos_moyen_par_exercice_sec?: Record<string, number | null>
+  temps_actif_sec?: number
+  ratio_actif_repos?: number
+  heure_debut?: string
+  slot_horaire?: string
+  estimated_1rm_par_exercice_kg?: Record<string, number>
+  pr_par_exercice?: Record<string, boolean>
+  muscles_sollicites?: unknown[]
+  volume_par_muscle_kg?: Record<string, number>
+  poids_corps_kg?: number
+  age_ans?: number
+  temps_depuis_derniere_seance_sec?: number
+  evolution_volume_par_exercice?: Record<string, number | null>
+  evolution_1rm_par_exercice?: Record<string, number | null>
+  volume_7_derniers_jours_kg?: number
+  volume_par_muscle_30j_kg?: Record<string, number>
+  volume_par_muscle_90j_kg?: Record<string, number>
+  evolution_repos_moyen_seance_sec?: number
+  nb_seances_30_derniers_jours?: number
+  frequence_hebdo_moyenne?: number
+  frequence_sollicitation_par_muscle_7j?: Record<string, number>
+}
+
+function extractRaw(d: MetricsData | null | undefined, popMean: MyoRaw): MyoRaw {
   const volTotal: number = d?.volume_total_kg ?? 0
   const dominant: string | null = d?.muscle_primaire_dominant ?? null
   return {
@@ -241,7 +414,8 @@ function extractRaw(d: any, popMean: MyoRaw): MyoRaw {
     nb_exercices_avec_pr: rCountTrue(d?.pr_par_exercice),
     nb_muscles: (d?.muscles_sollicites ?? []).length,
     hhi_muscles: hhiScore(d?.volume_par_muscle_kg, volTotal),
-    share_dominant: dominant && volTotal > 0 ? ((d?.volume_par_muscle_kg?.[dominant] ?? 0) / volTotal) : 0,
+    share_dominant:
+      dominant && volTotal > 0 ? (d?.volume_par_muscle_kg?.[dominant] ?? 0) / volTotal : 0,
     poids_corps_kg: d?.poids_corps_kg ?? popMean.poids_corps_kg,
     age_ans: d?.age_ans ?? popMean.age_ans,
     temps_depuis_sec: d?.temps_depuis_derniere_seance_sec ?? 259200,
@@ -273,11 +447,14 @@ async function fetchBaselines(userId: string, beforeIso: string): Promise<Baseli
   const { data: mData } = await supabase
     .from('workout_metrics')
     .select('data')
-    .in('workout_id', (wIds as any[]).map((w: any) => w.id))
+    .in(
+      'workout_id',
+      (wIds as unknown as { id: string }[]).map((w) => w.id)
+    )
 
-  const rows: MyoRaw[] = ((mData ?? []) as any[])
-    .map((r: any) => extractRaw(r.data, POP_MEAN))
-    .filter((r: MyoRaw) => r.volume_kg > 0)
+  const rows: MyoRaw[] = ((mData ?? []) as unknown as { data: MetricsData }[])
+    .map((r) => extractRaw(r.data, POP_MEAN))
+    .filter((r) => r.volume_kg > 0)
 
   if (rows.length < 5) return { n: rows.length, mean: { ...POP_MEAN }, std: { ...POP_STD } }
 
@@ -285,7 +462,7 @@ async function fetchBaselines(userId: string, beforeIso: string): Promise<Baseli
   const mean = {} as MyoRaw
   const std = {} as MyoRaw
   for (const k of keys) {
-    const vals = rows.map(r => r[k])
+    const vals = rows.map((r) => r[k])
     const m = vals.reduce((a, b) => a + b, 0) / vals.length
     mean[k] = m
     std[k] = Math.sqrt(vals.reduce((a, b) => a + (b - m) ** 2, 0) / vals.length) || 1
@@ -320,28 +497,62 @@ export interface LocalSessionMetrics {
 // Calcul synchrone des sessionValues depuis les métriques locales (population baselines).
 // Utilisé pour le preview dans summary.tsx avant le save Supabase.
 export function computeSessionValues(m: LocalSessionMetrics): number[][] {
-  const zn = (v: number, k: keyof MyoRaw) =>
-    clampZ((v - POP_MEAN[k]) / (POP_STD[k] || 1))
+  const zn = (v: number, k: keyof MyoRaw) => clampZ((v - POP_MEAN[k]) / (POP_STD[k] || 1))
   const norm = (z: number) => (z + 3) / 6
 
   return [
-    [zn(m.volume_kg, 'volume_kg'), zn(m.nb_series, 'nb_series'), 0, 0, 0, zn(m.densite, 'densite')].map(norm),
-    [zn(m.densite, 'densite'), zn(m.charge_relative, 'charge_relative'), 0, zn(m.poids_max_kg, 'poids_max_kg'), 0].map(norm),
+    [
+      zn(m.volume_kg, 'volume_kg'),
+      zn(m.nb_series, 'nb_series'),
+      0,
+      0,
+      0,
+      zn(m.densite, 'densite'),
+    ].map(norm),
+    [
+      zn(m.densite, 'densite'),
+      zn(m.charge_relative, 'charge_relative'),
+      0,
+      zn(m.poids_max_kg, 'poids_max_kg'),
+      0,
+    ].map(norm),
     [zn(m.nb_series, 'nb_series'), zn(m.nb_exercices, 'nb_exercices'), 0, 0, 0].map(norm),
-    [zn(m.temps_repos_moy_sec, 'temps_repos_moy_sec'), 0, zn(m.ratio_actif, 'ratio_actif'), 0, 0].map(norm),
+    [
+      zn(m.temps_repos_moy_sec, 'temps_repos_moy_sec'),
+      0,
+      zn(m.ratio_actif, 'ratio_actif'),
+      0,
+      0,
+    ].map(norm),
     [zn(m.nb_pr, 'nb_pr'), 0, 0, 0, 0].map(norm),
-    [zn(m.streak, 'streak'), zn(m.frequence_hebdo, 'frequence_hebdo'), zn(m.nb_seances_30j, 'nb_seances_30j'), 0, 0].map(norm),
+    [
+      zn(m.streak, 'streak'),
+      zn(m.frequence_hebdo, 'frequence_hebdo'),
+      zn(m.nb_seances_30j, 'nb_seances_30j'),
+      0,
+      0,
+    ].map(norm),
     (m.muscleDims ?? new Array(17).fill(0)).map((v: number, i: number) =>
       v === 0 ? 0 : norm(clampZ((v - MUSCLE_POP_MEAN[i]) / (MUSCLE_POP_STD[i] || 1)))
     ),
-    [zn(m.duree_sec, 'duree_sec'), 0, zn(m.ratio_actif, 'ratio_actif'), zn(m.densite, 'densite'), 0].map(norm),
+    [
+      zn(m.duree_sec, 'duree_sec'),
+      0,
+      zn(m.ratio_actif, 'ratio_actif'),
+      zn(m.densite, 'densite'),
+      0,
+    ].map(norm),
   ]
 }
 
 // Reconstruit sessionValues depuis une ligne myo_signatures (pour feed/[id].tsx et analytics)
 export function sessionValuesFromSignature(row: {
-  z_volume: number; z_intensite: number; z_structure: number
-  z_recovery: number; z_performance: number; z_regularite: number
+  z_volume: number
+  z_intensite: number
+  z_structure: number
+  z_recovery: number
+  z_performance: number
+  z_regularite: number
   z_extended: Record<string, unknown>
 }): number[][] {
   const norm = (z: number) => (z + 3) / 6
@@ -362,11 +573,27 @@ export function sessionValuesFromSignature(row: {
     [row.z_volume, g('nb_series'), 0, 0, 0, row.z_intensite].map(norm),
     [row.z_intensite, g('charge_relative'), 0, g('poids_max_kg'), 0].map(norm),
     [row.z_structure, g('nb_exercices'), g('nb_series_par_ex_moy'), 0, g('hhi_muscles')].map(norm),
-    [row.z_recovery, g('temps_repos_moy_sec'), g('std_temps_repos_par_ex'), g('ratio_actif'), 0].map(norm),
-    [row.z_performance, g('nb_exercices_avec_pr'), g('max_1rm_kg'), g('mean_evolution_1rm'), 0].map(norm),
-    [row.z_regularite, g('frequence_hebdo'), g('nb_seances_30j'), g('max_freq_muscle_7j'), 0].map(norm),
-    muscleDimsZ.map((z, i) => muscleDimsRaw[i] === 0 ? 0 : norm(z)),
-    [g('duree_sec'), g('temps_repos_total_sec'), g('ratio_actif'), row.z_intensite, g('slot_horaire_num')].map(norm),
+    [
+      row.z_recovery,
+      g('temps_repos_moy_sec'),
+      g('std_temps_repos_par_ex'),
+      g('ratio_actif'),
+      0,
+    ].map(norm),
+    [row.z_performance, g('nb_exercices_avec_pr'), g('max_1rm_kg'), g('mean_evolution_1rm'), 0].map(
+      norm
+    ),
+    [row.z_regularite, g('frequence_hebdo'), g('nb_seances_30j'), g('max_freq_muscle_7j'), 0].map(
+      norm
+    ),
+    muscleDimsZ.map((z, i) => (muscleDimsRaw[i] === 0 ? 0 : norm(z))),
+    [
+      g('duree_sec'),
+      g('temps_repos_total_sec'),
+      g('ratio_actif'),
+      row.z_intensite,
+      g('slot_horaire_num'),
+    ].map(norm),
   ]
 }
 
@@ -462,7 +689,8 @@ export async function saveMyoSignature(p: SaveMyoParams): Promise<number[][] | n
     nb_exercices_avec_pr: rCountTrue(p.pr_par_exercice),
     nb_muscles: p.muscles_sollicites.length,
     hhi_muscles: hhiScore(p.volume_par_muscle_kg, volTotal),
-    share_dominant: dominant && volTotal > 0 ? ((p.volume_par_muscle_kg[dominant] ?? 0) / volTotal) : 0,
+    share_dominant:
+      dominant && volTotal > 0 ? (p.volume_par_muscle_kg[dominant] ?? 0) / volTotal : 0,
     poids_corps_kg: p.poids_corps_kg ?? POP_MEAN.poids_corps_kg,
     age_ans: p.age_ans ?? POP_MEAN.age_ans,
     temps_depuis_sec: p.temps_depuis_derniere_seance_sec ?? 259200,
@@ -485,12 +713,12 @@ export async function saveMyoSignature(p: SaveMyoParams): Promise<number[][] | n
     zAll[k] = clampZ((raw[k] - bl.mean[k]) / bl.std[k])
   }
 
-  const z_volume      = zAll.volume_kg
-  const z_intensite   = zAll.densite
-  const z_structure   = zAll.nb_series
-  const z_recovery    = zAll.recuperation
+  const z_volume = zAll.volume_kg
+  const z_intensite = zAll.densite
+  const z_structure = zAll.nb_series
+  const z_recovery = zAll.recuperation
   const z_performance = zAll.nb_pr
-  const z_regularite  = zAll.streak
+  const z_regularite = zAll.streak
 
   const z_extended: Record<string, number | number[]> = {}
   const raw_extended: Record<string, number> = {}
@@ -502,6 +730,9 @@ export async function saveMyoSignature(p: SaveMyoParams): Promise<number[][] | n
   }
 
   // ─ Famille 6 : 17 dims musculaires ──────────────────────────────────────────
+  // raw 0 → dim 0 (muscle non travaillé = absence, pas une sous-performance à z≈-1,25)
+  // garde `|| 1` au dénominateur — aligné sur computeSessionValues (preview) et sessionValuesFromSignature (relue).
+  let muscleDimsRaw = new Array<number>(17).fill(0)
   const exerciseIds = Object.keys(p.setsByExercise)
   if (exerciseIds.length > 0) {
     const { data: emData } = await supabase
@@ -511,10 +742,10 @@ export async function saveMyoSignature(p: SaveMyoParams): Promise<number[][] | n
       .in('role', ['primary', 'secondary'])
 
     const emRows = (emData ?? []) as EmRow[]
-    const muscleDimsRaw = computeMuscleDims(p.setsByExercise, emRows)
+    muscleDimsRaw = computeMuscleDims(p.setsByExercise, emRows)
     z_extended['muscles_raw'] = muscleDimsRaw
     z_extended['muscles'] = muscleDimsRaw.map((v, i) =>
-      clampZ((v - MUSCLE_POP_MEAN[i]) / MUSCLE_POP_STD[i])
+      v === 0 ? 0 : clampZ((v - MUSCLE_POP_MEAN[i]) / (MUSCLE_POP_STD[i] || 1))
     )
   }
 
@@ -522,13 +753,13 @@ export async function saveMyoSignature(p: SaveMyoParams): Promise<number[][] | n
   const avg = allZ.reduce((a, b) => a + b, 0) / allZ.length
   const score = Math.round(((avg + 3) / 6) * 100)
 
-  const sortedZ = keys.map(k => `${k}:${zAll[k].toFixed(3)}`).join('|')
+  const sortedZ = keys.map((k) => `${k}:${zAll[k].toFixed(3)}`).join('|')
   const payload = `${p.workoutId}|${sortedZ}|${score}`
   const h1 = djb2(payload).toString(16).padStart(8, '0')
   const h2 = djb2(payload.split('').reverse().join('')).toString(16).padStart(8, '0')
   const hash = `${p.workoutId.replace(/-/g, '').slice(0, 32)}${h1}${h2}`.slice(0, 64)
 
-  const anomalyDims = keys.filter(k => Math.abs(zAll[k]) >= 2.9).map(k => DIM_LABELS[k])
+  const anomalyDims = keys.filter((k) => Math.abs(zAll[k]) >= 2.9).map((k) => DIM_LABELS[k])
 
   console.log('[MYO] inserting score=', score, 'dims=', allZ.length, 'hash=', hash.slice(0, 16))
   const { error } = await supabase.from('myo_signatures').insert({
@@ -544,14 +775,22 @@ export async function saveMyoSignature(p: SaveMyoParams): Promise<number[][] | n
     baseline_n: bl.n,
     baseline_mean: bl.mean,
     baseline_std: bl.std,
-    z_volume, z_intensite, z_structure, z_recovery, z_performance, z_regularite,
+    z_volume,
+    z_intensite,
+    z_structure,
+    z_recovery,
+    z_performance,
+    z_regularite,
     z_extended,
     score,
     hash,
     anomaly_detected: anomalyDims.length > 0,
     anomaly_message: anomalyDims.length > 0 ? `Extrême: ${anomalyDims.join(', ')}` : null,
   })
-  if (error) { console.error('[MYO] insert error:', error.message, error.code); return null }
+  if (error) {
+    console.error('[MYO] insert error:', error.message, error.code)
+    return null
+  }
 
   const norm = (z: number) => (z + 3) / 6
   const muscleDimsZ = Array.isArray(z_extended['muscles'])
@@ -562,10 +801,21 @@ export async function saveMyoSignature(p: SaveMyoParams): Promise<number[][] | n
     [z_volume, zAll.nb_series, 0, 0, 0, z_intensite].map(norm),
     [z_intensite, zAll.charge_relative, 0, zAll.poids_max_kg, 0].map(norm),
     [z_structure, zAll.nb_exercices, zAll.nb_series_par_ex_moy, 0, zAll.hhi_muscles].map(norm),
-    [z_recovery, zAll.temps_repos_moy_sec, zAll.std_temps_repos_par_ex, zAll.ratio_actif, 0].map(norm),
-    [z_performance, zAll.nb_exercices_avec_pr, zAll.max_1rm_kg, zAll.mean_evolution_1rm, 0].map(norm),
+    [z_recovery, zAll.temps_repos_moy_sec, zAll.std_temps_repos_par_ex, zAll.ratio_actif, 0].map(
+      norm
+    ),
+    [z_performance, zAll.nb_exercices_avec_pr, zAll.max_1rm_kg, zAll.mean_evolution_1rm, 0].map(
+      norm
+    ),
     [z_regularite, zAll.frequence_hebdo, zAll.nb_seances_30j, zAll.max_freq_muscle_7j, 0].map(norm),
-    muscleDimsZ.map(norm),
-    [zAll.duree_sec, zAll.temps_repos_total_sec, zAll.ratio_actif, z_intensite, zAll.slot_horaire_num].map(norm),
+    // raw 0 → 0 (identique à sessionValuesFromSignature, sinon summary ≠ feed/[id])
+    muscleDimsZ.map((z, i) => (muscleDimsRaw[i] === 0 ? 0 : norm(z))),
+    [
+      zAll.duree_sec,
+      zAll.temps_repos_total_sec,
+      zAll.ratio_actif,
+      z_intensite,
+      zAll.slot_horaire_num,
+    ].map(norm),
   ]
 }

@@ -1,12 +1,5 @@
 import React, { useEffect, useMemo, useRef } from 'react'
-import {
-  FlatList,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-  Dimensions,
-} from 'react-native'
+import { FlatList, StyleSheet, Text, TouchableOpacity, View, Dimensions } from 'react-native'
 import Animated, {
   useSharedValue,
   withSpring,
@@ -16,9 +9,16 @@ import Animated, {
 } from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { X } from 'lucide-react-native'
-import { Canvas, Path, Skia, LinearGradient as SkiaLinearGradient, vec } from '@shopify/react-native-skia'
+import {
+  Canvas,
+  Path,
+  Skia,
+  LinearGradient as SkiaLinearGradient,
+  vec,
+} from '@shopify/react-native-skia'
 import { useTheme } from '@/context/ThemeContext'
 import { spacing, radius, typography, touchTarget, spring } from '@/constants/theme'
+import { REPS_VALUES, getWeightValues } from '@/lib/weights'
 
 // ─── Types ────────────────────────────────────────────────────────────────
 
@@ -43,18 +43,6 @@ interface WheelState {
 const ITEM_HEIGHT = 80
 const VISIBLE_ITEMS = 3
 const CENTER_ITEM_INDEX = Math.floor(VISIBLE_ITEMS / 2)
-
-const REPS_VALUES = Array.from({ length: 50 }, (_, i) => i + 1)
-
-function getWeightValues(equipType: string | null): number[] {
-  if (equipType === 'bodyweight') return []
-  if (equipType === 'dumbbell') return Array.from({ length: 30 }, (_, i) => (i + 1) * 2)
-  if (equipType === 'barbell') {
-    return [20, 40, 50, 60, 65, 70, 75, 80, 85, 90, 95, 100, 105, 110, 115, 120, 125, 130, 140, 150, 160, 170, 180, 190, 200, 210, 220]
-  }
-  if (equipType === 'kettlebell') return Array.from({ length: 12 }, (_, i) => (i + 1) * 4)
-  return Array.from({ length: 80 }, (_, i) => (i + 1) * 2.5)
-}
 
 // ─── Wheel Picker Component (single wheel) ─────────────────────────────────
 
@@ -84,8 +72,8 @@ function SingleWheel({ values, selectedValue, onValueChange, label, isEmpty }: S
       }, 80)
       return () => clearTimeout(t)
     }
-  // currentIndex exclu intentionnellement : ne jamais interrompre un scroll utilisateur en cours
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // currentIndex exclu intentionnellement : ne jamais interrompre un scroll utilisateur en cours
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [values.length])
 
   function handleMomentumScrollEnd(e: { nativeEvent: { contentOffset: { y: number } } }) {
@@ -98,10 +86,18 @@ function SingleWheel({ values, selectedValue, onValueChange, label, isEmpty }: S
   if (isEmpty || values.length === 0) {
     return (
       <View style={styles.wheelContainer}>
-        <View style={[styles.wheelScroll, { height: WHEEL_HEIGHT, justifyContent: 'center', alignItems: 'center' }]}>
+        <View
+          style={[
+            styles.wheelScroll,
+            { height: WHEEL_HEIGHT, justifyContent: 'center', alignItems: 'center' },
+          ]}
+        >
           <Text style={[styles.wheelEmptyText, { color: colors.textTertiary }]}>—</Text>
         </View>
-        <View style={[styles.wheelCenterHighlight, { top: ITEM_HEIGHT * CENTER_ITEM_INDEX }]} pointerEvents="none">
+        <View
+          style={[styles.wheelCenterHighlight, { top: ITEM_HEIGHT * CENTER_ITEM_INDEX }]}
+          pointerEvents="none"
+        >
           <View style={styles.wheelCenterBox} />
         </View>
         <Text style={[styles.wheelLabel, { color: colors.textSecondary }]}>{label}</Text>
@@ -156,7 +152,10 @@ function SingleWheel({ values, selectedValue, onValueChange, label, isEmpty }: S
       />
 
       {/* Center highlight — au-dessus de la liste, transparent avec bordures uniquement */}
-      <View style={[styles.wheelCenterHighlight, { top: ITEM_HEIGHT * CENTER_ITEM_INDEX }]} pointerEvents="none">
+      <View
+        style={[styles.wheelCenterHighlight, { top: ITEM_HEIGHT * CENTER_ITEM_INDEX }]}
+        pointerEvents="none"
+      >
         <View style={styles.wheelCenterBox} />
       </View>
 
@@ -190,20 +189,22 @@ function GhostWeightBar({
 
   const trackPath = useMemo(() => {
     const p = Skia.Path.Make()
-    p.addRRect(Skia.RRectXY(
-      Skia.XYWHRect(0, cy, GHOST_W, GHOST_TRACK_H),
-      GHOST_TRACK_H / 2, GHOST_TRACK_H / 2,
-    ))
+    p.addRRect(
+      Skia.RRectXY(
+        Skia.XYWHRect(0, cy, GHOST_W, GHOST_TRACK_H),
+        GHOST_TRACK_H / 2,
+        GHOST_TRACK_H / 2
+      )
+    )
     return p
   }, [cy])
 
   const fillPath = useMemo(() => {
     if (fillW < 1) return null
     const p = Skia.Path.Make()
-    p.addRRect(Skia.RRectXY(
-      Skia.XYWHRect(0, cy, fillW, GHOST_TRACK_H),
-      GHOST_TRACK_H / 2, GHOST_TRACK_H / 2,
-    ))
+    p.addRRect(
+      Skia.RRectXY(Skia.XYWHRect(0, cy, fillW, GHOST_TRACK_H), GHOST_TRACK_H / 2, GHOST_TRACK_H / 2)
+    )
     return p
   }, [fillW, cy])
 
@@ -214,15 +215,23 @@ function GhostWeightBar({
     return p
   }, [ghostX, cy])
 
-
   return (
     <View style={ghostWeightStyles.container}>
       <View style={ghostWeightStyles.labelRow}>
         <Text style={[ghostWeightStyles.label, { color: colors.textTertiary }]}>FANTÔME</Text>
-        <Text style={[ghostWeightStyles.value, {
-          color: beaten ? '#00E673' : delta < 0 ? 'rgba(255,59,48,0.85)' : colors.textSecondary,
-        }]}>
-          {beaten ? `+${delta.toFixed(1)} kg` : delta < 0 ? `${Math.abs(delta).toFixed(1)} kg en dessous` : `${ghostValue} kg cible`}
+        <Text
+          style={[
+            ghostWeightStyles.value,
+            {
+              color: beaten ? '#00E673' : delta < 0 ? 'rgba(255,59,48,0.85)' : colors.textSecondary,
+            },
+          ]}
+        >
+          {beaten
+            ? `+${delta.toFixed(1)} kg`
+            : delta < 0
+              ? `${Math.abs(delta).toFixed(1)} kg en dessous`
+              : `${ghostValue} kg cible`}
         </Text>
       </View>
       <Canvas style={{ width: GHOST_W, height: GHOST_CH }}>
@@ -234,11 +243,13 @@ function GhostWeightBar({
             <SkiaLinearGradient
               start={vec(0, 0)}
               end={vec(Math.max(fillW, 1), 0)}
-              colors={beaten
-                ? ['rgba(0,230,115,0.45)', '#00E673']
-                : delta < 0
-                ? ['rgba(255,59,48,0.30)', 'rgba(255,59,48,0.65)']
-                : ['rgba(240,240,245,0.12)', 'rgba(240,240,245,0.32)']}
+              colors={
+                beaten
+                  ? ['rgba(0,230,115,0.45)', '#00E673']
+                  : delta < 0
+                    ? ['rgba(255,59,48,0.30)', 'rgba(255,59,48,0.65)']
+                    : ['rgba(240,240,245,0.12)', 'rgba(240,240,245,0.32)']
+              }
             />
           </Path>
         )}
@@ -247,7 +258,13 @@ function GhostWeightBar({
           path={markerPath}
           style="stroke"
           strokeWidth={2}
-          color={beaten ? 'rgba(0,230,115,0.60)' : delta < 0 ? 'rgba(255,59,48,0.55)' : 'rgba(255,255,255,0.45)'}
+          color={
+            beaten
+              ? 'rgba(0,230,115,0.60)'
+              : delta < 0
+                ? 'rgba(255,59,48,0.55)'
+                : 'rgba(255,255,255,0.45)'
+          }
         />
       </Canvas>
     </View>
@@ -321,7 +338,7 @@ export default function WheelPickerModal({
       const t = setTimeout(() => setMounted(false), 360)
       return () => clearTimeout(t)
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isVisible])
 
   function handleValidate() {
@@ -343,23 +360,14 @@ export default function WheelPickerModal({
 
       {/* Modal sheet (80% height) */}
       <Animated.View
-        style={[
-          styles.modalSheet,
-          { backgroundColor: colors.backgroundSecondary },
-          slideStyle,
-        ]}
+        style={[styles.modalSheet, { backgroundColor: colors.backgroundSecondary }, slideStyle]}
       >
         {/* Handle & header */}
         <View style={styles.modalTopBar}>
           <View style={[styles.modalHandle, { backgroundColor: colors.border }]} />
           <View style={styles.modalHeaderFlex}>
-            <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>
-              Ajouter un set
-            </Text>
-            <TouchableOpacity
-              onPress={onClose}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
+            <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Ajouter un set</Text>
+            <TouchableOpacity onPress={onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
               <X size={20} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
@@ -371,7 +379,7 @@ export default function WheelPickerModal({
             <SingleWheel
               values={weightValues}
               selectedValue={state.weight}
-              onValueChange={(w) => setState(s => ({ ...s, weight: w }))}
+              onValueChange={(w) => setState((s) => ({ ...s, weight: w }))}
               label="KG"
             />
           ) : (
@@ -386,18 +394,14 @@ export default function WheelPickerModal({
           <SingleWheel
             values={REPS_VALUES}
             selectedValue={state.reps}
-            onValueChange={(r) => setState(s => ({ ...s, reps: r }))}
+            onValueChange={(r) => setState((s) => ({ ...s, reps: r }))}
             label="REPS"
           />
         </View>
 
         {/* Ghost weight bar */}
         {ghostValue !== undefined && weightValues.length > 0 && (
-          <GhostWeightBar
-            currentWeight={state.weight}
-            ghostValue={ghostValue}
-            colors={colors}
-          />
+          <GhostWeightBar currentWeight={state.weight} ghostValue={ghostValue} colors={colors} />
         )}
 
         {/* Bottom buttons */}
@@ -407,18 +411,14 @@ export default function WheelPickerModal({
             onPress={onClose}
             activeOpacity={0.85}
           >
-            <Text style={[styles.cancelText, { color: colors.textSecondary }]}>
-              ANNULER
-            </Text>
+            <Text style={[styles.cancelText, { color: colors.textSecondary }]}>ANNULER</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.validateButton, { backgroundColor: colors.accent }]}
             onPress={handleValidate}
             activeOpacity={0.85}
           >
-            <Text style={[styles.validateText, { color: colors.background }]}>
-              VALIDER
-            </Text>
+            <Text style={[styles.validateText, { color: colors.background }]}>VALIDER</Text>
           </TouchableOpacity>
         </View>
       </Animated.View>
