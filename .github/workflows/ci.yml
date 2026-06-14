@@ -34,6 +34,6 @@ jobs:
         working-directory: mobile_app
         run: npm run typecheck
 
-      - name: Tests
+      - name: Tests (+ coverage thresholds)
         working-directory: mobile_app
-        run: npm test -- --ci
+        run: npm run test:coverage -- --ci

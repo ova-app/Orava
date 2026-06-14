@@ -22,7 +22,8 @@ const MIN_CONFIDENCE = 0.6
 const MAX_EXTRAPOLATION_DAYS = 120
 
 // Pondération : 1.0 aujourd'hui → 0.3 à 180j, plancher 0.1 au-delà (décroissance linéaire puis plancher)
-function weight(loggedAt: number, now: number): number {
+// Exporté pour les tests unitaires (math pure).
+export function weight(loggedAt: number, now: number): number {
   const ageDays = (now - loggedAt) / MS_PER_DAY
   if (ageDays <= 180) return Math.max(0.3, 1.0 - (0.7 * ageDays) / 180)
   return 0.1
@@ -30,7 +31,8 @@ function weight(loggedAt: number, now: number): number {
 
 // Régression linéaire pondérée : y = slope × x + intercept
 // x = jours depuis now (valeurs négatives), y = weight_kg
-function weightedLinearRegression(
+// Exporté pour les tests unitaires (math pure).
+export function weightedLinearRegression(
   xs: number[],
   ys: number[],
   ws: number[]
@@ -52,7 +54,8 @@ function weightedLinearRegression(
 }
 
 // R² pondéré — mesure la qualité du fit
-function weightedR2(
+// Exporté pour les tests unitaires (math pure).
+export function weightedR2(
   xs: number[],
   ys: number[],
   ws: number[],

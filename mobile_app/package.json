@@ -10,7 +10,7 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "lint": "eslint . --ext .ts,.tsx --max-warnings 400",
+    "lint": "eslint . --ext .ts,.tsx --max-warnings 236",
     "typecheck": "tsc --noEmit",
     "prepare": "git config core.hooksPath mobile_app/.husky",
     "test": "jest",
@@ -32,11 +32,25 @@
     ],
     "moduleNameMapper": {
       "^@/(.*)$": "<rootDir>/$1"
+    },
+    "collectCoverageFrom": [
+      "lib/predictor.ts",
+      "lib/workoutPayload.ts",
+      "lib/ghost.ts",
+      "lib/utils.ts",
+      "lib/myo.ts",
+      "lib/db.ts"
+    ],
+    "coverageThreshold": {
+      "lib/predictor.ts": { "statements": 90, "branches": 75, "functions": 100, "lines": 90 },
+      "lib/workoutPayload.ts": { "statements": 90, "branches": 80, "functions": 70, "lines": 90 },
+      "lib/ghost.ts": { "statements": 95, "branches": 90, "functions": 100, "lines": 95 },
+      "lib/utils.ts": { "statements": 95, "branches": 90, "functions": 100, "lines": 95 }
     }
   },
   "lint-staged": {
     "*.{ts,tsx}": [
-      "eslint --fix --max-warnings 400",
+      "eslint --fix --max-warnings 236",
       "prettier --write"
     ]
   },

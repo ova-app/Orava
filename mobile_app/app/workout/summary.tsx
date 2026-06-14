@@ -46,6 +46,7 @@ import { computePrediction } from '@/lib/predictor'
 import { storage } from '@/lib/storage'
 import { supabase } from '@/lib/supabase'
 import { formatDuration, epley1RM } from '@/lib/utils'
+import { buildWorkoutPayload } from '@/lib/workoutPayload'
 
 const { width: SCREEN_W } = Dimensions.get('window')
 
@@ -862,86 +863,26 @@ export default function SummaryScreen() {
     const startedAtIso = startedAt?.toISOString() ?? new Date().toISOString()
     const endedAtIso = new Date().toISOString()
 
-    // Construit le payload complet workout + exercises + sets pour la RPC transactionnelle.
+    // Payload RPC transactionnelle + lignes SQLite (logique extraite → lib/workoutPayload.ts).
     // Échec partiel impossible : tout est inséré dans une seule transaction Postgres (ou rien).
-    type SetPayload = {
-      id: string
-      set_number: number
-      reps: number
-      weight_kg: number
-      rest_seconds: number | null
-      is_pr: boolean
-      pr_charge: PrLevel
-      pr_serie: PrLevel
-      logged_at: string
-    }
-    const exercisesPayload: Array<{
-      id: string
-      exercise_id: string
-      order_index: number
-      pr_exercice: PrLevel
-      sets: SetPayload[]
-    }> = []
-    // Sets à écrire en SQLite — UNIQUEMENT après succès complet Supabase (ORA-007)
-    const localSets: Array<{
-      id: string
-      exercise_id: string
-      weight_kg: number
-      reps: number
-      session_id: string
-      logged_at: number
-    }> = []
-
-    for (let ei = 0; ei < exercises.length; ei++) {
-      const ex = exercises[ei]
-      const validatedSets = ex.sets.filter((s) => s.validated && s.reps > 0)
-      if (validatedSets.length === 0) continue
-      const exVolume = volumeParExercice[ex.exercise_id] ?? 0
-      const prExercice = computePodium(exVolume, ex.pr_top3_exercice)
-      const weId = crypto.randomUUID()
-      exercisesPayload.push({
-        id: weId,
-        exercise_id: ex.exercise_id,
-        order_index: ei,
-        pr_exercice: prExercice,
-        sets: validatedSets.map((s) => ({
-          id: crypto.randomUUID(),
-          set_number: s.set_number,
-          reps: s.reps,
-          weight_kg: s.weight_kg,
-          rest_seconds: s.rest_seconds,
-          is_pr: s.is_pr,
-          pr_charge: s.pr_charge,
-          pr_serie: s.pr_serie,
-          logged_at: s.validated_at ? new Date(s.validated_at).toISOString() : endedAtIso,
-        })),
-      })
-      for (const s of validatedSets) {
-        localSets.push({
-          id: `${workoutId}-${ex.exercise_id}-${s.set_number}`,
-          exercise_id: ex.exercise_id,
-          weight_kg: s.weight_kg,
-          reps: s.reps,
-          session_id: workoutId,
-          logged_at: s.validated_at ?? Date.now(),
-        })
-      }
-    }
-
-    const { error: rpcErr } = await supabase.rpc('create_workout', {
-      payload: {
-        id: workoutId,
+    const { payload, localSets } = buildWorkoutPayload(
+      exercises,
+      volumeParExercice,
+      {
+        workoutId,
         title: workoutName,
-        started_at: startedAtIso,
-        ended_at: endedAtIso,
-        duration_sec: durationSec,
-        total_volume_kg: totalVolume,
-        is_public: isPublic,
-        poids_corps_kg: poidsCorps,
-        pr_seance: prSeance,
-        exercises: exercisesPayload,
+        startedAtIso,
+        endedAtIso,
+        durationSec,
+        totalVolume,
+        isPublic,
+        poidsCorps,
+        prSeance,
       },
-    })
+      computePodium
+    )
+
+    const { error: rpcErr } = await supabase.rpc('create_workout', { payload })
     if (rpcErr) throw new Error(rpcErr.message)
 
     // ── Tout Supabase est commité → on alimente SQLite (idempotent via id déterministe) ──
