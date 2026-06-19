@@ -1,0 +1,16 @@
+# Chaque PR demande automatiquement une review du/des owners du chemin touché.
+# Remplacer @alexandre-handle par le vrai pseudo GitHub d'Alexandre.
+
+# Par défaut : les deux co-fondateurs
+*                       @sofianebessila
+
+# Règles de dev / archi / produit : Sofiane garde la main
+/.claude/               @sofianebessila
+/Orava___Master_Plan_v4.md  @sofianebessila
+
+# Base de données : review obligatoire (migrations sensibles)
+/.claude/rules/database.md  @sofianebessila
+/supabase/              @sofianebessila
+
+# Quand Alexandre est intégré, ajouter par domaine, ex :
+# /mobile_app/app/(tabs)/feed.tsx   @alexandre-handle

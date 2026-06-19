@@ -14,7 +14,7 @@ orava/
 │   │   └── inspirations.md      — refs Whoop/Linear/TeamLab + notes
 │   ├── sounds/                  — fichiers WAV bruts ElevenLabs (→ assets/sounds/)
 │   └── animations/              — fichiers .riv Rive (→ assets/animations/)
-├── rapport.md           — état du projet + stratégie
+├── BACKLOG.md           — audit + dette priorisée (tickets ORA-xxx)
 └── Orava___Master_Plan_v4.md    — source de vérité produit
 ```
 

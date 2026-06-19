@@ -32,7 +32,7 @@ Caveman. Phrases courtes. Pas de politesse. Explore uniquement les fichiers néc
 orava/
 ├── mobile_app/     — code source
 ├── design/         — Midjourney candidates, Spline exports, Figma tokens, sons, animations Rive
-├── rapport.md      — état + stratégie
+├── BACKLOG.md      — audit + dette priorisée (tickets ORA-xxx)
 └── Orava___Master_Plan_v4.md
 ```
 Voir `rules/files.md` pour le détail de `design/` et les règles de transfert vers `mobile_app/assets/`.
