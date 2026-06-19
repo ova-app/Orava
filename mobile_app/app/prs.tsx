@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import { log } from '@/lib/logger'
 import {
   Dimensions,
   View,
@@ -548,7 +549,7 @@ export default function PrsScreen(): React.JSX.Element {
       .eq('user_id', user.id)
 
     if (wErr || !workoutsData) {
-      console.error('[prs] workouts query error:', wErr)
+      log.error('[prs] workouts query error:', wErr)
       setHasError(true)
       setLoading(false)
       return
@@ -568,7 +569,7 @@ export default function PrsScreen(): React.JSX.Element {
       .in('workout_id', workoutIds)
 
     if (weError || !weRows) {
-      console.error('[prs] workout_exercises query error:', weError)
+      log.error('[prs] workout_exercises query error:', weError)
       setHasError(true)
       setLoading(false)
       return
@@ -587,7 +588,7 @@ export default function PrsScreen(): React.JSX.Element {
       .in('id', exerciseIds)
 
     if (exError || !exRows) {
-      console.error('[prs] exercises query error:', exError)
+      log.error('[prs] exercises query error:', exError)
       setHasError(true)
       setLoading(false)
       return
@@ -625,7 +626,7 @@ export default function PrsScreen(): React.JSX.Element {
       .in('workout_exercise_id', weIds)
 
     if (setsError || !sets) {
-      console.error('[prs] workout_sets query error:', setsError)
+      log.error('[prs] workout_sets query error:', setsError)
       setHasError(true)
       setLoading(false)
       return

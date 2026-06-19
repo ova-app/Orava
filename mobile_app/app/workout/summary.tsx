@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState, useRef, useCallback } from 'react'
+import { log } from '@/lib/logger'
 import {
   ActivityIndicator,
   Alert,
@@ -784,7 +785,7 @@ export default function SummaryScreen() {
         streakSemaines = weeks.size
       }
     } catch (e) {
-      console.error('[summary] rolling 30j/streak', e)
+      log.error('[summary] rolling 30j/streak', e)
     }
 
     try {
@@ -799,7 +800,7 @@ export default function SummaryScreen() {
         0
       )
     } catch (e) {
-      console.error('[summary] volume 7j', e)
+      log.error('[summary] volume 7j', e)
     }
 
     let poidsCorps: number | null = null,
@@ -823,7 +824,7 @@ export default function SummaryScreen() {
         ageAns = Math.floor((Date.now() - dob.getTime()) / (365.25 * 86400000))
       }
     } catch (e) {
-      console.error('[summary] profil poids/âge', e)
+      log.error('[summary] profil poids/âge', e)
     }
 
     const chargeRelSeance =
@@ -955,7 +956,7 @@ export default function SummaryScreen() {
         logged_at: Date.now(),
       })
     } catch (e) {
-      console.error('[summary] SQLite local insert', e)
+      log.error('[summary] SQLite local insert', e)
     }
 
     // Photo : best-effort APRÈS le save atomique (la séance est déjà persistée sans elle)
@@ -979,7 +980,7 @@ export default function SummaryScreen() {
               .eq('id', workoutId)
         }
       } catch (e) {
-        console.error('[summary] upload photo', e)
+        log.error('[summary] upload photo', e)
       }
     }
 
@@ -1024,7 +1025,7 @@ export default function SummaryScreen() {
         computed_at: new Date().toISOString(),
       })
     } catch (e) {
-      console.error('[summary] insert workout_metrics', e)
+      log.error('[summary] insert workout_metrics', e)
     }
 
     try {
@@ -1077,7 +1078,7 @@ export default function SummaryScreen() {
       })
       if (sv) setSessionValues(sv)
     } catch (e) {
-      console.error('[summary] saveMyoSignature', e)
+      log.error('[summary] saveMyoSignature', e)
     }
 
     return { workoutId, prSeance }
@@ -1110,7 +1111,7 @@ export default function SummaryScreen() {
             await AsyncStorage.setItem('predictions_cache', JSON.stringify(merged))
           }
         } catch (e) {
-          console.error('[summary] cache prédictions', e)
+          log.error('[summary] cache prédictions', e)
         }
       })()
       storage.delete('workout_session_draft')

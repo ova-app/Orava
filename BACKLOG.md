@@ -4,11 +4,23 @@
 > Lecture seule du code à date. Chaque ticket cite `fichier:ligne` réel.
 > Barème : note pour une ambition **valorisation type Strava**, pas pour un MVP de hackathon.
 
-## Note globale : **7 / 20**
+---
 
-Fondations réelles et ambition crédible (Myo câblé sur vraies données, social fonctionnel, onboarding < 60 s, 175 tests de logique pure propres), mais **12 défauts bloquants** interdisent un lancement public : non-conformité RGPD + suppression de compte absente (rejet Apple garanti), aucune monétisation branchée, deux features cœur mortes (predictor, snapshot crash-safe), save non transactionnel, chaîne de release non fiable, zéro monitoring prod.
+## État au 19/06/2026 — phase développement terminée
 
-### Sous-notes par dimension
+Vagues 0 → 1 → 2 + cœur de la Definition of Done faites. **20 tickets faits ont été retirés** de ce backlog (trace : journal daté dans « Plan de correction » ci-dessous ; détail dans l'historique git). Les blockers qui *corrompaient les données* (predictor mort, snapshot crash-safe factice, save non transactionnel, normalisation Myo divergente) sont résolus.
+
+**Reste à faire :**
+- **Dev** : `ORA-026` (baseline Myo encore mockée — le moat) · `ORA-038` (a11y retrofit, partiel).
+- **Pré-lancement** : conformité/RGPD, monétisation, sécurité prod, perf scaling, i18n, tests e2e — catalogue P0/P1/P2 ci-dessous.
+
+---
+
+## Note globale (audit initial) : **7 / 20**
+
+> Snapshot à la date de l'audit. Les défauts « data/offline » et « robustesse » ont depuis été corrigés en phase dev ; les blockers restants sont surtout conformité store + monétisation (non encore branchés).
+
+### Sous-notes par dimension (audit initial)
 
 | Dimension | Note | Verdict |
 |---|---|---|
@@ -24,54 +36,63 @@ Fondations réelles et ambition crédible (Myo câblé sur vraies données, soci
 
 ---
 
-## ⚑ Plan de correction — phase DÉVELOPPEMENT (priorité actuelle)
+## ⚑ Plan de correction — phase DÉVELOPPEMENT — ✅ TERMINÉE
 
-> **L'app est encore en développement.** Tout ce qui relève du **release / scaling / conformité store** est volontairement reporté (voir « Reporté » en bas). Logique des vagues : corriger d'abord ce qui **corrompt les données** et **fait grossir la dette** avant d'empiler des features dessus.
->
-> ⚠️ La numérotation P0/P1/P2 ci-dessous reste un classement de **gravité absolue** (pour le jour du lancement). Les **vagues** ci-dessous sont l'**ordre d'exécution recommandé en phase dev** — elles ne suivent pas l'ordre P0→P2.
+> Journal daté du travail dev. Logique des vagues : corriger d'abord ce qui **corrompt les données** et **fait grossir la dette** avant d'empiler des features.
 
-### Vague 0 — Hygiène dev (~½ journée, EN PREMIER)
-On développe à l'aveugle tant que ce n'est pas fait.
-- **ORA-009** — `tsc` au vert (`myo-orb.tsx:242`).
-- **ORA-008 (local)** — brancher `tsc --noEmit` + `npm test` en pre-commit Husky (sans toucher CI/EAS).
-- **ORA-012** — Error Boundary racine (sinon bug de rendu = écran blanc muet).
-- **ORA-011 (dev)** — dé-silencier les `catch (_) {}` du save (`summary.tsx`) → `console.error` au minimum. Pas de Sentry à ce stade.
-- **ORA-071** — supprimer `tsc_out.txt` (périmé/trompeur) + artefacts dev.
+### Vague 0 — Hygiène dev — ✅ FAITE (19/06/2026)
+- ✅ **ORA-009** — `tsc --noEmit` au vert.
+- ✅ **ORA-008 (local)** — `tsc --noEmit` + `npm test` en pre-commit Husky (`.husky/pre-commit` : lint-staged → tsc → test).
+- ✅ **ORA-012** — Error Boundary racine dans `_layout.tsx` (écran de repli + `console.error`).
+- ✅ **ORA-011 (dev)** — catch muets dé-silencés : chemin de save `summary.tsx` (`console.error`) + `storage.ts` `hydrateStorage` (critique crash-safe) + cache prédictions `useAnalyticsData`.
+- ✅ **ORA-071** — artefacts dev supprimés (`tsc_out.txt`, `apply_fix.py`, `to_be_fixed.md`, `Priorites.md`, `design_app.md`).
+- ✅ **ORA-033** — 5 `useAnimatedStyle` inlinés dans `summary.tsx` (plus de helper-hook `makeRevealStyle` ; 0 violation `rules-of-hooks`).
+- ✅ **ORA-031** — agrégation muscles O(n×m) → O(n+m) par pré-indexation `Map` (`useAnalyticsData.ts` + `feed/[id].tsx`).
 
-### Vague 1 — Bugs de fondation data (LA priorité) — ✅ FAITE (14/06/2026)
-Ces bugs faussent silencieusement tout ce qu'on construira au-dessus (Myo, ghost, predictor, futur ADN). Chaque jour de dev en plus = plus de données corrompues.
-- ✅ **ORA-007** — save transactionnel via RPC `create_workout` + `workoutId` idempotent (ref) + SQLite inséré **après** succès Supabase (best-effort). ⚠️ **Migration à appliquer** : `create_workout(payload jsonb)` en fin de `rules/database.md`.
-- ✅ **ORA-006** — `_layout.tsx` await `hydrateStorage()` avant montage provider + réhydratation `status/exercises/startedAt/elapsedSeconds` du draft au mount de `WorkoutProvider`.
-- ✅ **ORA-025** — `raw 0 → dim 0` + garde `|| 1` au dénominateur ; 3 chemins (preview / retour save / relue signature) alignés.
+### Vague 1 — Bugs de fondation data — ✅ FAITE (14/06/2026)
+- ✅ **ORA-007** — save transactionnel via RPC `create_workout` + `workoutId` idempotent (ref) + SQLite inséré **après** succès Supabase (best-effort). Migration `create_workout(payload jsonb)` **appliquée** (cf. `rules/database.md`).
+- ✅ **ORA-006** — `_layout.tsx` await `hydrateStorage()` avant le provider + réhydratation `status/exercises/startedAt/elapsedSeconds` du draft au mount.
+- ✅ **ORA-025** — `raw 0 → dim 0` + garde `|| 1` au dénominateur ; 3 chemins alignés (preview / retour save / signature relue).
 - ✅ **ORA-005** — `computeConfidence` = somme pondérée (exportée) + 9 tests unitaires.
-- ✅ **ORA-024 + ORA-027** — `backfillLocalFromSupabase()` (réamorce SQLite si vide, lancé au boot) + top3 PR via `getExercisePrTop3()` SQLite (zéro réseau séance, offline-safe).
+- ✅ **ORA-024 + ORA-027** — `backfillLocalFromSupabase()` (réamorce SQLite si vide au boot) + top3 PR via `getExercisePrTop3()` SQLite (zéro réseau séance, offline-safe).
 
-> tsc vert, 195 tests verts (12 suites). Mock global AsyncStorage + expo-sqlite ajouté (`jest.setup.js`).
+### Vague 2 — Dette archi — ✅ FAITE (14/06/2026)
+- ✅ **ORA-035** — helpers centralisés : `lib/muscles.ts`, `lib/weights.ts`, `lib/utils.ts`. 11 fichiers migrés + tests.
+- ✅ **ORA-036** — `no-explicit-any: error`, **0 occurrence** restante ; jointures Supabase typées.
+- ✅ **ORA-034** — couche data extraite en hooks `lib/hooks/` pour les 6 écrans actifs.
 
-### Vague 2 — Dette archi (le plus rentable à faire tôt) — ✅ FAITE (14/06/2026)
-Coût qui double tous les 2 mois : chaque nouvel écran recopie le pattern.
-- ✅ **ORA-035** — centralisé : `lib/muscles.ts` (3 référentiels muscles + `muscleGroupLabel`), `lib/weights.ts` (`REPS_VALUES` + `getWeightValues`), `lib/utils.ts` (`formatVolume`/`formatVolumeKg`/`formatDuration`/`epley1RM`). 11 fichiers migrés + 11 tests (`utilsHelpers.test.ts`). Note : `GhostCompareBar` (session) ≠ `GhostWeightBar` (wheel-picker) = 2 composants distincts → faux positif, non fusionnés.
-- ✅ **ORA-036** — `no-explicit-any: error` actif, **0 occurrence** restante. Jointures Supabase typées via interfaces + `as unknown as` (prs, myo, analytics, profile, history) ; JSONB `workout_metrics.data` → interface `MetricsData`.
-- ✅ **ORA-034** — couche data extraite en hooks `lib/hooks/` pour les 6 écrans actifs : `useHistoryData`, `useAnalyticsData`, `useProfileData` + **`useFeedData`** (fetch timeline + KPIs mois + `handleLike` optimiste avec revert), **`useSummaryData`** (sessionValues Myo + enrichissement muscles + historique volume ; save pipeline laissé dans l'écran car couplé UI), **`useExerciseLibrary`** (bibliothèque modale session : fetch + recherche/filtre + sections ; `MUSCLE_LABELS` coarse + `normalizeNFD` + `ExerciseRow` déplacés dans le hook).
+### Bonus perf — ✅ FAIT (14/06/2026)
+- ✅ **ORA-028/029** — `React.memo(FeedItem)` + `renderItem`/`keyExtractor` `useCallback` + FlatList tunée (`removeClippedSubviews`, `initialNumToRender/maxToRenderPerBatch=4`, `windowSize=7`).
 
-> tsc vert · 195 tests verts (12 suites) · ESLint `no-explicit-any` = 0. (Erreurs ESLint préexistantes hors Vague 2 : `rules-of-hooks` ×8 = ORA-033, `no-require-imports` ×5.)
+### Dette sécurité / data — lot du 19/06/2026 — ✅ FAIT
+- ✅ **ORA-060** — adapter SecureStore : purge des chunks orphelins après `setItem` (boucle `deleteItemAsync` au-delà du nouveau nombre de fragments).
+- ✅ **ORA-061** — `initDB` versionné via `PRAGMA user_version` (`SCHEMA_VERSION`) → migrations locales rejouables.
+- ✅ **ORA-062** — `local_sessions` migrée en `id TEXT PRIMARY KEY` (rebuild conditionnel des installs antérieures via la migration v1). Doc `rules/database.md` + `rules/stack.md` synchronisées.
+- ✅ **ORA-041** — `timer.tsx` : `Vibration.vibrate(400)` brut → `Haptics.notificationAsync(Success)` gardé par le toggle `settings_vibration` (même source que session.tsx). Supprime aussi le dernier `catch (_)` muet du repo.
 
-### Definition of Done (au fil de l'eau, pas un sprint) — 🟡 EN COURS (14/06/2026)
-À intégrer dès les **nouveaux** écrans — moins cher inline que rétrofité.
-- ✅ **ORA-040** — tokens ajoutés dans `theme.ts` : `avatarColors`, `scrim`, `scrimStrong`, `score` (high/mid/low). Hex remplacés dans feed.tsx (palette avatar, PR `dark.pr*`, voiles modals, `#fff`→`dark.textPrimary`), feed/[id].tsx (échelle score, `error`, scrims), summary.tsx (MuscleBar + sparkline `accent`/`background`/`textPrimary`). **Reste** : blancs alpha décoratifs des Skia charts dark-only (rgba(255,255,255,…)/rgba(26,26,36,…)) — non tokenisés (nécessiteraient des tokens alpha dédiés).
-- 🟡 **ORA-038** — `accessibilityRole/Label` ajoutés en passant (bouton like feed/[id]). Reste le rétrofit session/feed/library.
-- ✅ **ORA-037** — like détail (`feed/[id].tsx`) persisté (insert/delete Supabase) + revert sur erreur ; `handleLike` du feed (`useFeedData`) idem avec revert.
+### Devops / CI — lot du 19/06/2026 — ✅ FAIT
+- ✅ **ORA-008 (CI)** — `.github/workflows/ci.yml` lance lint + `tsc --noEmit` + tests sur push/PR `main` (gate de merge). Déjà en place (vérifié 19/06).
+- ✅ **ORA-070** — `.nvmrc` (20) + `engines` (node >=20) + `dependabot.yml` (npm + github-actions) déjà présents ; `buildNumber`/`versionCode` retirés d'`app.json` (source = `appVersionSource: remote`) ; **CodeQL** ajouté (`.github/workflows/codeql.yml`, SAST JS/TS).
+- ✅ **ORA-044** — plafond `--max-warnings` ratcheté 400 → **231** (= total actuel, 0 erreur) → toute régression de warning casse la CI. *Résiduel :* descente vers 0 = nettoyage `no-inline-styles` + `exhaustive-deps` (gros, à faire au fil de l'eau).
 
-### Bonus perf (remonté en Vague 2 car feed = écran de test quotidien) — ✅ FAIT (14/06/2026)
-- ✅ **ORA-028/029** — `React.memo(FeedItem)` + `renderItem`/`keyExtractor` via `useCallback` + FlatList tunée (`removeClippedSubviews`, `initialNumToRender=4`, `maxToRenderPerBatch=4`, `windowSize=7`). Limite drastiquement le nombre de `MyoChart` Skia montés simultanément ; les cartes hors-viewport sont démontées (stoppe aussi leurs animations `withRepeat(-1)`). Miniature statique `makeImageSnapshot` non retenue (le tuning FlatList suffit).
+### Dette code / DS — lot du 19/06/2026 — ✅ EN COURS
+- ✅ **ORA-068** — `lib/logger.ts` centralisé (`log.error/warn/info`, conditionné `__DEV__`, ancre unique pour Sentry en ORA-011). Tous les `console.*` du code app migrés (8 fichiers). Script Node `generate-logo-assets.js` laissé en `console` (hors app).
+- ✅ **ORA-067** — `Dimensions.get('window')` hoisté en const module `SCREEN_WIDTH` (app portrait-locked) → plus de calcul par render (SkeletonCard + FeedItem) ; `fetchFeed` au focus gardé par un TTL 20s (anti-martèlement Supabase aller-retour tabs). *Résiduel assumé :* 7 polices bloquantes au démarrage gardées (évite le FOUT — tradeoff voulu).
+- ✅ **ORA-066** — exception `Easing.linear` documentée aux 2 spinners à rotation continue (`index.tsx`, `feed.tsx`) : vitesse constante voulue, un ease pulserait.
+- ✅ **ORA-023** — `maxLength={500}` sur l'input commentaire (`feed.tsx`) ; volet DB en migration planifiée `supabase/planned/ora023_comment_length_check.sql` (CHECK ≤500, idempotent) **à appliquer**.
+- 🟡 **ORA-065** — token `typography.micro` (10px) ajouté + 1er site migré (feed). *Résiduel :* migration des ~50 `fontSize 9/10/11` restants au fil de l'eau (beaucoup sont des labels Skia numériques ou des layouts tunés → vérif visuelle requise) ; idem spacing off-grid (`gap:5/6`).
+
+### Definition of Done — 🟡 cœur fait, a11y restant
+- ✅ **ORA-040** — tokens couleurs ajoutés (`avatarColors`, `scrim`, `score`…) + hex remplacés dans feed / feed[id] / summary. *Résiduel non bloquant* : blancs alpha décoratifs des charts Skia (dark-only) non tokenisés.
+- ✅ **ORA-037** — likes (détail + feed) persistés Supabase + revert sur erreur.
+- 🟡 **ORA-038** — a11y amorcée (bouton like `feed/[id]`). **Reste** : rétrofit `session/feed/library` → seul item DoD encore ouvert (voir P1).
 
 ### Reporté (post-développement, avant lancement)
-RevenueCat (ORA-010), suppression compte (ORA-001), RGPD UI (ORA-003), service_role (ORA-002), push (ORA-042), i18n (ORA-039), OTA (ORA-043), EAS secrets/CI (ORA-004/008-CI), pagination feed (ORA-030), Sentry (ORA-011-prod), conformité store (ORA-072), Apple Sign-In (ORA-046).
-**Exception :** perf feed (ORA-028/029) à remonter en Vague 2 **si** le feed est l'écran de test quotidien.
+RevenueCat (ORA-010), suppression compte (ORA-001), RGPD UI (ORA-003), service_role (ORA-002), push (ORA-042), i18n (ORA-039), OTA (ORA-043), EAS secrets / CI (ORA-004 / ORA-008-CI), pagination feed (ORA-030), Sentry / monitoring prod (ORA-011-prod), conformité store (ORA-072), Apple Sign-In (ORA-046).
 
 ---
 
-## P0 — BLOQUANTS (gravité absolue — pour le jour du lancement, cf. vagues ci-dessus pour l'ordre dev)
+## P0 — BLOQUANTS (gravité absolue — pour le jour du lancement)
 
 ### ORA-001 · [CONFORMITÉ] Suppression de compte absente → rejet Apple garanti
 `profile.tsx:671`, `settings.tsx:316-340` — Seul `signOut` existe, aucun flux d'effacement. Apple Guideline 5.1.1(v) l'exige depuis juin 2022 pour toute app à création de compte. **Rejet automatique au review.**
@@ -89,37 +110,14 @@ RevenueCat (ORA-010), suppression compte (ORA-001), RGPD UI (ORA-003), service_r
 `eas.json` (aucune clé `env`), `.github/workflows/eas-build.yml` (ne passe que `EXPO_TOKEN`), `.env` gitignored donc absent du runner. → Build cloud avec `EXPO_PUBLIC_SUPABASE_URL = undefined` = **écran blanc / crash auth**. « Marche en local » uniquement car `.env` est sur le poste dev.
 **Action :** `eas secret:create` pour chaque `EXPO_PUBLIC_*` et chaque profil (preview/production).
 
-### ORA-005 · [DATA/BUG] Moteur Prédictif 100 % mort — formule de confiance erronée
-`lib/predictor.ts:82` — `return r2 * 0.55 * pointsFactor * 0.25 * freqFactor * 0.20 * fatigueFactor` : les poids sont **multipliés** au lieu d'être sommés. Max théorique = `0,55 × 0,25 × 0,20 = 0,0275`, seuil `MIN_CONFIDENCE = 0,6` → `computePrediction` retourne **toujours `null`**. Feature affichée dans `analytics.tsx:312-316`.
-**Action :** somme pondérée `(r2*0.55 + pointsFactor*0.25 + freqFactor*0.20) * fatigueFactor` (max 1.0), recalibrer le seuil, + test unitaire sur `computeConfidence`.
-
-### ORA-006 · [DATA/BUG] Snapshot séance jamais relu → « crash-safe » factice
-`context/WorkoutContext.tsx:112` (init `status='idle'`, aucune lecture du draft), `session.tsx:187-196` (écriture seule), `_layout.tsx:37` (`hydrateStorage()` non `await`). Le draft `workout_session_draft` est écrit à chaque mutation mais **jamais réhydraté** → toute séance en cours est perdue au moindre crash/kill iOS. La mention CLAUDE.md « Snapshot MMKV → crash-safe ✅ » est fausse.
-**Action :** `await hydrateStorage()` avant de monter `WorkoutProvider` ; au mount, restaurer `status/exercises/startedAt` depuis le draft si présent ; recalculer `elapsedSeconds`.
-
-### ORA-007 · [DATA/BUG] Save séance non transactionnel et non idempotent
-`summary.tsx:753` (`workoutId = crypto.randomUUID()` régénéré à chaque tentative), `summary.tsx:756-807` (N inserts séquentiels `throw` sans rollback, `insertLocalSet` entrelacé dans la boucle). Échec au 3ᵉ exo → workout orphelin/partiel côté Supabase + sets du 1ᵉ exo déjà en SQLite. Retry → **double insertion SQLite** (nouvel `id`) → ghost/predictor comptent la séance 2×.
-**Action :** RPC Postgres transactionnelle `create_workout(payload jsonb)` ; générer `workoutId` une seule fois (idempotence) ; n'insérer en SQLite **qu'après** succès complet Supabase.
-
-### ORA-008 · [DEVOPS] CI ne lance ni les tests ni `tsc`
-`.github/workflows/eas-build.yml` — Steps = `npm ci` → `npm run lint` → `eas build`. 175 tests existants ne gardent rien ; `tsc` jamais exécuté.
-**Action :** ajouter `npx tsc --noEmit` + `npm test` **avant** le build EAS, bloquants au merge.
-
-### ORA-009 · [CODE/BUG] `tsc --noEmit` échoue — garantie « TS strict » fausse
-`app/workout/myo-orb.tsx:242` — `error TS2322` : tableau `GRAD` en `as const` inféré comme union de 3 tuples distincts → `lo = GRAD[k]` non assignable. **Vérifié : `tsc --noEmit` exit 2.** Non détecté car CI ne lance pas tsc (cf. ORA-008). L'EAS build passe quand même (Babel strippe les types) mais le strict est rompu.
-**Action :** typer `const GRAD: readonly { t: number; rgb: readonly number[] }[]`. Supprimer l'artefact périmé `mobile_app/tsc_out.txt` (pointe vers une autre erreur déjà corrigée → trompeur).
-
 ### ORA-010 · [PRODUIT] Aucune monétisation branchée — revenu = 0
 `react-native-purchases` absent de `package.json`, `app/paywall.tsx` inexistant, `users.plan` jamais lu pour gater une feature (le Mode Fantôme « Pro illimité » n'est jamais distingué à l'exécution).
 **Action :** intégrer RevenueCat + paywall + gating réel sur `plan` (produits `orava_pro_monthly/yearly`, `orava_coach_monthly`).
 
-### ORA-011 · [DEVOPS] Zéro monitoring d'erreurs en prod + catch silencieux
-`@sentry/react-native` absent. ~30 `catch (_) {}` muets sur le chemin de save : `summary.tsx:712,719,731,776,830,855` (upload photo, `workout_metrics`, `saveMyoSignature`). Échecs invisibles en prod → impossible de savoir qu'un % d'utilisateurs perd ses séances.
-**Action :** `@sentry/react-native` + remonter au minimum les `catch` du chemin de save (PostHog est déjà présent).
-
-### ORA-012 · [CODE] Aucune Error Boundary dans toute l'app
-`app/_layout.tsx` — Aucune `ErrorBoundary`/`componentDidCatch`. Une exception de rendu (cast `as` faux, WebGL) crashe l'app entière en écran blanc, sans capture.
-**Action :** Error Boundary racine + écran de repli + capture Sentry.
+### ORA-011 · [DEVOPS] Zéro monitoring d'erreurs en prod (volet Sentry)
+`@sentry/react-native` absent → échecs invisibles en prod, impossible de savoir qu'un % d'utilisateurs perd ses séances.
+> ✅ Volet **dev** fait (ORA-011-dev : catch du chemin de save + storage/hydrate + cache prédictions dé-silencés en `console.error`). Reste le monitoring prod.
+**Action :** `@sentry/react-native` + brancher les `catch` critiques dessus (PostHog est déjà présent).
 
 ---
 
@@ -130,62 +128,35 @@ RevenueCat (ORA-010), suppression compte (ORA-001), RGPD UI (ORA-003), service_r
 - **ORA-020 · [SÉCURITÉ] RLS = seule barrière sur toutes les écritures client.** `feed.tsx:2058,919,626`, `edit-profile.tsx:241`, `summary.tsx:756` — `user_id` fourni par le client sur tous les INSERT ; `delete comment` filtré par `id` seul (`feed.tsx:640`). Non vérifiable dans le repo (SQL DB). **Action :** auditer/durcir RLS sur chaque table en écriture (`WITH CHECK (auth.uid() = user_id)` INSERT, `USING` UPDATE/DELETE).
 - **ORA-021 · [SÉCURITÉ] Buckets Storage publics + URLs devinables.** `edit-profile.tsx:87`, `summary.tsx:773` — `getPublicUrl()` sur `${user.id}/…` ; photo de séance accessible même si `is_public=false`. **Action :** buckets privés + `createSignedUrl()` ; aligner la visibilité photo sur `is_public` ; policies Storage `${auth.uid()}/`.
 - **ORA-022 · [SÉCURITÉ] Données de santé en clair dans AsyncStorage.** `lib/storage.ts:9`, `session.tsx:187` — `snapshotToMMKV()` (nom trompeur, MMKV non utilisé) persiste le brouillon de séance en clair ; idem `predictions_cache`. **Action :** chiffrer au repos (MMKV `encryptionKey` ou SecureStore) ; renommer.
-- **ORA-023 · [SÉCURITÉ] Champ commentaire sans `maxLength`.** `feed.tsx:753,626` — input et INSERT non bornés (abus/DoS stockage ; pas de XSS car `<Text>` RN). **Action :** `maxLength={500}` + `CHECK (char_length(content) <= 500)` DB.
 
 ### Data / offline
 
-- **ORA-024 · [DATA] SQLite jamais réamorcé depuis Supabase.** `lib/ghost.ts:24`, `lib/predictor.ts:94`, `summary.tsx:798` — `local_sets`/`local_sessions` alimentés uniquement au save. Après réinstall / nouvel appareil / clear data → SQLite vide alors que Supabase est plein → **ghost + predictor silencieusement HS** pendant des semaines. **Action :** backfill au 1ᵉʳ `initDB` post-auth depuis `workout_sets`/`workouts` si tables locales vides.
-- **ORA-025 · [DATA] Famille 6 Myo : normalisation divergente preview vs persistance.** `lib/myo.ts:516-518` (persistance z-score même `v===0`, sans `|| 1`) vs `:334-335` (preview `v===0 ? 0`). Un muscle non travaillé est stocké à z ≈ −1,25 → signature affichée (summary) ≠ relue (feed/[id]). **Action :** aligner « raw 0 → dim 0 » à la persistance + garde `|| 1` au dénominateur.
-- **ORA-026 · [DATA/PRODUIT] Baseline Myo encore mockée (Phase 1 non faite).** `lib/myo.ts:134-135` (`MUSCLE_POP_MEAN/STD` population codés en dur au lieu du rolling personnel), `myo-orb.tsx:462` (`MOCK_AVERAGE` overlay « ta moyenne » factice). Le Myo affiche de vraies valeurs séance mais sa normalisation et sa comparaison historique sont fictives — or c'est le **moat produit**. **Action :** rolling personnel depuis `myo_signatures.z_extended.muscles_raw` ; supprimer `MOCK_AVERAGE`.
-- **ORA-027 · [DATA] Réseau pendant séance active + PR manqué offline.** `WorkoutContext.tsx:162-176` — `addExercise` fait un appel Supabase (viole règle #3 « zéro réseau pendant séance ») ; si l'appel échoue (offline), `pr_top3_*` reste vide → vrai PR non détecté pour la séance (silencieux). **Action :** précharger les top3 en début de séance / depuis SQLite ; recalculer `pr_charge`/`pr_serie` au save (actuellement figés).
+- **ORA-026 · [DATA/PRODUIT] Baseline Myo encore mockée (Phase 1 non faite).** `lib/myo.ts:134-135` (`MUSCLE_POP_MEAN/STD` population codés en dur au lieu du rolling personnel), `myo-orb.tsx:462` (`MOCK_AVERAGE` overlay « ta moyenne » factice). Le Myo affiche de vraies valeurs séance mais sa normalisation et sa comparaison historique sont fictives — or c'est le **moat produit**. **Action :** rolling personnel depuis `myo_signatures.z_extended.muscles_raw` ; supprimer `MOCK_AVERAGE`. *(Choix de design à trancher : taille de la fenêtre rolling, seuil min de séances, fallback avant N séances.)*
 
 ### Performance
 
-- **ORA-028 · [PERF] `MyoChart` Skia complet monté dans chaque cellule du feed.** `feed.tsx:1031-1040` — composant Skia de 728 lignes (≈10 `useMemo`, `<Canvas>` GPU) × jusqu'à 50 workouts, `FlatList` non tunée. Scroll de l'écran le plus chaud < 60 FPS sur Pixel 6a. **Action :** miniature statique (`makeImageSnapshot` caché) ou Myo réservé au détail ; `FlatList` `initialNumToRender/maxToRenderPerBatch/windowSize/removeClippedSubviews`.
-- **ORA-029 · [PERF] `FeedItem` non mémoïsé + animation infinie par carte.** `feed.tsx:799` (pas de `React.memo`, `renderItem` closure inline `:2179`), `PRSkiaChip` `withRepeat(-1)` `:254-276`. `React.memo` utilisé **nulle part** dans l'app. **Action :** `React.memo(FeedItem)` + `useCallback(renderItem)` + suspendre le shimmer hors-viewport.
 - **ORA-030 · [PERF/SCALABILITÉ] Feed = 8 requêtes/chargement, `limit(50)` sans pagination, agrégats client.** `feed.tsx:1864-1887` — pattern N+1 agrégé en JS, plafonné à 50 items non scrollables, recalculé à chaque focus. Coûts Supabase explosifs à l'échelle. **Action :** RPC `get_feed(cursor)` paginée + agrégats PR/likes côté DB (vues matérialisées / Edge Functions).
-- **ORA-031 · [PERF] Agrégation muscles O(n×m).** `analytics.tsx:230-240`, `feed/[id].tsx:726-734` — `.filter` complet imbriqué dans une boucle. **Action :** pré-indexer en `Map<exercise_id, rows[]>`.
 - **ORA-032 · [PERF] Upload photo sans resize + images sans cache.** `summary.tsx:764-776` (blob multi-Mo en RAM, pas de resize) ; `<Image>` RN partout (pas de cache disque, re-téléchargement). **Action :** `expo-image-manipulator` (resize ~1080px) + `expo-image` pour toutes les `source={{uri}}`.
-- **ORA-033 · [PERF/CODE] `useAnimatedStyle` appelé dans un helper.** `summary.tsx:560-570` — `makeRevealStyle` (contenant un hook) invoqué 5×. Fragile (Rules of Hooks). **Action :** inliner les 5 `useAnimatedStyle`.
-
-### Architecture & code
-
-- **ORA-034 · [ARCHI] 6 god-objects (~9 300 lignes) data+métier+UI mêlés.** `feed.tsx` (2435), `feed/[id].tsx` (1795), `summary.tsx` (1640), `session.tsx` (1596), `profile.tsx` (1235), `analytics.tsx` (995). **Action :** sortir la data en hooks `lib/hooks/`, les sous-composants en fichiers co-localisés (`_components/`), sans toucher la règle `components/`.
-- **ORA-035 · [ARCHI] Duplication massive de helpers.** `formatVolume` (utils.ts existe mais ré-déclaré dans feed/feed[id]/history[id]/history), `formatDuration` ×6, `MUSCLE_LABEL_MAP` ×6 (`analytics:53`, `exercise/[id]:55`, `history/[id]:136`, `feed/[id]:190`, `prs:65`, `session:155`), `epley1RM` ×2 (`predictor:18`, `summary:275`), tables de poids/`REPS_VALUES` ×2 (`session` vs `wheel-picker-modal`), GhostBar ×2. **Action :** centraliser dans `lib/` et importer.
-- **ORA-036 · [CODE] ~40 violations TypeScript strict.** `prs.tsx:518,539,553,559,591` (`as any` ×5), `feed.tsx:828,855,873,1862…` (`as unknown as` ×9), `myo.ts:212,276-279` (`any`), `feed/[id].tsx:117` (`[key:string]: any`), `supabase.ts:20-21`. ESLint `no-explicit-any: warn`. **Action :** typer les jointures Supabase ; passer `no-explicit-any` en `error`.
-- **ORA-037 · [BUG] Like de l'écran détail non persisté.** `feed/[id].tsx:1087` — `onPress={() => setHasLiked(!hasLiked)}` sans appel Supabase → like cosmétique perdu au reload. `handleCommentLike` (`feed.tsx:895`) : optimistic sans try/catch ni revert. **Action :** persister + revert sur erreur.
 
 ### Accessibilité, i18n & DS
 
-- **ORA-038 · [A11Y] Couverture a11y quasi nulle sur les écrans cœur.** 332 touchables, ~89 props d'a11y concentrées sur auth/settings/edit-profile. **Zéro** label sur `session.tsx` (47), `feed.tsx` (31), `feed/[id].tsx` (40), `library.tsx` (14), `profile.tsx` (23). Logger une série en VoiceOver/TalkBack = impossible. **Action :** `accessibilityRole` + `accessibilityLabel` sur 100 % des touchables, priorité session/feed/library.
+- **ORA-038 · [A11Y] Couverture a11y quasi nulle sur les écrans cœur.** 🟡 *Amorcé (bouton like `feed/[id]`).* 332 touchables, ~89 props d'a11y concentrées sur auth/settings/edit-profile. **Zéro** label sur `session.tsx` (47), `feed.tsx` (31), `feed/[id].tsx` (40 restants), `library.tsx` (14), `profile.tsx` (23). Logger une série en VoiceOver/TalkBack = impossible. **Action :** `accessibilityRole` + `accessibilityLabel` sur 100 % des touchables, priorité session/feed/library.
 - **ORA-039 · [I18N] Aucune infrastructure i18n.** Pas de `expo-localization`/`i18next` ; 100 % FR hardcodé ; `users.locale` inutilisé. Internationalisation impossible sans refactor — bloquant pour scaler comme Strava. **Action :** `i18next` + `expo-localization`, externaliser les strings, brancher `users.locale`.
-- **ORA-040 · [DS] 85 couleurs hardcodées → light mode cassé.** `feed.tsx` (15), `feed/[id].tsx` (11), `summary.tsx` (8 hex + 8 rgba), palette `AVATAR_COLORS` inventée (`feed.tsx:122-131`), tokens PR redéfinis en dur (`feed.tsx:190-196`, `summary.tsx:201`), `#fff`/`#000` purs (`feed.tsx:1094`, `session.tsx:288`). ThemeContext OK mais ces hex ne réagissent pas au thème. **Action :** tokeniser dans `theme.ts` (ajouter `dataViz[]`, `scrim`, `micro`) ; remplacer par `colors.*`.
-- **ORA-041 · [DS] `Vibration.vibrate(400)` brut contourne le toggle settings.** `timer.tsx:96` — n'utilise pas la taxonomie `expo-haptics` opt-outable. **Action :** passer par le helper haptique central.
 
 ### Produit & tests
 
 - **ORA-042 · [PRODUIT] Aucune boucle de ré-engagement.** `expo-notifications` absent → pas de push (« PR prédit », « streak en danger ») ; partage Stories 9:16 annoncé non codé ; pas de deep links de partage. Rétention J30 plancher. **Action :** push + export Stories (`makeImageSnapshot` + Share Sheet) + deep links.
 - **ORA-043 · [DEVOPS] Pas d'OTA (`expo-updates` absent).** Chaque hotfix passe par les stores (24-72 h). **Action :** `expo-updates` + channels EAS (déjà configurés).
-- **ORA-044 · [DEVOPS] Lint CI tolère 400 warnings.** `package.json:10` (`--max-warnings 400`), `no-explicit-any`/`no-empty` en `warn`. **Action :** descendre le plafond vers 0, passer ces règles en `error`.
-- **ORA-045 · [TESTS] 0 % composant / intégration / e2e.** `__tests__/` = 175 tests de logique pure, dont certains **recopient** la fonction testée (`prsBuildPodium.test.ts:12-127`, `sessionUx.test.ts:34-58`) → testent une copie, pas le prod. `@testing-library/react-native`, Detox/Maestro absents. Aucun des bugs P0 (ORA-005/006/007) n'est couvert. **Action :** render tests sur session/summary + smoke e2e Maestro (login → log set → save) ; tester le code importé.
+- **ORA-045 · [TESTS] 0 % composant / intégration / e2e.** `__tests__/` = tests de logique pure, dont certains **recopient** la fonction testée (`prsBuildPodium.test.ts:12-127`, `sessionUx.test.ts:34-58`) → testent une copie, pas le prod. `@testing-library/react-native`, Detox/Maestro absents. **Action :** render tests sur session/summary + smoke e2e Maestro (login → log set → save) ; tester le code importé.
 - **ORA-046 · [PRODUIT] Apple/Google Sign-In absents.** Seul email/password. Attendu sur une app sociale grand public. **Action :** ajouter Apple Sign In (obligatoire dès qu'un autre social login existe).
 
 ---
 
 ## P2 — MINEURS / DETTE
 
-- **ORA-060 · [SÉCURITÉ] Adapter SecureStore ne purge pas les chunks orphelins.** `supabase.ts:40-46` — au refresh d'un JWT plus court, fragments périmés résiduels (chiffrés, faible gravité). **Action :** boucle `deleteItemAsync` pour `i >= chunks.length`.
-- **ORA-061 · [DATA] `initDB` sans versioning.** `db.ts:10-33` — `CREATE IF NOT EXISTS` no-op sur base existante → toute future migration locale inappliquée. **Action :** `PRAGMA user_version` + migrations incrémentales.
-- **ORA-062 · [DATA] `local_sessions` sans PRIMARY KEY.** `db.ts:26` — `INSERT OR REPLACE` se comporte comme INSERT (pas d'unicité) → doublons. **Action :** `id TEXT PRIMARY KEY`.
 - **ORA-063 · [DATA] Ghost codé en dur à 30 j.** `session.tsx:820` — `getGhostReference(id, 30)`, la branche Pro illimitée n'est jamais utilisée. **Action :** `plan === 'premium' ? 99999 : 30`.
-- **ORA-064 · [A11Y] Contraste `textTertiary` 2,6:1 < WCAG AA.** `#4A4A5A` sur `#0A0A0F`, utilisé 143× dont du contenu réel (`library.tsx:417`). **Action :** réserver au décoratif ou éclaircir le token.
-- **ORA-065 · [DS] `fontSize` inline 9-11px hors échelle DS + spacing off-grid sporadique.** ~40 micro-textes < `caption` (12px) ; `gap:5/6`, `padding:3` épars. **Action :** token `micro` (10px) ; mapper sur `spacing.s*`.
-- **ORA-066 · [DS] `Easing.linear` sur loaders.** `index.tsx:42`, `feed.tsx:1732` — rotations continues (convention OK mais règle DS absolue). **Action :** documenter l'exception ou `withRepeat` sans easing perceptible.
-- **ORA-067 · [PERF] Micro-coûts render.** `Dimensions.get('window')` à chaque render (`feed.tsx:802,418`) ; `fetchFeed` relancé à chaque focus (`feed.tsx:1998`) ; 7 polices bloquantes au démarrage (`_layout.tsx:44`). **Action :** constantes module / cache TTL court.
-- **ORA-068 · [CODE] ~11 `console.*` résiduels.** `myo.ts`, `prs.tsx` (4), `feed.tsx` (4)… **Action :** logger centralisé conditionné `__DEV__` → PostHog/Sentry.
+- **ORA-064 · [A11Y] Contraste `textTertiary` 2,6:1 < WCAG AA.** `#4A4A5A` sur `#0A0A0F`, utilisé 143× dont du contenu réel (`library.tsx:417`). **Action :** réserver au décoratif ou éclaircir le token. **⛔ Décision design requise** : `textTertiary` est un token Figma validé — l'éclaircir change toute la hiérarchie « off » de l'app. À trancher avec le designer (éclaircir le token vs le réserver au décoratif + nouveau token AA pour le contenu). Non modifié unilatéralement (règle #1 — autorité Figma).
 - **ORA-069 · [SÉCURITÉ] Politique mot de passe faible.** `register.tsx:82-83` — min 8, aucune autre exigence. **Action :** activer la protection « leaked password » Supabase (HIBP).
-- **ORA-070 · [DEVOPS] Versioning `app.json` vs `eas.json` ambigu + pas de `.nvmrc`/`engines`/Dependabot/SAST.** `app.json` fige `buildNumber/versionCode` alors que source = `remote`. **Action :** retirer ces clés d'`app.json` ; `.nvmrc` + `engines` ; activer Dependabot + `npm audit`/CodeQL.
-- **ORA-071 · [DETTE] Artefacts de dev dans le repo.** `apply_fix.py`, `to_be_fixed.md`, `Priorites.md`, `design_app.md` (racine), `mobile_app/tsc_out.txt` (périmé). **Action :** nettoyer avant due diligence.
 - **ORA-072 · [PRODUIT/CONFORMITÉ] App Privacy labels + compte de test à préparer.** Pour le review Apple/Google : déclarer collecte santé/localisation/photos, fournir un compte de test.
 
 ---
@@ -194,26 +165,25 @@ RevenueCat (ORA-010), suppression compte (ORA-001), RGPD UI (ORA-003), service_r
 
 - Résidence EU (Supabase Frankfurt + PostHog `eu.i.posthog.com`), tokens en SecureStore, requêtes paramétrées (**aucune injection SQL** — vérifié), `is_public` DEFAULT `false`, **aucune coordonnée lat/lng précise écrite** (seule `location_city`).
 - Conformité expo-gl exemplaire (`onContextCreate` synchrone, `MeshPhongMaterial`, `endFrameEXP`, `setPixelRatio(1)`), batching Supabase via `Promise.all` quasi partout, cleanup Reanimated rigoureux, paths Skia majoritairement memoïsés, `getItemLayout` sur le WheelPicker.
-- 175 tests de logique pure honnêtes (cas limites sérieux, aucun `.only`/`.skip`).
-- Myo **câblé sur vraies données** côté `summary.tsx` et `feed/[id].tsx` (≠ ce qu'indique la doc) — seule la baseline reste mockée (cf. ORA-026).
+- Tests de logique pure honnêtes (cas limites sérieux, aucun `.only`/`.skip`) — 195 verts (12 suites) au 19/06/2026.
+- Myo **câblé sur vraies données** côté `summary.tsx` et `feed/[id].tsx` — seule la baseline reste mockée (cf. ORA-026).
 - Onboarding < 60 s tenu (`onboarding/first-set.tsx` précharge un exo et démarre direct).
 
 ### Faux positifs écartés (vérifiés pendant l'audit)
 
 - `crypto.randomUUID()` : **polyfillé** dans `supabase.ts:6-22` (+ `react-native-get-random-values`) → `summary.tsx` ne crashera pas. Non-problème.
-- « Log d'un set avant chargement des top3 » : `addExercise` n'ajoute l'exercice au state (`WorkoutContext.tsx:217`) **qu'après** le `await` → la carte n'existe pas avant. Race inexistante (le vrai risque restant = PR manqué offline, cf. ORA-027).
-- `tsc_out.txt` indiquait une erreur `session.tsx(176,5)` : **déjà corrigée**, artefact périmé. La seule erreur tsc réelle est `myo-orb.tsx:242` (ORA-009).
+- « Log d'un set avant chargement des top3 » : `addExercise` n'ajoute l'exercice au state (`WorkoutContext.tsx:217`) **qu'après** le `await` → la carte n'existe pas avant. Race inexistante.
 
 ---
 
 ## Séquencement
 
-**Phase développement (maintenant)** → voir **⚑ Plan de correction — phase DÉVELOPPEMENT** en haut du document (Vague 0 → 1 → 2 + Definition of Done).
+**Phase développement** → ✅ terminée (Vague 0 → 1 → 2 + cœur DoD). Reste 2 items dev : **ORA-026** (baseline Myo — moat) puis **ORA-038** (a11y retrofit).
 
-**Phase pré-lancement (plus tard)** — ordre indicatif une fois le dev stabilisé :
+**Phase pré-lancement** — ordre indicatif :
 1. **Conformité/sécurité (déblocage store)** : ORA-001, 002, 003, 072 + ORA-021/022.
-2. **Fiabilité release** : ORA-004, 008 (CI), 011 (Sentry), 043.
+2. **Fiabilité release** : ORA-004, 008 (CI), 011 (Sentry/monitoring prod), 043.
 3. **Monétisation + rétention** : ORA-010, 042, 046.
-4. **Perf feed + scaling** : ORA-028/029/030.
+4. **Perf feed + scaling** : ORA-030 (+ ORA-032 images).
 5. **a11y + i18n (rétrofit du legacy)** : ORA-038, 039.
 6. **Dette continue** : P2 restant.

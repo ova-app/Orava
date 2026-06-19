@@ -10,7 +10,7 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "lint": "eslint . --ext .ts,.tsx --max-warnings 400",
+    "lint": "eslint . --ext .ts,.tsx --max-warnings 230",
     "typecheck": "tsc --noEmit",
     "prepare": "git config core.hooksPath mobile_app/.husky",
     "test": "jest",

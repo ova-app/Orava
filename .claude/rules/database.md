@@ -155,7 +155,7 @@ CREATE TABLE IF NOT EXISTS local_sets (
 );
 
 CREATE TABLE IF NOT EXISTS local_sessions (
-  id TEXT NOT NULL,
+  id TEXT PRIMARY KEY,        -- ORA-062 : PK (sinon INSERT OR REPLACE doublonne au retry)
   total_volume_kg REAL,
   logged_at INTEGER NOT NULL
 );
@@ -164,6 +164,8 @@ CREATE INDEX IF NOT EXISTS idx_sets_exercise ON local_sets(exercise_id, logged_a
 ```
 
 Alimenté en même temps que le save Supabase dans summary.tsx. Utilisé exclusivement par Mode Fantôme et Moteur Prédictif.
+
+**Migrations locales (ORA-061) :** `initDB()` versionne le schéma via `PRAGMA user_version` (`SCHEMA_VERSION` dans `db.ts`). `CREATE IF NOT EXISTS` étant no-op sur base existante, tout changement de schéma d'une table déjà créée passe par un bloc `if (version < N)`. v1 = reconstruction de `local_sessions` avec PK pour les installs antérieures.
 
 ---
 

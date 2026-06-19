@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { log } from './logger'
 
 type SlotHoraire = 'matin' | 'apres_midi' | 'soir' | 'nuit'
 
@@ -761,7 +762,7 @@ export async function saveMyoSignature(p: SaveMyoParams): Promise<number[][] | n
 
   const anomalyDims = keys.filter((k) => Math.abs(zAll[k]) >= 2.9).map((k) => DIM_LABELS[k])
 
-  console.log('[MYO] inserting score=', score, 'dims=', allZ.length, 'hash=', hash.slice(0, 16))
+  log.info('[MYO] inserting score=', score, 'dims=', allZ.length, 'hash=', hash.slice(0, 16))
   const { error } = await supabase.from('myo_signatures').insert({
     workout_id: p.workoutId,
     user_id: p.userId,
@@ -788,7 +789,7 @@ export async function saveMyoSignature(p: SaveMyoParams): Promise<number[][] | n
     anomaly_message: anomalyDims.length > 0 ? `Extrême: ${anomalyDims.join(', ')}` : null,
   })
   if (error) {
-    console.error('[MYO] insert error:', error.message, error.code)
+    log.error('[MYO] insert error:', error.message, error.code)
     return null
   }
 

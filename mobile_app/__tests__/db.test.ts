@@ -21,22 +21,17 @@ jest.mock('expo-sqlite', () => ({
 
 // ─── Imports après mock ───────────────────────────────────────────────────────
 
-import {
-  initDB,
-  insertLocalSet,
-  insertLocalSession,
-  getLastLocalSet,
-} from '../lib/db'
+import { initDB, insertLocalSet, insertLocalSession, getLastLocalSet } from '../lib/db'
 
 // ─── Reset DB singleton entre tests ──────────────────────────────────────────
 
 beforeEach(async () => {
-  mockRunAsync      = jest.fn().mockResolvedValue(undefined)
+  mockRunAsync = jest.fn().mockResolvedValue(undefined)
   mockGetFirstAsync = jest.fn().mockResolvedValue(null)
-  mockExecAsync     = jest.fn().mockResolvedValue(undefined)
+  mockExecAsync = jest.fn().mockResolvedValue(undefined)
   mockOpenDatabaseAsync = jest.fn().mockResolvedValue({
-    execAsync:     mockExecAsync,
-    runAsync:      mockRunAsync,
+    execAsync: mockExecAsync,
+    runAsync: mockRunAsync,
     getFirstAsync: mockGetFirstAsync,
   })
 
@@ -123,7 +118,7 @@ describe('insertLocalSet', () => {
     expect(params).toContain('ex-curl')
     expect(params).toContain(20)
     expect(params).toContain(12)
-    expect(params).toContain(240)  // volume = 20 × 12
+    expect(params).toContain(240) // volume = 20 × 12
     expect(params).toContain('session-99')
     expect(params).toContain(1_700_000_000_999)
   })
@@ -191,6 +186,9 @@ describe('insertLocalSession', () => {
 describe('getLastLocalSet', () => {
   beforeEach(async () => {
     await initDB()
+    // initDB lit PRAGMA user_version + sqlite_master via getFirstAsync (ORA-061) →
+    // on vide l'historique pour que les assertions ne portent que sur getLastLocalSet.
+    mockGetFirstAsync.mockClear()
   })
 
   it('retourne null si aucun set pour cet exercice', async () => {
@@ -224,7 +222,7 @@ describe('getLastLocalSet', () => {
     expect(sql).toMatch(/ORDER BY logged_at DESC/i)
   })
 
-  it('passe l\'exerciseId comme paramètre SQL', async () => {
+  it("passe l'exerciseId comme paramètre SQL", async () => {
     mockGetFirstAsync.mockResolvedValue(null)
     await getLastLocalSet('ex-squat')
     const params = mockGetFirstAsync.mock.calls[0] as unknown[]

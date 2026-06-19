@@ -1,4 +1,5 @@
 // ─── useAnalyticsData — couche data de l'écran Analytics (ORA-034) ────────────
+import { log } from '@/lib/logger'
 // Extrait de app/analytics.tsx : volume rolling 7/30/90j, muscles 30j, PRs
 // récents, prédictions (cache local). L'écran ne garde que le rendu.
 
@@ -134,10 +135,17 @@ export function useAnalyticsData(): AnalyticsData {
 
         const muscleVol: Record<string, number> = {}
 
+        // ORA-031 — pré-indexer weData par exercise_id (Map) au lieu d'un .filter
+        // complet par ligne em → O(n+m) au lieu de O(n×m).
+        const weByExercise = new Map<string, WeRow[]>()
+        for (const we of (weData as WeRow[]) ?? []) {
+          const arr = weByExercise.get(we.exercise_id)
+          if (arr) arr.push(we)
+          else weByExercise.set(we.exercise_id, [we])
+        }
+
         for (const em of (emData as EmRow[]) ?? []) {
-          const exRows = ((weData as WeRow[]) ?? []).filter(
-            (we) => we.exercise_id === em.exercise_id
-          )
+          const exRows = weByExercise.get(em.exercise_id) ?? []
           for (const exRow of exRows) {
             const vol = (exRow.workout_sets ?? []).reduce(
               (s, set) =>
@@ -227,7 +235,9 @@ export function useAnalyticsData(): AnalyticsData {
         // Garde uniquement les prédictions avec daysUntilPR dans les 120j
         setPredictions(cached.filter((p) => p.daysUntilPR > 0 && p.daysUntilPR <= 120))
       }
-    } catch (_) {}
+    } catch (e) {
+      log.error('[useAnalyticsData] cache prédictions', e)
+    }
 
     setLoading(false)
   }, [router])

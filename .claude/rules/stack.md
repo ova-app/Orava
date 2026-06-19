@@ -65,7 +65,7 @@ CREATE TABLE IF NOT EXISTS local_sets (
 );
 
 CREATE TABLE IF NOT EXISTS local_sessions (
-  id TEXT NOT NULL,           -- = workout_id Supabase (synchronisé post-save)
+  id TEXT PRIMARY KEY,        -- = workout_id Supabase ; PK = ORA-062 (anti-doublon retry)
   total_volume_kg REAL,
   logged_at INTEGER NOT NULL
 );
@@ -73,6 +73,7 @@ CREATE TABLE IF NOT EXISTS local_sessions (
 CREATE INDEX IF NOT EXISTS idx_sets_exercise ON local_sets(exercise_id, logged_at DESC);
 ```
 Règle : insérer dans SQLite EN MÊME TEMPS que le save Supabase dans summary.tsx.
+Migrations locales versionnées via `PRAGMA user_version` (ORA-061) — voir `rules/database.md`.
 
 ## Reanimated — règles
 - Installer : `npx expo install react-native-reanimated` puis ajouter plugin dans `babel.config.js`
