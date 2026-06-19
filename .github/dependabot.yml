@@ -1,0 +1,25 @@
+# Mises à jour de dépendances automatiques (PR hebdomadaires groupées).
+version: 2
+updates:
+  # Dépendances npm de l'app mobile
+  - package-ecosystem: "npm"
+    directory: "/mobile_app"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    groups:
+      # Une seule PR pour les bumps mineurs/patch — moins de bruit
+      minor-and-patch:
+        update-types: ["minor", "patch"]
+    labels:
+      - "dependencies"
+
+  # Versions des GitHub Actions (CI)
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    labels:
+      - "dependencies"
