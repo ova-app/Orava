@@ -15,7 +15,6 @@
     },
     "ios": {
       "bundleIdentifier": "com.orava.app",
-      "buildNumber": "1",
       "supportsTablet": false,
       "infoPlist": {
         "NSCameraUsageDescription": "Orava utilise la caméra pour les photos de profil.",
@@ -24,7 +23,6 @@
     },
     "android": {
       "package": "com.orava.app",
-      "versionCode": 1,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0A0A0F"

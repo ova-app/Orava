@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { log } from '@/lib/logger'
 import {
   Animated as RNAnimated,
   Dimensions,
@@ -361,7 +362,7 @@ function PRSkiaChipInner({ prs }: { prs: WorkoutPRSummary }) {
 
 function SkeletonCard() {
   const { colors } = useTheme()
-  const CARD_W = Dimensions.get('window').width - spacing.s4 * 2
+  const CARD_W = SCREEN_WIDTH - spacing.s4 * 2
   const CARD_H = 88
   const BEAM_W = 220
 
@@ -519,6 +520,8 @@ interface CommentsModalProps {
 }
 
 const SCREEN_HEIGHT = Dimensions.get('window').height
+// ORA-067 — largeur figée au niveau module (app portrait-locked) : évite un Dimensions.get() par render.
+const SCREEN_WIDTH = Dimensions.get('window').width
 const SHEET_HALF = SCREEN_HEIGHT * 0.5
 const SHEET_FULL = SCREEN_HEIGHT * 0.9
 
@@ -600,7 +603,7 @@ function CommentsModal({
       setText('')
       onCommentAdded()
     } catch (err) {
-      console.error('Failed to post comment:', err)
+      log.error('Failed to post comment:', err)
     } finally {
       setSubmitting(false)
     }
@@ -611,7 +614,7 @@ function CommentsModal({
       await supabase.from('comments').delete().eq('id', commentId)
       onCommentAdded()
     } catch (err) {
-      console.error('Failed to delete comment:', err)
+      log.error('Failed to delete comment:', err)
     }
   }
 
@@ -705,9 +708,7 @@ function CommentsModal({
                       />
                     </TouchableOpacity>
                     {item.likes_count > 0 && (
-                      <Text
-                        style={[typography.caption, { color: colors.textTertiary, fontSize: 10 }]}
-                      >
+                      <Text style={[typography.micro, { color: colors.textTertiary }]}>
                         {item.likes_count}
                       </Text>
                     )}
@@ -750,6 +751,7 @@ function CommentsModal({
               value={text}
               onChangeText={setText}
               editable={!submitting}
+              maxLength={500}
               style={[
                 styles.commentInput,
                 {
@@ -799,7 +801,7 @@ interface FeedItemProps {
 function FeedItemBase({ item, currentUserId, onLike, onNavigateDetail }: FeedItemProps) {
   const sessionValues = item.sessionValues
   const { colors } = useTheme()
-  const { width: screenW } = Dimensions.get('window')
+  const screenW = SCREEN_WIDTH
   const [likesModalVisible, setLikesModalVisible] = useState(false)
   const [commentsModalVisible, setCommentsModalVisible] = useState(false)
   const [likes, setLikes] = useState<Like[]>([])
@@ -841,7 +843,7 @@ function FeedItemBase({ item, currentUserId, onLike, onNavigateDetail }: FeedIte
         setLikes(mapped)
       }
     } catch (err) {
-      console.error('Failed to fetch likes:', err)
+      log.error('Failed to fetch likes:', err)
     }
   }
 
@@ -902,7 +904,7 @@ function FeedItemBase({ item, currentUserId, onLike, onNavigateDetail }: FeedIte
         setComments(mapped)
       }
     } catch (err) {
-      console.error('Failed to fetch comments:', err)
+      log.error('Failed to fetch comments:', err)
     }
   }
 
@@ -1897,6 +1899,7 @@ export default function FeedScreen() {
   const kpiIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const kpiDelayRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const isFirstFocus = useRef(true)
+  const lastFetchAtRef = useRef(0) // ORA-067 — timestamp du dernier fetch feed (TTL focus)
   const firstNameRef = useRef('')
 
   // Garder le ref à jour sans recréer l'interval
@@ -2065,6 +2068,7 @@ export default function FeedScreen() {
   useEffect(() => {
     if (refreshing) {
       refreshSpin.value = 0
+      // ORA-066 — exception linear assumée : rotation continue (vitesse constante).
       refreshSpin.value = withRepeat(
         withTiming(360, { duration: 700, easing: Easing.linear }),
         -1,
@@ -2079,15 +2083,20 @@ export default function FeedScreen() {
     useCallback(() => {
       if (isFirstFocus.current) {
         isFirstFocus.current = false
+        lastFetchAtRef.current = Date.now()
         fetchFeed().finally(() => setLoading(false))
       } else {
-        // Retour sur le tab — slide depuis la droite + actualisation
-        const W = Dimensions.get('window').width
+        // Retour sur le tab — slide depuis la droite (toujours).
+        const W = SCREEN_WIDTH
         listTranslateX.value = W
         listOpacity.value = 0.85
         listTranslateX.value = withSpring(0, { damping: 22, stiffness: 180, mass: 0.8 })
         listOpacity.value = withTiming(1, { duration: 220, easing: Easing.bezier(0.16, 1, 0.3, 1) })
         listTranslateY.value = 0
+        // ORA-067 — ne re-fetch que si les données sont périmées (>20s) : évite de marteler
+        // Supabase (8 requêtes) à chaque aller-retour rapide entre tabs.
+        if (Date.now() - lastFetchAtRef.current < 20000) return
+        lastFetchAtRef.current = Date.now()
         setRefreshing(true)
         Promise.all([fetchFeed(), new Promise((r) => setTimeout(r, 1500))]).finally(() => {
           setRefreshing(false)

@@ -45,6 +45,15 @@ const ExpoSecureStoreAdapter = {
     const chunkSize = 1800
     const chunks = value.match(new RegExp(`.{1,${chunkSize}}`, 'g')) || []
     await Promise.all(chunks.map((chunk, i) => SecureStore.setItemAsync(`${key}.${i}`, chunk)))
+    // ORA-060 — purge des chunks orphelins laissés par une valeur précédente plus longue.
+    // Un JWT plus court écrit moins de fragments ; sans ça les anciens (chiffrés) traîneraient.
+    let i = chunks.length
+    while (true) {
+      const orphan = await SecureStore.getItemAsync(`${key}.${i}`)
+      if (orphan === null) break
+      await SecureStore.deleteItemAsync(`${key}.${i}`)
+      i++
+    }
   },
   removeItem: async (key: string) => {
     let i = 0

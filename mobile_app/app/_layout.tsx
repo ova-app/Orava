@@ -1,4 +1,5 @@
 import { Stack, useNavigationContainerRef } from 'expo-router'
+import { log } from '@/lib/logger'
 import { PostHogProvider } from 'posthog-react-native'
 import * as SplashScreen from 'expo-splash-screen'
 import { Component, useEffect, useState, type ReactNode } from 'react'
@@ -34,7 +35,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
   }
 
   componentDidCatch(error: Error, info: { componentStack?: string | null }) {
-    console.error('[ErrorBoundary]', error, info?.componentStack)
+    log.error('[ErrorBoundary]', error, info?.componentStack)
   }
 
   render() {
@@ -103,7 +104,7 @@ export default function RootLayout() {
         await initDB()
         void backfillLocalFromSupabase() // ORA-024 — réamorce SQLite si vide (non bloquant)
       } catch (e) {
-        console.error('[_layout] init', e)
+        log.error('[_layout] init', e)
       } finally {
         setHydrated(true)
       }

@@ -7,9 +7,16 @@ export function getDB(): SQLite.SQLiteDatabase {
   return _db
 }
 
+// Version courante du schéma SQLite local. Incrémenter à chaque migration ci-dessous (ORA-061).
+const SCHEMA_VERSION = 1
+
 export async function initDB(): Promise<void> {
-  _db = await SQLite.openDatabaseAsync('orava.db')
-  await _db.execAsync(`
+  const db = await SQLite.openDatabaseAsync('orava.db')
+  _db = db
+  // Schéma de base — idempotent. local_sessions a désormais une PRIMARY KEY (ORA-062) :
+  // sur une install neuve la table est directement correcte ; les installs existantes
+  // (ancienne table sans PK) sont reconstruites par la migration versionnée plus bas.
+  await db.execAsync(`
     PRAGMA journal_mode = WAL;
 
     CREATE TABLE IF NOT EXISTS local_sets (
@@ -23,13 +30,47 @@ export async function initDB(): Promise<void> {
     );
 
     CREATE TABLE IF NOT EXISTS local_sessions (
-      id TEXT NOT NULL,
+      id TEXT PRIMARY KEY,
       total_volume_kg REAL,
       logged_at INTEGER NOT NULL
     );
 
     CREATE INDEX IF NOT EXISTS idx_sets_exercise ON local_sets(exercise_id, logged_at DESC);
   `)
+
+  // ─── Migrations versionnées (ORA-061) ───────────────────────────────────────
+  // PRAGMA user_version persiste un entier dans le fichier DB → migrations rejouables
+  // sans risque. CREATE IF NOT EXISTS étant no-op sur base existante, les changements
+  // de schéma d'une table déjà créée DOIVENT passer par ici.
+  const versionRow = await db.getFirstAsync<{ user_version: number }>('PRAGMA user_version')
+  const version = versionRow?.user_version ?? 0
+
+  if (version < 1) {
+    // ORA-062 — l'ancienne local_sessions (id TEXT NOT NULL, sans PK) laisse INSERT OR REPLACE
+    // se comporter comme un INSERT → doublons au retry. On la reconstruit avec PRIMARY KEY si
+    // son schéma ne la contient pas (les doublons existants sont dédupliqués par INSERT OR REPLACE).
+    const schemaRow = await db.getFirstAsync<{ sql: string | null }>(
+      `SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'local_sessions'`
+    )
+    const sql = schemaRow?.sql ?? ''
+    if (sql && !/PRIMARY KEY/i.test(sql)) {
+      await db.execAsync(`
+        CREATE TABLE local_sessions_new (
+          id TEXT PRIMARY KEY,
+          total_volume_kg REAL,
+          logged_at INTEGER NOT NULL
+        );
+        INSERT OR REPLACE INTO local_sessions_new (id, total_volume_kg, logged_at)
+          SELECT id, total_volume_kg, logged_at FROM local_sessions;
+        DROP TABLE local_sessions;
+        ALTER TABLE local_sessions_new RENAME TO local_sessions;
+      `)
+    }
+  }
+
+  if (version < SCHEMA_VERSION) {
+    await db.execAsync(`PRAGMA user_version = ${SCHEMA_VERSION};`)
+  }
 }
 
 export async function insertLocalSet(params: {

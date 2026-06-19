@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import { log } from './logger'
 
 const PREFIX = 'orava-workout:'
 const cache = new Map<string, string>()
@@ -29,11 +30,15 @@ export const storage = {
 export async function hydrateStorage(): Promise<void> {
   try {
     const keys = await AsyncStorage.getAllKeys()
-    const ours = keys.filter(k => k.startsWith(PREFIX))
+    const ours = keys.filter((k) => k.startsWith(PREFIX))
     if (ours.length === 0) return
     const pairs = await AsyncStorage.multiGet(ours)
     for (const [k, v] of pairs) {
       if (v !== null) cache.set(k.slice(PREFIX.length), v)
     }
-  } catch (_) {}
+  } catch (e) {
+    // ORA-011-dev — crash-safe dépend de cette hydratation : un échec muet =
+    // draft de séance jamais relu sans le savoir.
+    log.error('[storage] hydrateStorage', e)
+  }
 }

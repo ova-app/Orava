@@ -27,6 +27,8 @@ function LoadingSpinner({ color }: { color: string }): React.JSX.Element {
   const rotation = useSharedValue(0)
 
   useEffect(() => {
+    // ORA-066 — exception linear assumée : rotation continue d'un spinner = vitesse
+    // constante ; un spring/ease introduirait une pulsation visible. Cf. rules/ui.md.
     rotation.value = withRepeat(
       withTiming(360, { duration: 1200, easing: Easing.linear }),
       -1,

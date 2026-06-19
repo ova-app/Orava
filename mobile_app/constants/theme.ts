@@ -139,6 +139,14 @@ export const typography = {
     letterSpacing: 0.4,
     lineHeight: 16,
   },
+  // ORA-065 — token canonique pour les micro-textes (< caption). Remplace les fontSize: 9/10/11
+  // inline (hors charts Skia, qui restent numériques). Migration au fil de l'eau.
+  micro: {
+    fontSize: 10,
+    fontFamily: font.medium,
+    letterSpacing: 0.4,
+    lineHeight: 14,
+  },
   mono: {
     fontSize: 14,
     fontFamily: font.mono,

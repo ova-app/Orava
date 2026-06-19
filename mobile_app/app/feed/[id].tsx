@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import { log } from '@/lib/logger'
 import {
   View,
   Text,
@@ -663,7 +664,7 @@ export default function FeedDetailScreen(): React.JSX.Element {
       .single()
 
     if (wError || !wData) {
-      console.error('fetchWorkout error:', wError)
+      log.error('fetchWorkout error:', wError)
       setLoading(false)
       return
     }
@@ -769,8 +770,12 @@ export default function FeedDetailScreen(): React.JSX.Element {
       if (emData) {
         const muscleVol: Record<string, number> = {}
 
+        // ORA-031 — indexer exs par exerciseId (first-match, comme .find) → O(n+m)
+        const exById = new Map<string, (typeof exs)[number]>()
+        for (const e of exs) if (!exById.has(e.exerciseId)) exById.set(e.exerciseId, e)
+
         for (const em of emData) {
-          const ex = exs.find((e) => e.exerciseId === em.exercise_id)
+          const ex = exById.get(em.exercise_id)
           if (!ex) continue
           const vol = ex.sets.reduce((sum, s) => {
             return sum + (s.weight_kg ?? 0) * (s.reps ?? 0) * ((em.activation_pct ?? 0) / 100)
