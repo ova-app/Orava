@@ -10,7 +10,7 @@
 # Idempotent : relancer ne duplique pas les labels (les issues, si).
 
 set -uo pipefail
-REPO="sofianebessila/Orava"   # ⚠️ changer ici après migration vers le compte projet/org
+REPO="ova-app/Orava"
 
 echo "==> Labels"
 mklabel() { gh label create "$1" --color "$2" --description "$3" -R "$REPO" 2>/dev/null \

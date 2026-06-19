@@ -1,7 +1,7 @@
 # Setup GitHub Orava - labels, milestones, issues CR 15/06/2026
 # cd C:\Users\SofianeBESSILA\orava && .\scripts\github-setup.ps1
 
-$REPO = "sofianebessila/Orava"
+$REPO = "ova-app/Orava"
 $GH   = "C:\Program Files\GitHub CLI\gh.exe"
 
 function mklabel($name, $color, $desc) {
