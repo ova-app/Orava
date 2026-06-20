@@ -21,6 +21,7 @@ touché ni au code, ni à React Native, ni à Supabase. Lis dans l'ordre.
 | 7 | [07-design-system.md](./07-design-system.md) | Les règles visuelles : couleurs, typo, animations, densité | 20 min |
 | 8 | [08-workflow-dev.md](./08-workflow-dev.md) | Git, commits, hooks, CI, tests, **ajouter un écran de A à Z** | 25 min |
 | 9 | [09-glossaire.md](./09-glossaire.md) | Tous les termes (anglicismes, muscles, abréviations) | référence |
+| 10 | [10-audits.md](./10-audits.md) | Les skills d'audit Claude : `/audit` (noter la boîte sur 20) + `/code-audit` (auditer tout le code) | 15 min |
 
 ---
 
