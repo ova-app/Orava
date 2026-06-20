@@ -170,6 +170,41 @@ RevenueCat (ORA-010), suppression compte (ORA-001), RGPD UI (ORA-003), service_r
 
 ---
 
+## Phase B — Vitrine sociale (Claims + PR vedette)
+
+> Complétion de la feature « vitrine sociale » livrée le 20/06/2026 (refonte profil + Claim called-shot + PR vedette + pronostics feed). MVP A→D codé et testé (typecheck/lint/203 tests/couverture verts). Ces tickets couvrent le **reporté assumé**. Détail produit : `.claude/rules/database.md` (section « Vitrine sociale »).
+
+### Lot Phase B — ✅ FAIT (20/06/2026) — typecheck + lint 229/230 + 238 tests + coverage gate verts
+> Reste : **ORA-078** (push — bloqué par ORA-042) et l'opt-in *public* du near-miss d'ORA-081 (différé : nécessite une surface feed + un flag). **Prérequis transverse non joué : ORA-075** (migration `claims_and_featured_pr.sql`) — tout le code Phase B est best-effort/no-op tant qu'elle n'est pas appliquée à la main.
+> - ✅ **ORA-080** — logique pure extraite de `claims.ts` (résolution weight/sessions, toggle vote, deadline, track record, near-miss) + `featuredPr.ts` (meilleur PR, delta) et **testée par import réel** (`__tests__/claims.test.ts` 30 tests, `featuredPr.test.ts` 8 tests). Planchers `coverageThreshold` ratchetés sur `lib/claims.ts` + `lib/featuredPr.ts` (cliquet, même logique qu'ORA-044/074).
+> - ✅ **ORA-079** — card prédiction `analytics.tsx` cliquable → `/claim/new` prérempli (exercice + cible via params `useLocalSearchParams`). Boucle robot→humain (toute prédiction affichée est ≥ 60 % de confiance).
+> - 🟡 **ORA-081** — near-miss **privé** sur profil (claim `failed` ≤ 7 j, ni rouge ni accent) + **re-claim 1 tap** (`createClaim` réutilisé). `expired` exclu (= remplacé volontairement). *Reste :* l'affichage public opt-in du near-miss.
+> - ✅ **ORA-076** — bouton épingle par exercice dans l'Armurerie (`prs.tsx`) → `pinExerciseAsFeatured` (re-dérive le snapshot via les helpers purs). Lecture du pin via `getManualFeaturedPr` **en requête isolée best-effort** (jamais dans le `select` profil critique → zéro risque de 400 pré-migration). `pinFeaturedPr` renvoie désormais `boolean`.
+> - ✅ **ORA-077** — expiration **serveur** des claims : `supabase/planned/ora077_resolve_claims_cron.sql` (pg_cron horaire `resolve_overdue_claims()`, zéro-infra) **+** `supabase/functions/resolve-claims/index.ts` (Edge Function, hook futur ORA-078). À appliquer/déployer à la main (cf. `supabase/README.md`).
+
+### ~~ORA-075~~ · ✅ [DATA] Appliquer la migration `claims_and_featured_pr.sql` (prérequis)
+`supabase/planned/claims_and_featured_pr.sql` — `users.featured_pr` (jsonb) + tables `claims` + `claim_votes` + RLS. **Non appliquée** (comme `create_workout`/ORA-020). Tant qu'elle ne l'est pas : les claims sont no-op (tout best-effort/catché, rien ne casse) et `featured_pr` est volontairement hors du select profil (`useProfileData.ts`) pour éviter un 400. **Action :** exécuter le SQL dans le dashboard (SQL Editor), vérifier les policies, puis cocher comme appliquée dans `supabase/README.md`. **Prérequis de tous les tickets ci-dessous.**
+
+### ORA-076 · ✅ [PRODUIT] Pin manuel du PR vedette (curation)
+`lib/featuredPr.ts` (`pinFeaturedPr` déjà écrite, jamais appelée), `lib/hooks/useProfileData.ts` (lecture `featured_pr` retirée du select — à réintroduire **après** ORA-075), `prs.tsx` (Armurerie = source du picker). Aujourd'hui le PR vedette est **auto-pick only** (meilleur gold `pr_charge`). **Action :** depuis la card PR vedette (profil) ou l'Armurerie, permettre d'épingler manuellement un PR → `pinFeaturedPr` (écrit `featured_pr` avec `manual:true`, jamais écrasé par l'auto-pick) ; réintroduire la lecture `featured_pr` dans `useProfileData` (prioritaire sur l'auto). **Dépend d'ORA-075.**
+
+### ORA-077 · ✅ [DATA/ROBUSTESSE] Résolution serveur des claims (Edge Function cron)
+`lib/claims.ts` — résolution actuellement **client au save** (`resolveClaimsAfterWorkout`) + échéances `week` via `expireOverdueClaims` à l'ouverture profil/feed. Limite : un claim `sessions` raté ne bascule en échec **que quand l'user rouvre l'app** après la deadline (arbitrage MVP acté). **Action :** Edge Function Supabase planifiée (cron) qui résout les claims `active` dont `deadline < now()` même si l'user est inactif → cohérence du track record et des events feed. *(Choix : garder la résolution `succeeded` côté client au save pour l'immédiateté, l'Edge Function ne gère que les expirations.)*
+
+### ORA-078 · ⏳ [PRODUIT] Push de résolution de claim — BLOQUÉ par ORA-042 (infra push)
+`lib/claims.ts` (claims résolus) — pas de notification quand un claim est tenu/raté ni quand l'échéance approche. **Action :** push `expo-notifications` : « Claim réussi 🔥 », « ton claim expire demain », « X a tenu son claim ». **Dépend d'ORA-042** (infra push) et idéalement d'ORA-077 (résolution serveur = trigger fiable).
+
+### ORA-079 · ✅ [PRODUIT] Suggestion de claim depuis le moteur prédictif
+`lib/predictor.ts` (`computePrediction` → PR prédit + confiance) → `app/claim/new.tsx` / bande claim. Le robot prédit déjà un PR ; l'humain devrait pouvoir l'assumer en 1 tap. **Action :** quand une prédiction `confidence ≥ 0.6` existe, proposer « Orava te prédit X kg — tu le claim ? » → `createClaim` prérempli (exercice + cible). Boucle robot→humain qui amorce les claims (mitige le cold-start).
+
+### ORA-080 · ✅ [TESTS] Couverture `lib/claims.ts` + `lib/featuredPr.ts`
+`lib/claims.ts` et `lib/featuredPr.ts` à **0 %** (logique de résolution `weight`/`sessions`, toggle de vote, auto-pick gold, calcul de delta — non testés). Contraire à la culture ORA-045/ORA-074 (gate de couverture). **Action :** extraire les bouts de logique pure (décision de résolution, math de toggle believe/doubt, sélection du meilleur PR) et les tester par import réel ; remonter le plancher `coverageThreshold`.
+
+### ORA-081 · 🟡 [PRODUIT] UX d'échec de claim (near-miss + re-claim) — privé fait, opt-in public différé
+`lib/claims.ts` — un claim `failed`/`expired` disparaît **silencieusement** (feed n'affiche que `active`+`succeeded`, profil que l'actif). Décision « échec doux » respectée, mais zéro atterrissage : pas de « manqué de 3 kg · re-claim », pas de near-miss opt-in. **Action :** surfacer l'échec à l'auteur uniquement (privé) avec `resolved_value` (« raté de X »), CTA re-claim 1 tap (réutilise `createClaim`), et option d'afficher publiquement le near-miss s'il le souhaite. Protège la rétention sans honte publique.
+
+---
+
 ## Points positifs vérifiés (à préserver)
 
 - Résidence EU (Supabase Frankfurt + PostHog `eu.i.posthog.com`), tokens en SecureStore, requêtes paramétrées (**aucune injection SQL** — vérifié), `is_public` DEFAULT `false`, **aucune coordonnée lat/lng précise écrite** (seule `location_city`).

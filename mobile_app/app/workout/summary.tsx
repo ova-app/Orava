@@ -44,6 +44,7 @@ import {
 } from '@shopify/react-native-skia'
 import { insertLocalSet, insertLocalSession } from '@/lib/db'
 import { computePrediction } from '@/lib/predictor'
+import { resolveClaimsAfterWorkout } from '@/lib/claims'
 import { storage } from '@/lib/storage'
 import { supabase } from '@/lib/supabase'
 import { formatDuration, epley1RM } from '@/lib/utils'
@@ -1112,6 +1113,25 @@ export default function SummaryScreen() {
           }
         } catch (e) {
           log.error('[summary] cache prédictions', e)
+        }
+      })()
+      // Fire-and-forget — résout les claims actifs avec la donnée réelle de la séance
+      // (« 100 kg au DC » / « N séances »). Non bloquant : la séance est déjà sauvée.
+      void (async () => {
+        try {
+          const maxWeightByExercise: Record<string, number> = {}
+          for (const ex of exercises) {
+            const weights = ex.sets
+              .filter((s) => s.validated && s.weight_kg > 0 && s.reps > 0)
+              .map((s) => s.weight_kg)
+            if (weights.length > 0) maxWeightByExercise[ex.exercise_id] = Math.max(...weights)
+          }
+          const {
+            data: { user },
+          } = await supabase.auth.getUser()
+          if (user) await resolveClaimsAfterWorkout(user.id, { maxWeightByExercise })
+        } catch (e) {
+          log.error('[summary] résolution claims', e)
         }
       })()
       storage.delete('workout_session_draft')

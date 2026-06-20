@@ -9,7 +9,7 @@ import {
   Easing,
 } from 'react-native-reanimated'
 import { useRouter } from 'expo-router'
-import { ChevronLeft, Dumbbell, TrendingUp, Zap } from 'lucide-react-native'
+import { ChevronLeft, Dumbbell, TrendingUp, Zap, Target } from 'lucide-react-native'
 import { useTheme } from '@/context/ThemeContext'
 import { spacing, radius, typography, font } from '@/constants/theme'
 import { formatVolume } from '@/lib/utils'
@@ -357,7 +357,24 @@ export default function AnalyticsScreen(): React.JSX.Element {
               {predictions
                 .sort((a, b) => a.daysUntilPR - b.daysUntilPR)
                 .map((pred) => (
-                  <View key={pred.exerciseId} style={s.predCard}>
+                  // ORA-079 — boucle robot→humain : la prédiction (confiance ≥ 60 %) est
+                  // claimable en 1 tap → /claim/new prérempli (exercice + cible).
+                  <Pressable
+                    key={pred.exerciseId}
+                    style={({ pressed }) => [s.predCard, pressed && { opacity: 0.75 }]}
+                    onPress={() =>
+                      router.push({
+                        pathname: '/claim/new',
+                        params: {
+                          exerciseId: pred.exerciseId,
+                          exerciseName: pred.exerciseName,
+                          target: String(pred.predictedPR),
+                        },
+                      })
+                    }
+                    accessibilityRole="button"
+                    accessibilityLabel={`Claimer ${pred.predictedPR} kg sur ${pred.exerciseName}`}
+                  >
                     <View style={[s.predAccentBar, { backgroundColor: colors.accent }]} />
                     <View style={s.predContent}>
                       <Text style={s.predExName} numberOfLines={1}>
@@ -378,8 +395,12 @@ export default function AnalyticsScreen(): React.JSX.Element {
                           {Math.round(pred.confidence * 100)}% confiance
                         </Text>
                       </View>
+                      <View style={s.predClaimRow}>
+                        <Target size={12} color={colors.accent} strokeWidth={2.5} />
+                        <Text style={s.predClaimText}>Claimer ce PR</Text>
+                      </View>
                     </View>
-                  </View>
+                  </Pressable>
                 ))}
             </View>
           )}
@@ -758,6 +779,20 @@ function buildStyles(colors: ReturnType<typeof useTheme>['colors']) {
     predConfidence: {
       ...typography.caption,
       color: colors.textTertiary,
+    },
+    predClaimRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.s1,
+      marginTop: spacing.s3,
+      paddingTop: spacing.s2,
+      borderTopWidth: 1,
+      borderTopColor: colors.separator,
+    },
+    predClaimText: {
+      ...typography.caption,
+      fontFamily: font.bold,
+      color: colors.accent,
     },
 
     bottomSpacer: {

@@ -3,9 +3,18 @@
 // (workouts + likes + comments + PRs agrégés + signatures Myo) + KPIs du mois +
 // like optimiste avec revert (ORA-037). L'écran ne garde que rendu + animations.
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { log } from '@/lib/logger'
 import { supabase } from '@/lib/supabase'
 import { sessionValuesFromSignature } from '@/lib/myo'
+import {
+  getClaimVotes,
+  voteClaim as voteClaimApi,
+  type ClaimType,
+  type ClaimScope,
+  type ClaimStatus,
+  type ClaimVote,
+} from '@/lib/claims'
 
 // ─── Types partagés avec l'écran ──────────────────────────────────────────────
 
@@ -48,6 +57,31 @@ export interface FeedWorkout {
   photo_url: string | null
 }
 
+// Claim affiché dans le feed (called-shot social). Échec exclu (succès public, échec discret).
+export interface ClaimFeedItem {
+  id: string
+  user: { id: string; username: string | null; full_name: string | null }
+  type: ClaimType
+  exercise_name: string | null
+  target_value: number
+  unit: string
+  scope: ClaimScope
+  deadline: string | null
+  status: ClaimStatus
+  progress_current: number
+  resolved_value: number | null
+  created_at: string
+  resolved_at: string | null
+  believe: number
+  doubt: number
+  myVote: ClaimVote | null
+}
+
+// Timeline unifiée : séances + claims, triés chronologiquement.
+export type FeedEntry =
+  | { kind: 'workout'; ts: number; id: string; workout: FeedWorkout }
+  | { kind: 'claim'; ts: number; id: string; claim: ClaimFeedItem }
+
 export interface FeedKPIs {
   workoutsThisMonth: number
   trendPercent: number
@@ -66,11 +100,13 @@ const EMPTY_KPIS: FeedKPIs = {
 
 export interface FeedData {
   workouts: FeedWorkout[]
+  feedEntries: FeedEntry[]
   currentUserId: string | null
   currentUserFirstName: string
   kpis: FeedKPIs
   fetchFeed: () => Promise<void>
   handleLike: (workoutId: string, hasLiked: boolean) => Promise<void>
+  voteOnClaim: (claimId: string, vote: ClaimVote) => Promise<void>
 }
 
 // ─── KPIs du mois (volume / tendance / PRs / durée moyenne) ────────────────────
@@ -130,6 +166,7 @@ const PR_RANK: Record<PRLevel, number> = { gold: 3, silver: 2, bronze: 1 }
 
 export function useFeedData(): FeedData {
   const [workouts, setWorkouts] = useState<FeedWorkout[]>([])
+  const [claimItems, setClaimItems] = useState<ClaimFeedItem[]>([])
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [currentUserFirstName, setCurrentUserFirstName] = useState<string>('')
   const [kpis, setKpis] = useState<FeedKPIs>(EMPTY_KPIS)
@@ -347,7 +384,129 @@ export function useFeedData(): FeedData {
 
     setWorkouts(mapped)
     setKpis(computeKPIs(mapped))
+
+    // ── Claims publics (called-shot) : actifs + réussis. L'échec reste discret. ──
+    try {
+      const { data: claimsData } = await supabase
+        .from('claims')
+        .select(
+          'id, user_id, type, exercise_name, target_value, unit, scope, deadline, status, progress_current, resolved_value, created_at, resolved_at, user:user_id(id, username, full_name)'
+        )
+        .eq('is_public', true)
+        .in('status', ['active', 'succeeded'])
+        .order('created_at', { ascending: false })
+        .limit(30)
+
+      type RawClaim = {
+        id: string
+        user_id: string
+        type: ClaimType
+        exercise_name: string | null
+        target_value: number
+        unit: string
+        scope: ClaimScope
+        deadline: string | null
+        status: ClaimStatus
+        progress_current: number
+        resolved_value: number | null
+        created_at: string
+        resolved_at: string | null
+        user: Array<{ id: string; username: string | null; full_name: string | null }>
+      }
+      const rawClaims = (claimsData ?? []) as unknown as RawClaim[]
+      const claimIds = rawClaims.map((c) => c.id)
+
+      const voteAgg = new Map<string, { believe: number; doubt: number; mine: ClaimVote | null }>()
+      if (claimIds.length > 0) {
+        const { data: votesData } = await supabase
+          .from('claim_votes')
+          .select('claim_id, user_id, vote')
+          .in('claim_id', claimIds)
+        for (const v of (votesData ?? []) as Array<{
+          claim_id: string
+          user_id: string
+          vote: ClaimVote
+        }>) {
+          const agg = voteAgg.get(v.claim_id) ?? { believe: 0, doubt: 0, mine: null }
+          if (v.vote === 'believe') agg.believe += 1
+          else agg.doubt += 1
+          if (v.user_id === uid) agg.mine = v.vote
+          voteAgg.set(v.claim_id, agg)
+        }
+      }
+
+      const claimsMapped: ClaimFeedItem[] = rawClaims.map((c) => {
+        const agg = voteAgg.get(c.id) ?? { believe: 0, doubt: 0, mine: null }
+        return {
+          id: c.id,
+          user: c.user?.[0] ?? { id: c.user_id, username: null, full_name: null },
+          type: c.type,
+          exercise_name: c.exercise_name,
+          target_value: c.target_value,
+          unit: c.unit,
+          scope: c.scope,
+          deadline: c.deadline,
+          status: c.status,
+          progress_current: c.progress_current,
+          resolved_value: c.resolved_value,
+          created_at: c.created_at,
+          resolved_at: c.resolved_at,
+          believe: agg.believe,
+          doubt: agg.doubt,
+          myVote: agg.mine,
+        }
+      })
+      setClaimItems(claimsMapped)
+    } catch (e) {
+      log.error('[feed] claims', e)
+    }
   }, [])
+
+  // Timeline unifiée séances + claims, antichronologique.
+  const feedEntries = useMemo<FeedEntry[]>(() => {
+    const wEntries: FeedEntry[] = workouts.map((w) => ({
+      kind: 'workout',
+      ts: new Date(w.started_at).getTime(),
+      id: w.id,
+      workout: w,
+    }))
+    const cEntries: FeedEntry[] = claimItems.map((c) => ({
+      kind: 'claim',
+      ts: new Date(c.resolved_at ?? c.created_at).getTime(),
+      id: c.id,
+      claim: c,
+    }))
+    return [...wEntries, ...cEntries].sort((a, b) => b.ts - a.ts)
+  }, [workouts, claimItems])
+
+  // Pronostic believe/doubt — optimiste puis réconcilié serveur.
+  const voteOnClaim = useCallback(
+    async (claimId: string, vote: ClaimVote): Promise<void> => {
+      if (!currentUserId) return
+      setClaimItems((prev) =>
+        prev.map((c) => {
+          if (c.id !== claimId) return c
+          let { believe, doubt } = c
+          if (c.myVote === 'believe') believe -= 1
+          if (c.myVote === 'doubt') doubt -= 1
+          const next: ClaimVote | null = c.myVote === vote ? null : vote
+          if (next === 'believe') believe += 1
+          if (next === 'doubt') doubt += 1
+          return { ...c, believe, doubt, myVote: next }
+        })
+      )
+      await voteClaimApi(claimId, vote)
+      const fresh = await getClaimVotes(claimId, currentUserId)
+      setClaimItems((prev) =>
+        prev.map((c) =>
+          c.id === claimId
+            ? { ...c, believe: fresh.believe, doubt: fresh.doubt, myVote: fresh.mine }
+            : c
+        )
+      )
+    },
+    [currentUserId]
+  )
 
   const handleLike = useCallback(
     async (workoutId: string, hasLiked: boolean): Promise<void> => {
@@ -381,5 +540,14 @@ export function useFeedData(): FeedData {
     [currentUserId]
   )
 
-  return { workouts, currentUserId, currentUserFirstName, kpis, fetchFeed, handleLike }
+  return {
+    workouts,
+    feedEntries,
+    currentUserId,
+    currentUserFirstName,
+    kpis,
+    fetchFeed,
+    handleLike,
+    voteOnClaim,
+  }
 }

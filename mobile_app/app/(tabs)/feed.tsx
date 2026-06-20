@@ -45,7 +45,18 @@ import MyoChart from '@/app/workout/myo-chart'
 const AnimatedCircle = Animated.createAnimatedComponent(Circle)
 const AnimatedPath = Animated.createAnimatedComponent(Path)
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
-import { Heart, MessageCircle, RefreshCw, MapPin, X, Zap, Flame, Trophy } from 'lucide-react-native'
+import {
+  Heart,
+  MessageCircle,
+  RefreshCw,
+  MapPin,
+  X,
+  Zap,
+  Flame,
+  Trophy,
+  Target,
+  Sparkles,
+} from 'lucide-react-native'
 import { useTheme } from '@/context/ThemeContext'
 import { useRouter } from 'expo-router'
 import { useFocusEffect } from '@react-navigation/core'
@@ -57,9 +68,12 @@ import oravaLogo from '@/assets/orava_logo.png'
 import {
   useFeedData,
   type FeedWorkout,
+  type FeedEntry,
+  type ClaimFeedItem,
   type PRLevel,
   type WorkoutPRSummary,
 } from '@/lib/hooks/useFeedData'
+import { type ClaimVote } from '@/lib/claims'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -1227,6 +1241,209 @@ function FeedItemBase({ item, currentUserId, onLike, onNavigateDetail }: FeedIte
 // Couplé à removeClippedSubviews : les MyoChart Skia hors-viewport sont démontés.
 const FeedItem = React.memo(FeedItemBase)
 
+// ─── Feed Claim Card (called-shot social) ──────────────────────────────────────
+
+function claimDaysUntil(deadline: string | null): number | null {
+  if (!deadline) return null
+  return Math.max(0, Math.ceil((new Date(deadline).getTime() - Date.now()) / 86400000))
+}
+
+function FeedClaimCardBase({
+  claim,
+  currentUserId,
+  onVote,
+}: {
+  claim: ClaimFeedItem
+  currentUserId: string | null
+  onVote: (claimId: string, vote: ClaimVote) => void
+}) {
+  const { colors } = useTheme()
+  const displayName = claim.user.username ?? claim.user.full_name ?? '?'
+  const initials = displayName
+    .split(' ')
+    .slice(0, 2)
+    .map((p) => p.charAt(0).toUpperCase())
+    .join('')
+  const bg = avatarColor(claim.user.id || claim.id)
+  const isOwn = currentUserId === claim.user.id
+  const resolved = claim.status === 'succeeded'
+  const targetLabel = `${claim.target_value} ${claim.unit}`
+  const dLeft = claimDaysUntil(claim.deadline)
+  const deadlineLabel =
+    claim.scope === 'next_session'
+      ? 'prochaine séance'
+      : dLeft === 0
+        ? 'dernier jour'
+        : `J-${dLeft}`
+  const ts = resolved ? (claim.resolved_at ?? claim.created_at) : claim.created_at
+  const accentCol = resolved ? colors.prGold : colors.accent
+  const believeOn = claim.myVote === 'believe'
+  const doubtOn = claim.myVote === 'doubt'
+
+  // Styles dynamiques (theme/état) hoistés — pas de littéral inline (lint clean).
+  const cardDyn = { backgroundColor: colors.backgroundSecondary, borderLeftColor: accentCol }
+  const avatarDyn = { backgroundColor: bg }
+  const nameDyn = { color: colors.textPrimary }
+  const timeDyn = { color: colors.textSecondary }
+  const tagDyn = { backgroundColor: accentCol + '1A' }
+  const tagTextDyn = { color: accentCol }
+  const bodyDyn = { color: colors.textPrimary }
+  const subDyn = { color: colors.textSecondary }
+  const trackDyn = { backgroundColor: colors.backgroundTertiary }
+  const fillDyn = {
+    backgroundColor: colors.accent,
+    width: `${Math.min(100, (claim.progress_current / Math.max(1, claim.target_value)) * 100)}%`,
+  } as const
+  const mutedDyn = { color: colors.textTertiary }
+  const footerDyn = { borderTopColor: colors.separator }
+  const believeBtnDyn = { backgroundColor: believeOn ? colors.accent : colors.backgroundTertiary }
+  const doubtBtnDyn = {
+    backgroundColor: doubtOn ? colors.textSecondary : colors.backgroundTertiary,
+  }
+  const believeTextDyn = { color: believeOn ? colors.background : colors.textPrimary }
+  const doubtTextDyn = { color: doubtOn ? colors.background : colors.textPrimary }
+  const believeAccent = { color: colors.accent }
+
+  return (
+    <View style={claimStyles.wrapper}>
+      <View style={[styles.feedItem, claimStyles.card, cardDyn]}>
+        {/* Header */}
+        <View style={styles.row1}>
+          <View style={[styles.avatarMed, avatarDyn]}>
+            <Text style={[styles.avatarInitials, nameDyn]}>{initials}</Text>
+          </View>
+          <View style={claimStyles.nameCol}>
+            <Text style={[typography.caption, claimStyles.metaName, nameDyn]} numberOfLines={1}>
+              {displayName}
+            </Text>
+            <Text style={[typography.caption, claimStyles.metaTime, timeDyn]}>{timeAgo(ts)}</Text>
+          </View>
+          <View style={[claimStyles.tag, tagDyn]}>
+            {resolved ? (
+              <Sparkles size={12} color={colors.prGold} />
+            ) : (
+              <Target size={12} color={colors.accent} strokeWidth={2.5} />
+            )}
+            <Text style={[claimStyles.tagText, tagTextDyn]}>{resolved ? 'RÉUSSI' : 'CLAIM'}</Text>
+          </View>
+        </View>
+
+        {/* Corps */}
+        <Text style={[typography.subtitle, claimStyles.body, bodyDyn]}>
+          {resolved ? `A tenu son claim : ${targetLabel}` : `Vise ${targetLabel}`}
+        </Text>
+        {claim.type === 'weight' && claim.exercise_name && (
+          <Text style={[typography.body, claimStyles.sub, subDyn]}>
+            {claim.exercise_name}
+            {!resolved ? ` · ${deadlineLabel}` : ''}
+          </Text>
+        )}
+        {claim.type === 'sessions' && !resolved && (
+          <View style={claimStyles.progressWrap}>
+            <View style={[claimStyles.progressTrack, trackDyn]}>
+              <View style={[claimStyles.progressFill, fillDyn]} />
+            </View>
+            <Text style={[typography.caption, claimStyles.progressLabel, mutedDyn]}>
+              {claim.progress_current}/{claim.target_value} · {deadlineLabel}
+            </Text>
+          </View>
+        )}
+
+        {/* Footer — pronostics */}
+        {resolved ? (
+          <Text style={[typography.caption, claimStyles.resolvedNote, subDyn]}>
+            {claim.believe > 0 ? `${claim.believe} y croyaient. Pari tenu.` : 'Pari tenu.'}
+          </Text>
+        ) : isOwn ? (
+          <View style={[claimStyles.ownRow, footerDyn]}>
+            <Text style={[typography.caption, subDyn]}>
+              <Text style={[claimStyles.bold, believeAccent]}>{claim.believe}</Text> y croient
+            </Text>
+            <Text style={[typography.caption, subDyn]}>
+              <Text style={[claimStyles.bold, nameDyn]}>{claim.doubt}</Text> sceptiques
+            </Text>
+          </View>
+        ) : (
+          <View style={[claimStyles.voteRow, footerDyn]}>
+            <TouchableOpacity
+              onPress={() => onVote(claim.id, 'believe')}
+              style={[claimStyles.voteBtn, believeBtnDyn]}
+            >
+              <Flame
+                size={15}
+                color={believeOn ? colors.background : colors.accent}
+                fill={believeOn ? colors.background : 'transparent'}
+              />
+              <Text style={[claimStyles.voteBtnText, believeTextDyn]}>
+                J&apos;y crois {claim.believe > 0 ? claim.believe : ''}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => onVote(claim.id, 'doubt')}
+              style={[claimStyles.voteBtn, doubtBtnDyn]}
+            >
+              <Text style={[claimStyles.voteBtnText, doubtTextDyn]}>
+                Chaud {claim.doubt > 0 ? claim.doubt : ''}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+      </View>
+    </View>
+  )
+}
+
+const FeedClaimCard = React.memo(FeedClaimCardBase)
+
+const claimStyles = StyleSheet.create({
+  wrapper: { marginBottom: spacing.s3 },
+  card: { marginBottom: 0, borderLeftWidth: 3 },
+  nameCol: { flex: 1, minWidth: 0 },
+  metaName: { fontFamily: 'Barlow_700Bold', textTransform: 'uppercase' },
+  metaTime: { fontSize: 12 },
+  tag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderRadius: radius.full,
+    paddingHorizontal: 10,
+    height: 26,
+  },
+  tagText: { fontSize: 10, fontFamily: 'Barlow_700Bold', letterSpacing: 1 },
+  body: { fontFamily: 'Barlow_700Bold', marginTop: spacing.s3 },
+  sub: { marginTop: 2 },
+  progressWrap: { marginTop: spacing.s3 },
+  progressTrack: { height: 6, borderRadius: 3, overflow: 'hidden' },
+  progressFill: { height: 6, borderRadius: 3 },
+  progressLabel: { marginTop: spacing.s1 },
+  resolvedNote: { marginTop: spacing.s3 },
+  ownRow: {
+    flexDirection: 'row',
+    gap: spacing.s4,
+    marginTop: spacing.s4,
+    paddingTop: spacing.s3,
+    borderTopWidth: 1,
+  },
+  bold: { fontFamily: 'Barlow_700Bold' },
+  voteRow: {
+    flexDirection: 'row',
+    gap: spacing.s2,
+    marginTop: spacing.s4,
+    paddingTop: spacing.s3,
+    borderTopWidth: 1,
+  },
+  voteBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.s1,
+    height: 40,
+    borderRadius: radius.md,
+  },
+  voteBtnText: { fontFamily: 'Barlow_700Bold', fontSize: 13 },
+})
+
 // ─── KPIs Bandeau ────────────────────────────────────────────────────────────
 
 // TrendArrow — reproduit exactement TrendingUp/TrendingDown Lucide (viewBox 0 0 24 24)
@@ -1871,8 +2088,15 @@ export default function FeedScreen() {
   const { colors } = useTheme()
   const router = useRouter()
   // Couche data extraite — ORA-034
-  const { workouts, currentUserId, currentUserFirstName, kpis, fetchFeed, handleLike } =
-    useFeedData()
+  const {
+    feedEntries,
+    currentUserId,
+    currentUserFirstName,
+    kpis,
+    fetchFeed,
+    handleLike,
+    voteOnClaim,
+  } = useFeedData()
   const { workoutsThisMonth, trendPercent, volumeThisMonth, prsThisMonth, avgDurationMin } = kpis
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -2134,17 +2358,24 @@ export default function FeedScreen() {
 
   // ─── FlatList — renderItem stable (ORA-029) ─────────────────────────────────
 
-  const keyExtractor = useCallback((item: FeedWorkout) => item.id, [])
+  const keyExtractor = useCallback((item: FeedEntry) => `${item.kind}-${item.id}`, [])
   const renderFeedItem = useCallback(
-    ({ item }: { item: FeedWorkout }) => (
-      <FeedItem
-        item={item}
-        currentUserId={currentUserId}
-        onLike={handleLike}
-        onNavigateDetail={handleNavigateDetail}
-      />
-    ),
-    [currentUserId, handleLike, handleNavigateDetail]
+    ({ item }: { item: FeedEntry }) => {
+      if (item.kind === 'claim') {
+        return (
+          <FeedClaimCard claim={item.claim} currentUserId={currentUserId} onVote={voteOnClaim} />
+        )
+      }
+      return (
+        <FeedItem
+          item={item.workout}
+          currentUserId={currentUserId}
+          onLike={handleLike}
+          onNavigateDetail={handleNavigateDetail}
+        />
+      )
+    },
+    [currentUserId, handleLike, handleNavigateDetail, voteOnClaim]
   )
 
   // ─── Render ─────────────────────────────────────────────────────────────────
@@ -2198,28 +2429,6 @@ export default function FeedScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* KPI Bandeau */}
-      {!loading && (
-        <KPIBandeau
-          workoutsThisMonth={workoutsThisMonth}
-          trendPercent={trendPercent}
-          scaleSeances={scaleSeances}
-          scaleTrend={scaleTrend}
-          drawArrow={drawArrow}
-          drawMapPin={drawMapPin}
-          drawDumbbell={drawDumbbell}
-          volumeThisMonth={volumeThisMonth}
-          prsThisMonth={prsThisMonth}
-          avgDurationMin={avgDurationMin}
-          scaleVolume={scaleVolume}
-          scalePRs={scalePRs}
-          scaleDuration={scaleDuration}
-          drawVolume={drawVolume}
-          drawPRs={drawPRs}
-          drawDuration={drawDuration}
-        />
-      )}
-
       {/* Refresh indicator */}
       {refreshing && (
         <View style={styles.refreshIndicator}>
@@ -2252,13 +2461,35 @@ export default function FeedScreen() {
       ) : (
         <Animated.View style={[{ flex: 1 }, listAnimStyle]}>
           <FlatList
-            data={workouts}
+            data={feedEntries}
             keyExtractor={keyExtractor}
             contentContainerStyle={{
               paddingHorizontal: spacing.s4,
               paddingVertical: spacing.s3,
               paddingBottom: spacing.s12,
             }}
+            ListHeaderComponent={
+              <View style={{ marginHorizontal: -spacing.s4, marginBottom: spacing.s3 }}>
+                <KPIBandeau
+                  workoutsThisMonth={workoutsThisMonth}
+                  trendPercent={trendPercent}
+                  scaleSeances={scaleSeances}
+                  scaleTrend={scaleTrend}
+                  drawArrow={drawArrow}
+                  drawMapPin={drawMapPin}
+                  drawDumbbell={drawDumbbell}
+                  volumeThisMonth={volumeThisMonth}
+                  prsThisMonth={prsThisMonth}
+                  avgDurationMin={avgDurationMin}
+                  scaleVolume={scaleVolume}
+                  scalePRs={scalePRs}
+                  scaleDuration={scaleDuration}
+                  drawVolume={drawVolume}
+                  drawPRs={drawPRs}
+                  drawDuration={drawDuration}
+                />
+              </View>
+            }
             ItemSeparatorComponent={null}
             refreshControl={
               <RefreshControl

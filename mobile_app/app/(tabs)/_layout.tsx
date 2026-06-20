@@ -4,6 +4,10 @@ import { Tabs } from 'expo-router'
 import { Dumbbell, BookOpen, Zap } from 'lucide-react-native'
 import { dark, radius } from '@/constants/theme'
 
+// Ancre le groupe sur le feed — sinon le boot/reload dev peut ancrer sur `start`,
+// dont le useEffect redirige aussitôt vers /workout/session (lancement de séance).
+export const unstable_settings = { initialRouteName: 'feed' }
+
 export default function TabLayout() {
   return (
     <Tabs
@@ -28,7 +32,11 @@ export default function TabLayout() {
             </View>
           ),
           tabBarLabel: () => null,
-          tabBarItemStyle: { backgroundColor: 'transparent', alignItems: 'flex-end', paddingRight: 8 },
+          tabBarItemStyle: {
+            backgroundColor: 'transparent',
+            alignItems: 'flex-end',
+            paddingRight: 8,
+          },
         }}
         listeners={({ navigation, route }) => ({
           tabPress: (e) => {
@@ -70,7 +78,11 @@ export default function TabLayout() {
             </View>
           ),
           tabBarLabel: () => null,
-          tabBarItemStyle: { backgroundColor: 'transparent', alignItems: 'flex-start', paddingLeft: 8 },
+          tabBarItemStyle: {
+            backgroundColor: 'transparent',
+            alignItems: 'flex-start',
+            paddingLeft: 8,
+          },
         }}
       />
 
@@ -92,7 +104,7 @@ const styles = StyleSheet.create({
     elevation: 0,
     shadowOpacity: 0,
   },
-sideIcon: {
+  sideIcon: {
     width: 44,
     height: 44,
     justifyContent: 'center',

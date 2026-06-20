@@ -13,12 +13,13 @@ import {
 import { Canvas, Circle as SkiaCircle, RadialGradient, vec } from '@shopify/react-native-skia'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
-import { ChevronLeft, Zap, Flame, Shield } from 'lucide-react-native'
+import { ChevronLeft, Zap, Flame, Shield, Pin } from 'lucide-react-native'
 import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/context/ThemeContext'
 import { spacing, radius, typography, font, touchTarget } from '@/constants/theme'
 import { emptyStateRecipe } from '@/constants/recipes'
 import { muscleGroupLabel } from '@/lib/muscles'
+import { pinExerciseAsFeatured, getManualFeaturedPr } from '@/lib/featuredPr'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -300,9 +301,11 @@ function PodiumGlow({ level }: { level: PrLevel }): React.JSX.Element {
 interface ExerciseCardProps {
   item: ExercisePR
   colors: ReturnType<typeof useTheme>['colors']
+  onPin: (item: ExercisePR) => void
+  isPinned: boolean
 }
 
-function ExerciseCard({ item, colors }: ExerciseCardProps): React.JSX.Element {
+function ExerciseCard({ item, colors, onPin, isPinned }: ExerciseCardProps): React.JSX.Element {
   const hasCharge = item.podiumCharge.length > 0
   const hasSerie = item.podiumSerie.length > 0
   const hasGold = item.podiumCharge.some((s) => s.level === 'gold')
@@ -323,12 +326,36 @@ function ExerciseCard({ item, colors }: ExerciseCardProps): React.JSX.Element {
           </Text>
         </View>
 
-        {hasGold && (
-          <View style={[cardSt.goldPill, { backgroundColor: `${colors.prGold}18` }]}>
-            <Zap size={11} color={colors.prGold} fill={colors.prGold} strokeWidth={0} />
-            <Text style={[cardSt.goldPillText, { color: colors.prGold }]}>OR</Text>
-          </View>
-        )}
+        <View style={cardSt.headerRight}>
+          {hasGold && (
+            <View style={[cardSt.goldPill, { backgroundColor: `${colors.prGold}18` }]}>
+              <Zap size={11} color={colors.prGold} fill={colors.prGold} strokeWidth={0} />
+              <Text style={[cardSt.goldPillText, { color: colors.prGold }]}>OR</Text>
+            </View>
+          )}
+          {/* ORA-076 — épingle ce PR en vitrine du profil (best-effort, no-op pré-migration) */}
+          {hasCharge && (
+            <Pressable
+              onPress={() => onPin(item)}
+              style={({ pressed }) => [cardSt.pinBtn, pressed && { opacity: 0.6 }]}
+              accessibilityRole="button"
+              accessibilityLabel={
+                isPinned
+                  ? 'PR vedette épinglé sur le profil'
+                  : 'Épingler ce PR en vitrine du profil'
+              }
+              accessibilityState={{ selected: isPinned }}
+              hitSlop={6}
+            >
+              <Pin
+                size={16}
+                color={isPinned ? colors.accent : colors.textTertiary}
+                fill={isPinned ? colors.accent : 'transparent'}
+                strokeWidth={2}
+              />
+            </Pressable>
+          )}
+        </View>
       </View>
 
       {/* Section charge max */}
@@ -405,6 +432,17 @@ const cardSt = StyleSheet.create({
   muscleGroup: {
     ...typography.caption,
     textTransform: 'uppercase',
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.s2,
+  },
+  pinBtn: {
+    width: touchTarget.min,
+    height: touchTarget.min,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   goldPill: {
     flexDirection: 'row',
@@ -518,6 +556,7 @@ export default function PrsScreen(): React.JSX.Element {
   const [loading, setLoading] = useState<boolean>(true)
   const [hasError, setHasError] = useState<boolean>(false)
   const [selectedMuscle, setSelectedMuscle] = useState<string | null>(null)
+  const [pinnedId, setPinnedId] = useState<string | null>(null) // ORA-076 — exo épinglé en vitrine
 
   const muscleGroups = useMemo((): string[] => {
     const seen = new Set<string>()
@@ -541,6 +580,12 @@ export default function PrsScreen(): React.JSX.Element {
       router.replace('/auth/login')
       return
     }
+
+    // ORA-076 — exercice actuellement épinglé en vitrine (état du bouton pin). Best-effort,
+    // hors du chemin critique (no-op pré-migration).
+    void getManualFeaturedPr(user.id).then((featured) =>
+      setPinnedId(featured?.manual ? featured.exercise_id : null)
+    )
 
     // Step 1 : workout IDs de l'user
     const { data: workoutsData, error: wErr } = await supabase
@@ -657,6 +702,14 @@ export default function PrsScreen(): React.JSX.Element {
     void fetchPRs()
   }, [fetchPRs])
 
+  // ORA-076 — épingle le meilleur PR de l'exercice en vitrine du profil (1 tap).
+  const handlePin = useCallback((item: ExercisePR): void => {
+    void (async () => {
+      const ok = await pinExerciseAsFeatured(item.exerciseId, item.nameFr)
+      if (ok) setPinnedId(item.exerciseId)
+    })()
+  }, [])
+
   const s = buildStyles(colors)
   const empty = emptyStateRecipe('history', colors)
 
@@ -747,7 +800,14 @@ export default function PrsScreen(): React.JSX.Element {
       <FlatList
         data={filteredPrs}
         keyExtractor={(item) => item.exerciseId}
-        renderItem={({ item }) => <ExerciseCard item={item} colors={colors} />}
+        renderItem={({ item }) => (
+          <ExerciseCard
+            item={item}
+            colors={colors}
+            onPin={handlePin}
+            isPinned={pinnedId === item.exerciseId}
+          />
+        )}
         ListHeaderComponent={
           <>
             {Header}

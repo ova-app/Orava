@@ -9,8 +9,12 @@ Signaler TOUTE modification avant de coder. Ajouter les migrations SQL en fin de
 ## 14 tables Supabase (état actuel)
 
 ```
-users             : id, email, username, full_name, avatar_url, weight_unit(kg|lbs), plan(free|premium),
-                    locale, date_naissance(DATE NULL), created_at
+users             : id, email, username, full_name, first_name(TEXT NULL), last_name(TEXT NULL),
+                    name_display(TEXT DEFAULT 'full_name' — 'full_name'|'username', affichage tête de profil),
+                    avatar_url, weight_unit(kg|lbs), plan(free|premium),
+                    locale, date_naissance(DATE NULL), featured_pr(JSONB NULL — PR vedette épinglé profil), created_at
+                    ⚠️ full_name = concaténation maintenue (first_name + last_name) → lectures feed/profil intactes
+                       · first_name/last_name/name_display = migration profile_name_fields.sql · client isolé (lib/displayName.ts), no-op pré-migration
 follows           : follower_id → users.id, following_id → users.id, created_at
 gyms              : id, name, address, lat, lng, is_home, created_by → users.id, created_at
 muscles           : id, name, muscle_group, body_side, myo_dim(SMALLINT NULL)
@@ -44,6 +48,14 @@ myo_signatures    : id, user_id → users.id, workout_id → workouts.id, starte
                     score(FLOAT 0-100), hash(TEXT), anomaly(BOOL),
                     raw_* colonnes (valeurs brutes 41 dims), baseline_* colonnes (mean/std utilisés),
                     created_at
+claims            : id, user_id → users.id, type(weight|sessions), exercise_id → exercises.id (NULL si sessions),
+                    exercise_name(snapshot), target_value(numeric), unit(kg|séances),
+                    scope(next_session|week), deadline(TIMESTAMPTZ NULL), status(active|succeeded|failed|expired),
+                    progress_current(numeric), resolved_value(numeric NULL), resolved_at(NULL),
+                    is_public(DEFAULT true), created_at
+                    ⚠️ called-shot social · 1 seul actif/user (index partiel unique) · résolu client au save (summary.tsx)
+claim_votes       : claim_id → claims.id, user_id → users.id, vote(believe|doubt), created_at
+                    ⚠️ pronostics · PK (claim_id,user_id) = 1 vote/user · JAMAIS like/dislike
 ```
 
 ## RPCs Postgres
@@ -347,3 +359,19 @@ $$;
 GRANT EXECUTE ON FUNCTION public.create_workout(jsonb) TO authenticated;
 ```
 Le client génère `id` (workout), `exercises[].id` (workout_exercise) et `exercises[].sets[].id` (workout_set) côté app ; `workoutId` est généré **une seule fois** (ref) pour l'idempotence du retry. `workout_metrics`, `saveMyoSignature` et l'upload photo restent best-effort **après** la RPC (jamais bloquants).
+
+### [Profil] Nom décomposé + préférence d'affichage
+⚠️ **À APPLIQUER** — SQL exécutable : [`supabase/planned/profile_name_fields.sql`](../../supabase/planned/profile_name_fields.sql). Client déjà codé (edit-profile/profile).
+
+- `users.first_name (text NULL)` + `users.last_name (text NULL)` — le « nom complet » se saisit en 2 champs.
+- `users.name_display (text DEFAULT 'full_name', CHECK in ('full_name','username'))` — ce qui s'affiche en tête de profil.
+- `full_name` reste écrit (concaténation prénom + nom) par `edit-profile.tsx` → lectures feed/profil inchangées avant migration.
+- Lecture/écriture des nouvelles colonnes en requête **isolée** best-effort (`lib/displayName.ts` : `getProfileNameFields`/`saveProfileNameFields`) → no-op silencieux pré-migration (même pattern que `getManualFeaturedPr`). Backfill SQL : split de `full_name` existant (1er mot = prénom).
+
+### [Vitrine sociale] Claims + PR vedette
+⚠️ **À APPLIQUER** — SQL exécutable : [`supabase/planned/claims_and_featured_pr.sql`](../../supabase/planned/claims_and_featured_pr.sql). Client déjà codé (profil/feed/summary).
+
+- `users.featured_pr (jsonb NULL)` — PR épinglé en vitrine. Snapshot `{ set_id, exercise_id, exercise_name, weight_kg, reps, achieved_at, delta_kg, manual }`. NULL → auto-pick côté client (`lib/featuredPr.ts`, meilleur gold `pr_charge`). `manual:true` jamais écrasé.
+- `claims` — called-shot social. **1 actif/user** (`idx_claims_one_active` partiel unique). Résolution **client au save** (`lib/claims.ts` `resolveClaimsAfterWorkout` depuis `summary.tsx`) : `weight` résolu si l'exo visé est travaillé (≥ cible → `succeeded`, sinon `failed`) ; `sessions` incrémente `progress_current` (cible atteinte → `succeeded`). Échéances `week` dépassées → `expireOverdueClaims` (`failed`) à l'ouverture profil/feed **+ côté serveur** par le cron horaire `resolve_overdue_claims()` (ORA-077, `supabase/planned/ora077_resolve_claims_cron.sql` — couvre les users inactifs ; `succeeded` reste client au save). Pin manuel lu en requête **isolée** `getManualFeaturedPr` (hors `select` profil → pas de 400 pré-migration). Near-miss privé d'un claim `failed` ≤ 7 j + re-claim 1 tap (ORA-081).
+- `claim_votes` — pronostics `believe`/`doubt` (PK `(claim_id,user_id)` = 1 vote/user, toggle/retract côté client). RLS insert : interdit sur son propre claim + claim doit être `active`.
+- RLS : lecture publique si `is_public` (cohérent feed) ; écriture propriétaire strict (cohérent ORA-020). Échec d'un claim = **discret** (feed n'affiche que `active`+`succeeded`) ; track record profil = `succeeded/(succeeded+failed)`, `expired` exclu.

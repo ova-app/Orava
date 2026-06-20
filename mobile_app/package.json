@@ -40,10 +40,42 @@
         "functions": 12,
         "lines": 16
       },
-      "./lib/ghost.ts": { "statements": 100, "branches": 100, "functions": 100, "lines": 100 },
-      "./lib/plan.ts": { "statements": 100, "branches": 100, "functions": 100, "lines": 100 },
-      "./lib/utils.ts": { "statements": 100, "branches": 100, "functions": 100, "lines": 100 },
-      "./constants/theme.ts": { "statements": 100, "branches": 100, "functions": 100, "lines": 100 }
+      "./lib/ghost.ts": {
+        "statements": 100,
+        "branches": 100,
+        "functions": 100,
+        "lines": 100
+      },
+      "./lib/plan.ts": {
+        "statements": 100,
+        "branches": 100,
+        "functions": 100,
+        "lines": 100
+      },
+      "./lib/utils.ts": {
+        "statements": 100,
+        "branches": 100,
+        "functions": 100,
+        "lines": 100
+      },
+      "./constants/theme.ts": {
+        "statements": 100,
+        "branches": 100,
+        "functions": 100,
+        "lines": 100
+      },
+      "./lib/claims.ts": {
+        "statements": 18,
+        "branches": 18,
+        "functions": 29,
+        "lines": 19
+      },
+      "./lib/featuredPr.ts": {
+        "statements": 13,
+        "branches": 15,
+        "functions": 29,
+        "lines": 10
+      }
     }
   },
   "lint-staged": {
@@ -67,6 +99,7 @@
     "expo-font": "~14.0.11",
     "expo-gl": "~16.0.10",
     "expo-haptics": "~15.0.8",
+    "expo-image": "~3.0.11",
     "expo-image-picker": "~17.0.11",
     "expo-linking": "~8.0.11",
     "expo-location": "~19.0.8",

@@ -29,6 +29,9 @@ Les fichiers de `migrations/` ci-dessous sont les **changements incrémentaux do
 |---|---|---|
 | `ora020_rls_write_hardening.sql` | Durcissement RLS écritures (11 tables, WITH CHECK/USING) | ⚠️ **À appliquer APRÈS revue** du diagnostic `pg_policies` (en bas du fichier) |
 | `ora023_comment_length_check.sql` | CHECK `comments.content` ≤ 500 | ⚠️ À appliquer |
+| `claims_and_featured_pr.sql` | `users.featured_pr` (jsonb) + tables `claims` + `claim_votes` (+RLS) — vitrine sociale du profil (called-shot + PR vedette) | ⚠️ **À appliquer** (client déjà codé : profil/feed/summary) |
+| `profile_name_fields.sql` | `users.first_name` + `last_name` + `name_display` — nom décomposé (prénom/nom) + préférence d'affichage profil. Backfill du `full_name` existant | ⚠️ **À appliquer** (client déjà codé : edit-profile/profile, lecture/écriture isolée no-op pré-migration) |
+| `ora077_resolve_claims_cron.sql` | Cron horaire `resolve_overdue_claims()` — expiration serveur des claims (ORA-077) | ⚠️ À appliquer **après** `claims_and_featured_pr.sql` (active pg_cron) |
 | `phase3_athletic_dna.sql` · `phase3_programs_marketplace.sql` | Phase 3 (ADN, marketplace) | ⏳ à l'implémentation |
 
 ---
@@ -71,6 +74,16 @@ supabase db push      # applique les migrations en attente (create_workout) sur 
 supabase db reset     # reconstruit une base locale identique (dev)
 supabase migration new <nom>   # créer une nouvelle migration
 ```
+
+---
+
+## Edge Functions
+
+| Fonction | Rôle | Statut |
+|---|---|---|
+| `functions/resolve-claims/` | Expiration serveur des claims + futur hook push (ORA-077 / ORA-078). Alternative **extensible** au cron SQL `ora077_resolve_claims_cron.sql` — n'en déployer qu'**un** des deux. | ⚠️ Non déployée (`supabase functions deploy resolve-claims`) |
+
+> `SERVICE_ROLE` est injecté à l'exécution par Supabase — **jamais** dans le repo (cf. règle ci-dessous).
 
 ---
 
