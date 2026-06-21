@@ -1,6 +1,6 @@
 ---
 name: audit-conformite
-description: Audit expert Conformité, Sécurité & RGPD de l'entreprise Orava, évalué depuis le repo — données de santé (art. 9 RGPD), consentement/export/suppression de compte, conformité stores Apple/Google (rejet garanti), sécurité (secrets, RLS, Storage), comme risques juridiques et bloquants de lancement. Produit une sous-note /20. Invocable seul (/audit-conformite) ou appelé par /audit.
+description: Audit expert Conformité, Sécurité & RGPD de l'entreprise Ova, évalué depuis le repo — données de santé (art. 9 RGPD), consentement/export/suppression de compte, conformité stores Apple/Google (rejet garanti), sécurité (secrets, RLS, Storage), comme risques juridiques et bloquants de lancement. Produit une sous-note /20. Invocable seul (/audit-conformite) ou appelé par /audit.
 ---
 
 # Audit — Conformité, Sécurité & RGPD (risque d'entreprise)

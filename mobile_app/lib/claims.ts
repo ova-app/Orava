@@ -1,6 +1,6 @@
 // ─── lib/claims.ts — Claims (called-shot social) + pronostics ─────────────────
 // Le Claim = annonce vérifiable d'un objectif futur (« 100 kg au DC la prochaine
-// séance » / « 4 séances cette semaine »). Orava le résout avec la vraie donnée
+// séance » / « 4 séances cette semaine »). Ova le résout avec la vraie donnée
 // (résolution côté client au save, summary.tsx) → succès/échec affiché, jamais déclaratif.
 //
 // Les autres pronostiquent (believe/doubt) — JAMAIS like/dislike : la foule parie

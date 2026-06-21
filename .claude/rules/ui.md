@@ -7,7 +7,7 @@ v1 colors (`constants/theme.ts`) sont une base temporaire, remplacées en Phase 
 
 ---
 
-## Manifeste Design Orava — 10 contraintes non-négociables
+## Manifeste Design Ova — 10 contraintes non-négociables
 
 ```
 1. Contrainte radicale       : Orange. Pas de border visible. 60 FPS.
@@ -40,7 +40,7 @@ textSecondary: '#7A7A8C'   // ~52% brightness
 textTertiary:  '#4A4A5A'   // placeholders, labels off
 
 // ACCENT — UN SEUL, partout pareil
-accent: '#FFDD00'           // jaune électrique signature Orava
+accent: '#FFDD00'           // jaune électrique signature Ova
 // Contraste maximal sur fond #0A0A0F — unique dans l'espace fitness
 // Apparaît UNIQUEMENT sur : CTA primaire, PR actif, métrique hero
 // Jamais décoratif. Jamais deux fois dans le même composant.
@@ -125,7 +125,7 @@ radiusFull: 9999  // pills, badges
 
 // Touch targets — sport, mains en sueur
 touchMin:     44   // HIG minimum absolu
-touchComfort: 52   // standard Orava
+touchComfort: 52   // standard Ova
 touchHero:    64   // CTA session active
 ```
 
@@ -313,7 +313,7 @@ sessionSave()    → NotificationFeedbackType.Success
 
 ---
 
-## Logo Orava — directives
+## Logo Ova — directives
 
 **Design validé (01/06/2026)** : arche en U avec encoche V inversée au bas (forme fortune cookie). Fond jaune (#FFDD00) pour l'app icon. PNG source : `design/system/orava_logo.png`. App icon : `mobile_app/assets/icon.png` (fond jaune + arche blanche + "RAVA").
 
@@ -322,7 +322,7 @@ Implémentation code (SVG inline — partout) :
 import Svg, { Path } from 'react-native-svg'
 
 // Tailles : 40px (feed header), 48px (auth/session), 72px (splash)
-function LogoOrava({ size = 48 }: { size?: number }) {
+function LogoOva({ size = 48 }: { size?: number }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 100 100">
       <Path d="M 15,70 A 40,40 0 1 1 85,70 L 50,56 Z" fill="#FFDD00" />
@@ -336,7 +336,7 @@ Règles d'usage :
 - Couleur : `#FFDD00` sur fond sombre — jamais sur fond clair
 - Interactif dans header feed → `/chat` (tap)
 - Non-cliquable pendant séance active
-- Wordmark : arche + "ORAVA" typo bold condensed (le O = implicite dans le symbole)
+- Wordmark : arche + "OVA" typo bold condensed (le O = implicite dans le symbole)
 
 ---
 

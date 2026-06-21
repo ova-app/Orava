@@ -2,7 +2,7 @@
 
 ## Structure du repo
 ```
-orava/
+ova/
 ├── mobile_app/          — tout le code (voir ci-dessous)
 ├── design/              — assets design AVANT intégration dans le code
 │   ├── myo/
@@ -15,7 +15,7 @@ orava/
 │   ├── sounds/                  — fichiers WAV bruts ElevenLabs (→ assets/sounds/)
 │   └── animations/              — fichiers .riv Rive (→ assets/animations/)
 ├── BACKLOG.md           — audit + dette priorisée (tickets ORA-xxx)
-└── Orava___Master_Plan_v4.md    — source de vérité produit
+└── Ova___Master_Plan_v4.md    — source de vérité produit
 ```
 
 ## Règle design/ → mobile_app/assets/
@@ -32,10 +32,10 @@ Tout le code est dans `mobile_app/`. Les chemins ci-dessous sont relatifs à `mo
 app/
 ├── _layout.tsx              — guard auth + WorkoutProvider + ThemeProvider + StatusBar
 ├── index.tsx                — splash animé → redirect /auth/login
-├── chat.tsx                 — placeholder chatbot Phase 2 (accessible via logo Orava header feed)
+├── chat.tsx                 — placeholder chatbot Phase 2 (accessible via logo Ova header feed)
 ├── auth/                    — login.tsx · register.tsx
 ├── (tabs)/
-│   ├── _layout.tsx          — 3 tabs SEULEMENT : feed (logo Orava bullseye) · FAB 64px (session) · library
+│   ├── _layout.tsx          — 3 tabs SEULEMENT : feed (logo Ova bullseye) · FAB 64px (session) · library
 │   ├── feed.tsx             — timeline sociale · likes longpress bottom-sheet max 70% · greeting animé logo
 │   ├── history.tsx          — SectionList antichronologique par mois
 │   ├── library.tsx          — 113+ exos, SectionList par muscle, filtres chips, normalize NFD
@@ -101,7 +101,7 @@ __tests__/                   — tests unitaires Jest (logique pure uniquement, 
 |---|---|---|---|
 | `lib/ghost.ts` | Phase 1 | `getGhostReference(exerciseId, limitDays)` → SQLite | ✅ Créé |
 | `app/workout/wheel-picker-modal.tsx` | Phase 1 | Modal full-screen 3 roues (poids/reps/RPE) | ✅ Créé |
-| `app/chat.tsx` | Phase 1 | Placeholder chatbot accessible via logo Orava | ✅ Créé |
+| `app/chat.tsx` | Phase 1 | Placeholder chatbot accessible via logo Ova | ✅ Créé |
 | `app/feed/[id].tsx` | Phase 1 | Détail activité feed (Myo + photos + recap + comments) | ✅ Créé |
 | `lib/predictor.ts` | Phase 2 | Régression linéaire pondérée on-device → SQLite | ✅ Créé |
 | `app/workout/myo-chart.tsx` | Phase 2 | Chart Myo 2D Skia : 8 familles + radar/bar Canvas | ✅ Créé |
@@ -126,10 +126,10 @@ __tests__/                   — tests unitaires Jest (logique pure uniquement, 
 | Supabase JOIN casts | `as { }` sans type guard → TS2352 dans profile, history/[id], exercise/[id], prs | ✅ Corrigé (24/05/2026) |
 | `(tabs)/_layout.tsx` | 5 tabs → 3 tabs (feed logo bullseye, FAB session, library) | ✅ Corrigé (25/05/2026) |
 | `(tabs)/feed.tsx` | Likes longpress bottom-sheet débordait écran | ✅ Corrigé (25/05/2026) |
-| `(tabs)/feed.tsx` | Logo Orava losange → bullseye (cercle + cercle noir + dot jaune) | ✅ Corrigé (25/05/2026) |
+| `(tabs)/feed.tsx` | Logo Ova losange → bullseye (cercle + cercle noir + dot jaune) | ✅ Corrigé (25/05/2026) |
 | `(tabs)/feed.tsx` | Greeting splitté en 2 textes → unifié, slide depuis logo, disparaît 5s | ✅ Corrigé (25/05/2026) |
 | `(tabs)/feed.tsx` | KPI bandeau sans label "ce mois" | ✅ Corrigé (25/05/2026) |
-| `workout/session.tsx` | Logo Orava losange → bullseye | ✅ Corrigé (25/05/2026) |
+| `workout/session.tsx` | Logo Ova losange → bullseye | ✅ Corrigé (25/05/2026) |
 | `workout/session.tsx` | Header center vide (timer séance manquant) | ✅ Corrigé (25/05/2026) |
 | `workout/session.tsx` | WheelPicker non fluide, nombres masqués | ✅ Remplacé par WheelPickerModal (25/05/2026) |
 | `workout/session.tsx` | Rest timer 2500ms même sans PR | ✅ Corrigé : 250ms sans PR, 2500ms avec PR (25/05/2026) |

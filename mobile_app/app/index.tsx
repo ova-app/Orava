@@ -93,7 +93,7 @@ export default function SplashScreen(): React.JSX.Element {
       {/* Groupe logo + wordmark */}
       <View style={s.logoGroup}>
         <LogoOrava />
-        <Text style={s.wordmark}>ORAVA</Text>
+        <Text style={s.wordmark}>OVA</Text>
       </View>
 
       {/* Spinner séparé en dessous */}

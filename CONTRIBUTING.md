@@ -1,4 +1,4 @@
-# Contribuer à Orava
+# Contribuer à Ova
 
 À deux sur le repo, une règle simple : **on ne pousse jamais directement sur `main`**. Tout passe par une PR qui doit être verte.
 

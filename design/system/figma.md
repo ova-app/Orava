@@ -6,8 +6,8 @@
 ## Fichiers Figma
 | Fichier | Contenu |
 |---|---|
-| `Orava — Design System` | Palette, typo, tokens, composants |
-| `Orava — Screens` | 5 écrans principaux + flows |
+| `Ova — Design System` | Palette, typo, tokens, composants |
+| `Ova — Screens` | 5 écrans principaux + flows |
 
 ## Tokens validés (copie offline)
 

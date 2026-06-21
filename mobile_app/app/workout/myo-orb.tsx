@@ -260,7 +260,7 @@ function ScoreArcGradient({
   // Track (gris)
   const trackPath = arcPath(cx, cy, r, START_DEG, TOTAL_DEG)
 
-  // Dégradé sombre→jaune Orava
+  // Dégradé sombre→jaune Ova
   const GRAD: readonly { t: number; rgb: readonly [number, number, number] }[] = [
     { t: 0, rgb: [0x2a, 0x24, 0x00] },
     { t: 0.45, rgb: [0xcc, 0xaa, 0x00] },

@@ -1,12 +1,12 @@
 ---
 name: audit
-description: Audit complet de l'entreprise Orava (due diligence), évalué UNIQUEMENT depuis le repo. Orchestre 7 audits experts en parallèle (produit · marché · business · croissance · technologie · conformité · exécution), puis agrège une note de santé globale /20, un tableau de sous-notes par dimension, les forces, les risques critiques et un plan priorisé. Invoquer pour « analyser toute la boîte comme un panel d'experts » et obtenir une note sur 20.
+description: Audit complet de l'entreprise Ova (due diligence), évalué UNIQUEMENT depuis le repo. Orchestre 7 audits experts en parallèle (produit · marché · business · croissance · technologie · conformité · exécution), puis agrège une note de santé globale /20, un tableau de sous-notes par dimension, les forces, les risques critiques et un plan priorisé. Invoquer pour « analyser toute la boîte comme un panel d'experts » et obtenir une note sur 20.
 ---
 
-# Audit entreprise Orava — panel multi-experts (due diligence)
+# Audit entreprise Ova — panel multi-experts (due diligence)
 
 ## Rôle
-Diriger un **panel d'experts** qui audite **toute l'entreprise Orava telle qu'elle est évaluable depuis le repo**, en détermine forces et faiblesses, et rend une **note de santé / d'investment-readiness sur 20**. Barème : startup visant une **valorisation type Strava**.
+Diriger un **panel d'experts** qui audite **toute l'entreprise Ova telle qu'elle est évaluable depuis le repo**, en détermine forces et faiblesses, et rend une **note de santé / d'investment-readiness sur 20**. Barème : startup visant une **valorisation type Strava**.
 
 ## Principe directeur — RÈGLE ABSOLUE
 On évalue **uniquement ce qui est présent dans le repo** : docs (`Master Plan`, `BACKLOG`, `onboarding`, `rules`), code, config, CI, git, mémoire projet. **Aucune donnée externe** (marché, finances, traction) n'est inventée. Ce qui **manque dans le repo** mais devrait y être = un **constat (angle mort)**, pas une recherche web. Le fil rouge de chaque dimension = l'**écart entre l'ambition documentée et la réalité livrée**.
@@ -19,7 +19,7 @@ Annoncer : 7 audits experts en parallèle, périmètre = repo uniquement.
 ### 2. Fan-out (7 sous-agents EN PARALLÈLE)
 Dans **un seul message**, lancer **7 appels Agent** (`subagent_type: general-purpose`). Chaque sous-agent reçoit ce prompt (adapter `<dim>`) :
 
-> « Tu es un auditeur expert de l'entreprise Orava (repo courant, **lecture seule**). Lis `.claude/skills/audit-<dim>/SKILL.md` et **exécute-le intégralement**. Périmètre strict : **uniquement ce qui est évaluable depuis le repo** (docs, code, config, git, mémoire) — aucune donnée externe ; ce qui manque dans le repo est un constat. Confronte toujours l'**ambition documentée** (Master Plan) à la **réalité du code** (BACKLOG/repo). Retourne : (a) sous-note /20 + verdict une ligne, (b) **forces** vérifiées, (c) **faiblesses & angles morts** (gravité + preuve `fichier`/`§` + reco). Termine **impérativement** par la ligne `SCORE: <dimension> = XX/20`. »
+> « Tu es un auditeur expert de l'entreprise Ova (repo courant, **lecture seule**). Lis `.claude/skills/audit-<dim>/SKILL.md` et **exécute-le intégralement**. Périmètre strict : **uniquement ce qui est évaluable depuis le repo** (docs, code, config, git, mémoire) — aucune donnée externe ; ce qui manque dans le repo est un constat. Confronte toujours l'**ambition documentée** (Master Plan) à la **réalité du code** (BACKLOG/repo). Retourne : (a) sous-note /20 + verdict une ligne, (b) **forces** vérifiées, (c) **faiblesses & angles morts** (gravité + preuve `fichier`/`§` + reco). Termine **impérativement** par la ligne `SCORE: <dimension> = XX/20`. »
 
 Les 7 dimensions / dossiers :
 | `<dim>` | dimension |
@@ -52,7 +52,7 @@ Moyenne **pondérée**, arrondie à 0,5 (ambition Strava, phase pré-lancement) 
 
 ### 5. Rapport (Markdown)
 ```
-# Audit entreprise Orava — <date du jour>
+# Audit entreprise Ova — <date du jour>
 _Périmètre : ce qui est évaluable depuis le repo._
 ## Note de santé globale : XX/20
 > Verdict 3-4 lignes : où en est la boîte, ce qui débloque, ce qui plafonne.

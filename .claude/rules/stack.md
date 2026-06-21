@@ -2,7 +2,7 @@
 
 ## Stack installée
 - React Native 0.81.5 + Expo 54 (TypeScript strict) + Expo Router 6 (`mobile_app/app/`)
-- Supabase : PostgreSQL + Auth + RLS (projet ORAVA, région Frankfurt eu-central-1)
+- Supabase : PostgreSQL + Auth + RLS (projet OVA, région Frankfurt eu-central-1)
 - Auth storage : expo-secure-store — adaptateur custom chunks 1800 bytes (JWT > 2048b)
 - Icônes : Lucide React Native
 - 3D Myo : `three` 0.184 + `@types/three` + `expo-gl` 16 (installés via `--legacy-peer-deps`)
@@ -91,7 +91,7 @@ export const posthog = new PostHog('POSTHOG_KEY', { host: 'https://eu.posthog.co
 
 ## RevenueCat — config (Phase 2)
 - `react-native-purchases` via EAS Build (native module)
-- Produits : `orava_pro_monthly`, `orava_pro_yearly`, `orava_coach_monthly`
+- Produits : `ova_pro_monthly`, `ova_pro_yearly`, `ova_coach_monthly`
 - Feature flag PostHog contrôle le timing paywall (après 1re vs 3e séance)
 
 ## expo-gl + Three.js — règles critiques

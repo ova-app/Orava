@@ -24,7 +24,7 @@ Deux principes non négociables :
 
 1. **Audit de l'entreprise** (produit, marché, business, croissance, tech, conformité,
    exécution) — pas seulement de la dette technique.
-2. **Uniquement ce qui est évaluable depuis le repo** : `Orava___Master_Plan_v4.md`,
+2. **Uniquement ce qui est évaluable depuis le repo** : `Ova___Master_Plan_v4.md`,
    `BACKLOG.md`, l'onboarding, les `rules/`, le code, la config, l'historique git, la
    mémoire projet. **Aucune donnée externe inventée.** Ce qui *manque* dans le repo
    (ex. pas de TAM, pas de chiffres de traction) devient **un constat à part entière**.

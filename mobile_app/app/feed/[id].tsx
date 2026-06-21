@@ -907,7 +907,7 @@ export default function FeedDetailScreen(): React.JSX.Element {
     const date = workout ? formatDate(workout.started_at) : ''
     try {
       await Share.share({
-        message: `${title} · ${vol} · ${date} — via Orava`,
+        message: `${title} · ${vol} · ${date} — via Ova`,
         title,
       })
     } catch {}
@@ -922,12 +922,12 @@ export default function FeedDetailScreen(): React.JSX.Element {
           cancelButtonIndex: 0,
         },
         (idx) => {
-          if (idx === 1) void Share.share({ message: `orava://feed/${id}` })
+          if (idx === 1) void Share.share({ message: `ova://feed/${id}` })
         }
       )
     } else {
       Alert.alert('Options', undefined, [
-        { text: 'Copier le lien', onPress: () => Share.share({ message: `orava://feed/${id}` }) },
+        { text: 'Copier le lien', onPress: () => Share.share({ message: `ova://feed/${id}` }) },
         { text: 'Signaler', style: 'destructive', onPress: () => {} },
         { text: 'Annuler', style: 'cancel' },
       ])

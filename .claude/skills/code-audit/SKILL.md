@@ -1,6 +1,6 @@
 ---
 name: code-audit
-description: Audit ingénierie complet de tout le codebase Orava (mobile_app) — structure & choix de code, bugs réels (vérifiés), versions/dépendances, sécurité code-level. Orchestre 4 audits experts en parallèle, dédoublonne et priorise les constats en un rapport unique actionnable (Critique/Majeur/Mineur, fichier:ligne, fix). Distinct de /audit (entreprise) et de /code-review (diff). Invoquer pour « audit complet du code ».
+description: Audit ingénierie complet de tout le codebase Ova (mobile_app) — structure & choix de code, bugs réels (vérifiés), versions/dépendances, sécurité code-level. Orchestre 4 audits experts en parallèle, dédoublonne et priorise les constats en un rapport unique actionnable (Critique/Majeur/Mineur, fichier:ligne, fix). Distinct de /audit (entreprise) et de /code-review (diff). Invoquer pour « audit complet du code ».
 ---
 
 # Code-audit — audit ingénierie complet du codebase
@@ -21,7 +21,7 @@ Annoncer : 4 audits code experts en parallèle sur tout le codebase.
 ### 2. Fan-out (4 sous-agents EN PARALLÈLE)
 Dans **un seul message**, lancer **4 appels Agent** (`subagent_type: general-purpose`). Donner à `code-bugs` un effort élevé (`effort: high`) — c'est le plus exigeant. Prompt par sous-agent (adapter `<dim>`) :
 
-> « Tu es un auditeur ingénieur du codebase Orava (`mobile_app/`, **lecture seule**). Lis `.claude/skills/<dim>/SKILL.md` et **exécute-le intégralement sur tout le codebase** (pas seulement le diff). Lis `BACKLOG.md` pour ne pas re-flagger un ✅ ni ressortir un faux positif écarté. Cite des `fichier:ligne` réels (lis les fichiers). Retourne tes constats au format du skill, avec gravité (Critique/Majeur/Mineur) et un **fix** concret. Termine **impérativement** par la ligne `SUMMARY: <aire> = X critiques, Y majeurs, Z mineurs`. »
+> « Tu es un auditeur ingénieur du codebase Ova (`mobile_app/`, **lecture seule**). Lis `.claude/skills/<dim>/SKILL.md` et **exécute-le intégralement sur tout le codebase** (pas seulement le diff). Lis `BACKLOG.md` pour ne pas re-flagger un ✅ ni ressortir un faux positif écarté. Cite des `fichier:ligne` réels (lis les fichiers). Retourne tes constats au format du skill, avec gravité (Critique/Majeur/Mineur) et un **fix** concret. Termine **impérativement** par la ligne `SUMMARY: <aire> = X critiques, Y majeurs, Z mineurs`. »
 
 Les 4 : `code-structure`, `code-bugs`, `code-versions`, `code-security`.
 
@@ -32,7 +32,7 @@ Les 4 : `code-structure`, `code-bugs`, `code-versions`, `code-security`.
 
 ### 4. Rapport (Markdown)
 ```
-# Code-audit Orava — <date du jour>
+# Code-audit Ova — <date du jour>
 _Périmètre : tout le codebase mobile_app/ (lecture seule)._
 
 ## Synthèse

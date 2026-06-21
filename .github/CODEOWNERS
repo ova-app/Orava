@@ -6,7 +6,7 @@
 
 # Règles de dev / archi / produit : Sofiane garde la main
 /.claude/               @sofianebessila
-/Orava___Master_Plan_v4.md  @sofianebessila
+/Ova___Master_Plan_v4.md  @sofianebessila
 
 # Base de données : review obligatoire (migrations sensibles)
 /.claude/rules/database.md  @sofianebessila

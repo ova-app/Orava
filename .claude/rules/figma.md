@@ -13,7 +13,7 @@ Lire cette rule avant tout travail impliquant des assets design ou une mise à j
 ```
 design/figma-export/
 ├── orava_logo.png                      — logo définitif (cercle jaune + losange noir)
-└── Orava_design_figma/
+└── Ova_design_figma/
     ├── index.html                      — Design System interactif (Colors/Typography/Spacing/Radius)
     └── screens/                        — 33 PNGs numérotés 1.png → 33.png
         ├── 1.png    session active (WheelPicker)

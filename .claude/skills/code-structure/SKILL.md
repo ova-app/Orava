@@ -1,6 +1,6 @@
 ---
 name: code-structure
-description: Audit ingénierie de la structure et des choix de code du codebase Orava (mobile_app) — god-objects, duplication, couplage, séparation des responsabilités (lib/hooks vs UI), TypeScript strict, dead code, respect de l'arborescence app/, anti-patterns. Lecture seule, ligne par ligne, tout le codebase. Produit une liste de constats par gravité. Invocable seul (/code-structure) ou appelé par /code-audit.
+description: Audit ingénierie de la structure et des choix de code du codebase Ova (mobile_app) — god-objects, duplication, couplage, séparation des responsabilités (lib/hooks vs UI), TypeScript strict, dead code, respect de l'arborescence app/, anti-patterns. Lecture seule, ligne par ligne, tout le codebase. Produit une liste de constats par gravité. Invocable seul (/code-structure) ou appelé par /code-audit.
 ---
 
 # Audit code — Structure & choix techniques

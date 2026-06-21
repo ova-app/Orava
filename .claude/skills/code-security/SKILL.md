@@ -1,6 +1,6 @@
 ---
 name: code-security
-description: Audit sécurité code-level du codebase Orava (mobile_app) — secrets dans le repo/.env/git, mauvais usage EXPO_PUBLIC_, confiance client sur les écritures (RLS), exposition Storage (URLs publiques), données sensibles en clair au repos, crypto/auth, validation des entrées, deep links. Niveau code (distinct de l'audit RGPD/légal /audit-conformite). Lecture seule. Invocable seul (/code-security) ou appelé par /code-audit.
+description: Audit sécurité code-level du codebase Ova (mobile_app) — secrets dans le repo/.env/git, mauvais usage EXPO_PUBLIC_, confiance client sur les écritures (RLS), exposition Storage (URLs publiques), données sensibles en clair au repos, crypto/auth, validation des entrées, deep links. Niveau code (distinct de l'audit RGPD/légal /audit-conformite). Lecture seule. Invocable seul (/code-security) ou appelé par /code-audit.
 ---
 
 # Audit code — Sécurité (niveau code)

@@ -4,7 +4,7 @@ Tous les termes du projet, dans l'ordre alphabétique. À garder ouvert quand tu
 
 ---
 
-## Termes produit (Orava)
+## Termes produit (Ova)
 
 | Terme | Définition |
 |---|---|
@@ -68,7 +68,7 @@ Tous les termes du projet, dans l'ordre alphabétique. À garder ouvert quand tu
 | **Reanimated** | Bibliothèque d'animations 60 FPS (thread UI). |
 | **Skia** | Moteur de dessin 2D (charts Myo, ADN). |
 | **Skeleton screen** | Un écran « squelette » affiché pendant un chargement (à la place d'un spinner). |
-| **Spring** | Animation à ressort (physique) — le standard Orava, jamais de linéaire. |
+| **Spring** | Animation à ressort (physique) — le standard Ova, jamais de linéaire. |
 | **SQLite** | Base de données locale sur le téléphone (`lib/db.ts`). |
 | **Supabase** | Le backend : PostgreSQL + Auth + RLS + RPC. |
 | **tabular-nums** | Variante de police où chaque chiffre a la même largeur (chiffres qui ne sautent pas). |

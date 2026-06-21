@@ -151,7 +151,7 @@ export default function NewClaimScreen(): React.JSX.Element {
               <Target size={18} color={colors.accent} strokeWidth={2} />
             </View>
             <Text style={s.introText}>
-              Annonce un objectif vérifiable. Orava le résout avec ta vraie séance — le feed
+              Annonce un objectif vérifiable. Ova le résout avec ta vraie séance — le feed
               pronostique.
             </Text>
           </View>

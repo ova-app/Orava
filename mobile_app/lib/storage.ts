@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { log } from './logger'
 
-const PREFIX = 'orava-workout:'
+const PREFIX = 'ova-workout:'
 const cache = new Map<string, string>()
 
 export const storage = {

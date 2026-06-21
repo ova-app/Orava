@@ -1,6 +1,6 @@
 # 6 — Les données : où elles vivent et comment elles circulent
 
-Orava jongle avec **deux bases** : une dans le cloud (Supabase) et une sur le téléphone
+Ova jongle avec **deux bases** : une dans le cloud (Supabase) et une sur le téléphone
 (SQLite). Comprendre **qui sert à quoi** est essentiel.
 
 > Schéma complet des tables, RPC, migrations : [`.claude/rules/database.md`](../.claude/rules/database.md).

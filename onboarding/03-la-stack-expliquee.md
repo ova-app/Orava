@@ -76,7 +76,7 @@ de taille, donc un adaptateur custom le **découpe en morceaux de 1800 octets**.
 
 ---
 
-## Le visuel (le cœur de l'identité Orava)
+## Le visuel (le cœur de l'identité Ova)
 
 ### Three.js + expo-gl
 Pour la **Myo 3D** (l'orbe qu'on fait tourner). `expo-gl` fournit un contexte WebGL ;
@@ -95,7 +95,7 @@ JS) → fluides même si le JS est occupé. On utilise `useSharedValue` + `withS
 jamais l'ancienne API `Animated.Value`. Le design impose **des springs, jamais du linéaire**.
 
 ### react-native-svg
-Dessin vectoriel (le logo Orava, l'anneau du timer, le score Myo…).
+Dessin vectoriel (le logo Ova, l'anneau du timer, le score Myo…).
 
 ### react-native-gesture-handler
 Gestion fine des gestes tactiles (swipe, drag du WheelPicker…).

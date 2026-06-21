@@ -1,6 +1,6 @@
 ---
 name: audit-growth
-description: Audit expert Croissance, Acquisition & Rétention de l'entreprise Orava, évalué depuis le repo — boucles virales (Myo/prédiction en Stories), social feed, mécaniques de rétention (Fantôme, streaks, ADN), re-engagement (push), instrumentation analytics, et confrontation des KPIs cibles (Master Plan §13) à ce qui est réellement codé pour les atteindre. Produit une sous-note /20. Invocable seul (/audit-growth) ou appelé par /audit.
+description: Audit expert Croissance, Acquisition & Rétention de l'entreprise Ova, évalué depuis le repo — boucles virales (Myo/prédiction en Stories), social feed, mécaniques de rétention (Fantôme, streaks, ADN), re-engagement (push), instrumentation analytics, et confrontation des KPIs cibles (Master Plan §13) à ce qui est réellement codé pour les atteindre. Produit une sous-note /20. Invocable seul (/audit-growth) ou appelé par /audit.
 ---
 
 # Audit — Croissance, Acquisition & Rétention (vue repo)
@@ -12,7 +12,7 @@ Expert growth / rétention. Évaluer **les leviers d'acquisition, de rétention 
 **Uniquement ce qui est évaluable depuis le repo** (code, docs, config analytics, git). Pas de données de traction externes. Confronter les **KPIs cibles** (Master Plan §13) aux **mécaniques réellement codées** pour les atteindre. Une boucle promise mais non codée = **constat**.
 
 ## Sources à lire (obligatoire)
-1. `Orava___Master_Plan_v4.md` — §13 KPIs (rétention D7 >45 %, D30 >28 %, séances/sem >2,5, partages Myo >15 %, prédictions partagées >20 %), §4.4 (viralité Stories), §4.2 (OravaFeed).
+1. `Ova___Master_Plan_v4.md` — §13 KPIs (rétention D7 >45 %, D30 >28 %, séances/sem >2,5, partages Myo >15 %, prédictions partagées >20 %), §4.4 (viralité Stories), §4.2 (OvaFeed).
 2. `BACKLOG.md` — ORA-042 (push/Stories/deep links absents = pas de re-engagement), ORA-030 (feed non paginé).
 3. Repo : `mobile_app/lib/analytics.ts` (PostHog, taxonomie d'événements — mesure-t-on le funnel/rétention ?), `(tabs)/feed.tsx` (social), `lib/ghost.ts` + streaks (raisons de revenir), `expo-notifications` présent ? export Stories `makeImageSnapshot` codé ?
 

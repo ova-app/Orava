@@ -1,6 +1,6 @@
 ---
 name: audit-tech
-description: Audit expert Technologie, Architecture & Scalabilité de l'entreprise Orava — qualité et maintenabilité du code, robustesse data/offline (le moat technique), performance et scalabilité (coûts Supabase à l'échelle), maturité du design system, et la tech comme actif/risque d'entreprise (time-to-ship, bus factor technique). Synthétise la dette du BACKLOG au niveau business. Produit une sous-note /20. Invocable seul (/audit-tech) ou appelé par /audit.
+description: Audit expert Technologie, Architecture & Scalabilité de l'entreprise Ova — qualité et maintenabilité du code, robustesse data/offline (le moat technique), performance et scalabilité (coûts Supabase à l'échelle), maturité du design system, et la tech comme actif/risque d'entreprise (time-to-ship, bus factor technique). Synthétise la dette du BACKLOG au niveau business. Produit une sous-note /20. Invocable seul (/audit-tech) ou appelé par /audit.
 ---
 
 # Audit — Technologie, Architecture & Scalabilité (vue entreprise)
@@ -13,7 +13,7 @@ Expert CTO / due diligence technique. Évaluer **la tech comme actif d'entrepris
 
 ## Sources à lire (obligatoire)
 1. `BACKLOG.md` — note d'audit technique initiale, ce qui est ✅ corrigé (Vagues 0/1/2), ce qui reste (ORA-026 baseline Myo, ORA-030/032 perf feed, ORA-038 a11y).
-2. `Orava___Master_Plan_v4.md` — §5 Règles d'or archi, §6 Stack, §14 risques techniques (Myo 3D, perf Android), §15 (tâches « passage 20/20 »).
+2. `Ova___Master_Plan_v4.md` — §5 Règles d'or archi, §6 Stack, §14 risques techniques (Myo 3D, perf Android), §15 (tâches « passage 20/20 »).
 3. `.claude/rules/` (stack, database, workout, myo) + repo.
 
 ## Ce qu'on évalue (au niveau actif/risque d'entreprise)

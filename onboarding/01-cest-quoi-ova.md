@@ -1,8 +1,8 @@
-# 1 — C'est quoi Orava ?
+# 1 — C'est quoi Ova ?
 
 ## En une phrase
 
-Orava est une **application mobile de suivi de musculation** : tu logges tes
+Ova est une **application mobile de suivi de musculation** : tu logges tes
 séances (exercices, séries, poids, répétitions), et l'app transforme ces données
 brutes en **visualisations et insights** qu'aucune autre app fitness ne propose.
 
@@ -16,7 +16,7 @@ C'est une app **iOS + Android**, écrite une seule fois en React Native (voir
 Les apps de musculation existantes (Strong, Hevy…) sont des **tableurs déguisés** :
 tu notes tes séries, tu vois des graphiques de progression. C'est utile mais froid.
 
-Orava parie sur **trois choses** :
+Ova parie sur **trois choses** :
 
 1. **Logger une série doit être instantané et plaisant** — c'est l'action la plus
    répétée de l'app, elle doit être parfaite (zéro friction, retour haptique, design soigné).
@@ -39,7 +39,7 @@ Ces chiffres sont affichés comme un **relief 3D** (un « orbe » qu'on fait tou
 comme des **graphiques 2D**. C'est la récompense visuelle de ta séance.
 
 ### 🏆 Les PR (Personal Records)
-Un **PR** = un record personnel. Orava en suit **4 types** (record de charge, de série,
+Un **PR** = un record personnel. Ova en suit **4 types** (record de charge, de série,
 d'exercice, de séance) et chacun a un **podium** : 🥇 or / 🥈 argent / 🥉 bronze.
 Battre un record déclenche un flash visuel + une vibration.
 
@@ -64,7 +64,7 @@ confiance X % ». Calcul fait **sur le téléphone**, pas sur un serveur.
 ## Où en est le projet ? (les « Phases »)
 
 Le développement est découpé en phases. La **source de vérité** est
-[`Orava___Master_Plan_v4.md`](../Orava___Master_Plan_v4.md). État résumé (juin 2026) :
+[`Ova___Master_Plan_v4.md`](../Ova___Master_Plan_v4.md). État résumé (juin 2026) :
 
 | Phase | Contenu | État |
 |---|---|---|
@@ -81,7 +81,7 @@ Le développement est découpé en phases. La **source de vérité** est
 
 ## Important : l'app n'est PAS une app de coaching
 
-Orava **ne dit pas** quoi faire à la salle. Elle **observe, mesure et révèle**.
+Ova **ne dit pas** quoi faire à la salle. Elle **observe, mesure et révèle**.
 Pas de programme imposé, pas de « fais 3×10 ». Le produit est un **miroir intelligent**,
 pas un coach. Garde ça en tête quand tu proposes des features.
 

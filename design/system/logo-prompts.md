@@ -1,4 +1,4 @@
-# Orava — Prompts Logo Midjourney
+# Ova — Prompts Logo Midjourney
 
 Accent : `#FFDD00` (jaune électrique) sur fond `#0A0A0F` (noir profond).
 Univers : fitness premium, data-driven, athlètes sérieux 25-35 ans, dark-first.
@@ -8,10 +8,10 @@ Univers : fitness premium, data-driven, athlètes sérieux 25-35 ans, dark-first
 ## Prompt 1 — Symbole O + Orbe Myo (recommandé)
 
 ```
-Minimalist logo design for a premium fitness app called ORAVA, single letter "O" symbol,
+Minimalist logo design for a premium fitness app called OVA, single letter "O" symbol,
 the O contains a subtle 3D topographic relief sphere inside, as if the letter itself is an orb,
 electric yellow #FFDD00 on pure black background, clean vector mark,
-bold geometric sans-serif wordmark "ORAVA" beside it, condensed heavy weight,
+bold geometric sans-serif wordmark "OVA" beside it, condensed heavy weight,
 ultra-minimal, no gradients, no shadows, no decoration,
 style of Linear app, Trade Republic, WHOOP branding,
 flat design, professional sports tech brand identity,
@@ -23,7 +23,7 @@ flat design, professional sports tech brand identity,
 ## Prompt 2 — Symbole géométrique seul (app icon focus)
 
 ```
-Minimalist app icon logo for premium fitness tracking app ORAVA,
+Minimalist app icon logo for premium fitness tracking app OVA,
 abstract geometric mark combining upward triangle and circle,
 suggesting athletic peak performance and data visualization,
 electric yellow #FFDD00 symbol on deep black #0A0A0F square,
@@ -39,7 +39,7 @@ professional sports tech branding, 2026 design trends,
 ## Prompt 3 — Wordmark typographique pur
 
 ```
-Premium wordmark logo "ORAVA" for elite fitness tracking app,
+Premium wordmark logo "OVA" for elite fitness tracking app,
 custom bold condensed sans-serif lettering, slightly geometric,
 electric yellow #FFDD00 letters on black background,
 tight letter-spacing, strong weight 800-900, modern athletic feel,
@@ -54,13 +54,13 @@ clean vector, professional sports brand, minimalist 2026 aesthetic,
 ## Prompt 4 — Forme organique / énergie physique
 
 ```
-Minimalist logo for fitness app ORAVA, abstract organic mark
+Minimalist logo for fitness app OVA, abstract organic mark
 suggesting muscular topography and athletic energy,
 a single fluid bold shape evoking a mountain peak or muscle fiber cross-section,
 electric yellow #FFDD00 on black, no gradients, clean vector,
 bold geometric construction with organic curves,
 premium sports tech aesthetic, 2026 minimalism,
-paired with clean bold condensed wordmark "ORAVA",
+paired with clean bold condensed wordmark "OVA",
 style of Strava, WHOOP, Apple Fitness redesigned for 2026,
 --ar 3:1 --style raw --v 6.1 --q 2
 ```
@@ -70,7 +70,7 @@ style of Strava, WHOOP, Apple Fitness redesigned for 2026,
 ## Prompt 5 — Variations couleur (pour tester le contraste)
 
 ```
-Logo variations for fitness app ORAVA on dark backgrounds,
+Logo variations for fitness app OVA on dark backgrounds,
 same minimal geometric mark in 4 color versions:
 electric yellow, pure white, light gray, deep charcoal,
 all on #0A0A0F black background,

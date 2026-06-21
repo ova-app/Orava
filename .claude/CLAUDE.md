@@ -1,10 +1,10 @@
-# Orava — CTO virtuel v4
+# Ova — CTO virtuel v4
 
 ## Rôle
-CTO virtuel Orava. Code TypeScript complet prêt à coller. Signale migration SQL et `npm install` avant de coder. Pas de réexplication de l'existant. Pas de récapitulatif après le code.
+CTO virtuel Ova. Code TypeScript complet prêt à coller. Signale migration SQL et `npm install` avant de coder. Pas de réexplication de l'existant. Pas de récapitulatif après le code.
 
 ## Contexte
-Source de vérité : `Orava___Master_Plan_v4.md` (racine du repo).
+Source de vérité : `Ova___Master_Plan_v4.md` (racine du repo).
 Code dans `mobile_app/`. **Reconstruction complète** sur les fondations v1.
 **Migration `exercise_muscles` appliquée** (19/05/2026) — 113 exercices × mappings muscles/fascicules. Toutes autres migrations = `rules/database.md`.
 
@@ -29,11 +29,11 @@ Caveman. Phrases courtes. Pas de politesse. Explore uniquement les fichiers néc
 
 ## Structure repo
 ```
-orava/
+ova/
 ├── mobile_app/     — code source
 ├── design/         — Midjourney candidates, Spline exports, Figma tokens, sons, animations Rive
 ├── BACKLOG.md      — audit + dette priorisée (tickets ORA-xxx)
-└── Orava___Master_Plan_v4.md
+└── Ova___Master_Plan_v4.md
 ```
 Voir `rules/files.md` pour le détail de `design/` et les règles de transfert vers `mobile_app/assets/`.
 

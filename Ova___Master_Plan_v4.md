@@ -1,20 +1,20 @@
-# Orava : Master Plan & Architecture de Référence — v4.0
+# Ova : Master Plan & Architecture de Référence — v4.0
 
-Ce document est le **référentiel unique (Single Source of Truth)** du projet Orava. Il couvre la vision stratégique, l'architecture technique, la feuille de route, le découpage en tâches précises, le workflow outils & IA, et les sources d'inspiration design. Toute décision technique ou esthétique doit s'y conformer.
+Ce document est le **référentiel unique (Single Source of Truth)** du projet Ova. Il couvre la vision stratégique, l'architecture technique, la feuille de route, le découpage en tâches précises, le workflow outils & IA, et les sources d'inspiration design. Toute décision technique ou esthétique doit s'y conformer.
 
 ---
 
 ## 1. Vision Stratégique et Positionnement
 
-Orava n'est pas un simple utilitaire de fitness, c'est un **écosystème lifestyle premium** axé sur la donnée et l'esthétique. L'objectif est de fournir une interface d'une simplicité absolue (Progressive Disclosure) dissimulant une profondeur analytique de haut niveau. L'expérience doit générer un effet "Wow" continu par sa fluidité, l'absence de bugs (frictionless) et la beauté de sa visualisation de données (Myo 3D).
+Ova n'est pas un simple utilitaire de fitness, c'est un **écosystème lifestyle premium** axé sur la donnée et l'esthétique. L'objectif est de fournir une interface d'une simplicité absolue (Progressive Disclosure) dissimulant une profondeur analytique de haut niveau. L'expérience doit générer un effet "Wow" continu par sa fluidité, l'absence de bugs (frictionless) et la beauté de sa visualisation de données (Myo 3D).
 
 **Proposition de valeur en une phrase :**
-> *Orava transforme chaque séance en une œuvre de données — la seule app de fitness qui vous connaît mieux que vous-même.*
+> *Ova transforme chaque séance en une œuvre de données — la seule app de fitness qui vous connaît mieux que vous-même.*
 
-**Les quatre piliers de différenciation d'Orava :**
+**Les quatre piliers de différenciation d'Ova :**
 1. **Le Myo 3D** — une signature visuelle unique et partageable par séance.
 2. **Le Mode Fantôme** — s'entraîner contre la meilleure version de soi-même, en temps réel.
-3. **Le Moteur Prédictif** — Orava annonce vos futurs records avant qu'ils arrivent.
+3. **Le Moteur Prédictif** — Ova annonce vos futurs records avant qu'ils arrivent.
 4. **L'ADN Athlétique** — une empreinte algorithmique personnelle qui devient votre identité sportive portable.
 
 Ces quatre piliers se renforcent mutuellement : le Myo rend l'app belle, le Fantôme la rend addictive, le Prédictif la rend virale, l'ADN la rend indispensable et irremplaçable.
@@ -23,19 +23,19 @@ Ces quatre piliers se renforcent mutuellement : le Myo rend l'app belle, le Fant
 
 ## 2. Analyse Concurrentielle
 
-| Concurrent | Point fort | Faiblesse exploitable par Orava |
+| Concurrent | Point fort | Faiblesse exploitable par Ova |
 | :--- | :--- | :--- |
 | **Strong / Hevy** | Tracking solide, communauté engagée | UX générique, zéro esthétique, données plates, aucune prédiction |
 | **Whoop / Garmin** | Données biométriques riches | Nécessite hardware, pas de focus musculation, pas de social |
 | **MyFitnessPal** | Base nutrition massive | Aucune connexion effort ↔ nutrition, UX datée |
 | **Strava** | Réseau social fitness puissant | Exclusivement cardio/outdoor, pas de salle |
 
-**Le vide qu'Orava occupe :** aucun acteur ne combine (1) tracking musculation frictionless, (2) visualisation de données belle et partageable, (3) intelligence prédictive personnalisée, (4) identité sportive portable.
+**Le vide qu'Ova occupe :** aucun acteur ne combine (1) tracking musculation frictionless, (2) visualisation de données belle et partageable, (3) intelligence prédictive personnalisée, (4) identité sportive portable.
 
 **Avantage défensif à construire :**
 - Court terme (0–6 mois) : le Myo 3D et le Mode Fantôme créent une expérience immédiatement différente.
 - Moyen terme (6–18 mois) : le Moteur Prédictif crée une relation émotionnelle unique avec l'app.
-- Long terme (18 mois+) : l'ADN Athlétique crée un switching cost irrationnel — quitter Orava signifie perdre son identité sportive accumulée.
+- Long terme (18 mois+) : l'ADN Athlétique crée un switching cost irrationnel — quitter Ova signifie perdre son identité sportive accumulée.
 
 ---
 
@@ -45,9 +45,9 @@ Ces quatre piliers se renforcent mutuellement : le Myo rend l'app belle, le Fant
 
 | Tier | Prix | Ce qui est inclus |
 | :--- | :--- | :--- |
-| **Orava Free** | Gratuit | Tracking illimité, Myo 3D basique (5 variables), Mode Fantôme (30 jours d'historique), historique 90 jours, feed social en lecture |
-| **Orava Pro** | 9,99 €/mois ou 79 €/an | Myo 3D complet (41 variables), Mode Fantôme illimité, Moteur Prédictif complet, historique illimité, analytics avancés, export Stories, feed social complet |
-| **Orava Coach** | 24,99 €/mois | Tout Pro + ADN Athlétique partageable avec clients, dashboard multi-athlètes, vente de programmes, analytics agrégés clients |
+| **Ova Free** | Gratuit | Tracking illimité, Myo 3D basique (5 variables), Mode Fantôme (30 jours d'historique), historique 90 jours, feed social en lecture |
+| **Ova Pro** | 9,99 €/mois ou 79 €/an | Myo 3D complet (41 variables), Mode Fantôme illimité, Moteur Prédictif complet, historique illimité, analytics avancés, export Stories, feed social complet |
+| **Ova Coach** | 24,99 €/mois | Tout Pro + ADN Athlétique partageable avec clients, dashboard multi-athlètes, vente de programmes, analytics agrégés clients |
 
 **Logique des upsells :**
 - Free → Pro : Mode Fantôme limité à 30 jours (frustration douce) + Moteur Prédictif verrouillé (l'utilisateur voit "PR prédit dans 3 jours" sans pouvoir y accéder).
@@ -56,8 +56,8 @@ Ces quatre piliers se renforcent mutuellement : le Myo rend l'app belle, le Fant
 ### 3.2. Revenus additionnels (Phase 3+)
 
 - **Commission marketplace** : 15 % sur la vente de programmes par les coachs.
-- **Pass Orava** : modèle B2B avec les salles partenaires.
-- **OravaFeed** : module nutrition inclus en Pro, ou 3,99 €/mois séparément.
+- **Pass Ova** : modèle B2B avec les salles partenaires.
+- **OvaFeed** : module nutrition inclus en Pro, ou 3,99 €/mois séparément.
 
 ### 3.3. Objectifs financiers indicatifs
 
@@ -71,15 +71,15 @@ Ces quatre piliers se renforcent mutuellement : le Myo rend l'app belle, le Fant
 
 ## 4. Ambitions de l'Écosystème
 
-### 4.1. OravaSports — Le Cœur Technologique
+### 4.1. OvaSports — Le Cœur Technologique
 
 - **Tracking Parfait :** WheelPickers intelligents avec pré-remplissage automatique. L'utilisateur valide d'un tap, jamais ne saisit depuis zéro.
 - **Le Myo 3D :** Céramique 3D interactive déformée par des variables analytiques (8 familles). MVP : 5 variables. Pro : 41 variables complètes.
 - **Système de PR 4D :** Records sur 4 niveaux (Charge, Série, Exercice, Séance) via Podium (Or, Argent, Bronze). Partage natif Stories 9:16.
 - **Réseau Social :** Feed communautaire (likes, commentaires, Myo 3D) + marketplace de programmes coachs.
-- **Cartographie Premium :** Carte des salles partenaires + Pass Orava cross-salles (Phase 4).
+- **Cartographie Premium :** Carte des salles partenaires + Pass Ova cross-salles (Phase 4).
 
-### 4.2. OravaFeed — L'Extension Lifestyle
+### 4.2. OvaFeed — L'Extension Lifestyle
 
 - Assistant nutritionnel proactif (macros adaptés à l'effort de la semaine).
 - Listes de courses dynamiques basées sur les objectifs.
@@ -87,25 +87,25 @@ Ces quatre piliers se renforcent mutuellement : le Myo rend l'app belle, le Fant
 
 ### 4.3. Le Mode Fantôme — S'entraîner contre soi-même
 
-**Concept :** pendant la séance, Orava superpose en temps réel la meilleure performance passée sur le même exercice. Compétition uniquement contre soi — psychologiquement plus puissant qu'un leaderboard social, accessible à tous les niveaux.
+**Concept :** pendant la séance, Ova superpose en temps réel la meilleure performance passée sur le même exercice. Compétition uniquement contre soi — psychologiquement plus puissant qu'un leaderboard social, accessible à tous les niveaux.
 
 **Implémentation :** barre translucide secondaire sur le WheelPicker + indicateur discret `↑ +2,5 kg vs meilleure séance`. Si le fantôme est battu sur un exercice : barre vire à l'or + haptic doux. Données 100 % locales (SQLite), disponibles dès la 2e séance.
 
 **Versions :** Free = 30 derniers jours. Pro = historique illimité + sélection manuelle du fantôme de référence.
 
-### 4.4. Le Moteur Prédictif — Orava sait avant vous
+### 4.4. Le Moteur Prédictif — Ova sait avant vous
 
-**Concept :** régression linéaire pondérée sur les 90 derniers jours de données locales. Annonce les futurs records avant qu'ils arrivent. Notification : *"PR prédit dans 6 jours — probabilité 74 %."* Quand la prédiction se réalise : double célébration PR + validation Orava comme oracle personnel.
+**Concept :** régression linéaire pondérée sur les 90 derniers jours de données locales. Annonce les futurs records avant qu'ils arrivent. Notification : *"PR prédit dans 6 jours — probabilité 74 %."* Quand la prédiction se réalise : double célébration PR + validation Ova comme oracle personnel.
 
 **Implémentation :** calcul on-device (aucune donnée réseau), en arrière-plan post-séance. Variables : progression brute kg/reps + fréquence d'entraînement + fatigue accumulée (volume 7 derniers jours). Seuil d'affichage minimum : 60 % de confiance.
 
-**Viralité :** Story automatique "prédiction réalisée" = Myo 3D + carte de prédiction + "Orava l'avait vu". Contenu le plus viral de l'espace fitness.
+**Viralité :** Story automatique "prédiction réalisée" = Myo 3D + carte de prédiction + "Ova l'avait vu". Contenu le plus viral de l'espace fitness.
 
 **Versions :** Free = notification visible, détail verrouillé. Pro = courbes de projection + historique des prédictions.
 
 ### 4.5. L'ADN Athlétique — L'empreinte sportive irremplaçable
 
-**Concept :** après 90 jours (ou 20 séances minimum), Orava génère une empreinte algorithmique unique en 6 dimensions capturant le *style* d'athlète, pas juste les chiffres. Devient un CV sportif portable et vérifiable.
+**Concept :** après 90 jours (ou 20 séances minimum), Ova génère une empreinte algorithmique unique en 6 dimensions capturant le *style* d'athlète, pas juste les chiffres. Devient un CV sportif portable et vérifiable.
 
 **Les 6 dimensions :**
 1. Profil de force (ratios bench/squat/deadlift/OHP + percentiles)
@@ -117,7 +117,7 @@ Ces quatre piliers se renforcent mutuellement : le Myo rend l'app belle, le Fant
 
 **Visualisation :** carte Skia unique par utilisateur — formes géométriques déterministes. Deux athlètes similaires = ADN visuellement proches mais jamais identiques.
 
-**Switching cost :** après 6 mois, l'ADN est irremplaçable et non exportable. Quitter Orava = perdre son histoire sportive. Le mécanisme de rétention le plus puissant, parce qu'émotionnel.
+**Switching cost :** après 6 mois, l'ADN est irremplaçable et non exportable. Quitter Ova = perdre son histoire sportive. Le mécanisme de rétention le plus puissant, parce qu'émotionnel.
 
 **Versions :** Free = aperçu 2/6 dimensions floutées. Pro = ADN complet + historique mensuel. Coach = dashboard agrégé de tous les athlètes.
 
@@ -180,14 +180,14 @@ Myo 3D v1.0 (41 variables) · Export Stories 9:16 · **Moteur Prédictif v1.0** 
 ### Phase 3 — Social, Croissance & ADN Athlétique (9–12 semaines)
 Plateforme communautaire. Switching cost émotionnel activé.
 
-Feed social · Marketplace programmes · **ADN Athlétique v1.0** · Moteur Prédictif v1.1 · Système de référencement · OravaFeed module.
+Feed social · Marketplace programmes · **ADN Athlétique v1.0** · Moteur Prédictif v1.1 · Système de référencement · OvaFeed module.
 
 **Critère de sortie :** rétention J-30 ≥ 28 %. Au moins 5 coachs actifs sur le tier Coach.
 
 ### Phase 4 — L'Écosystème Vertical (12+ semaines)
 Devenir l'assistant de vie central du pratiquant.
 
-OravaFeed intégré · Mapbox (carte salles) · Pass Orava B2B · ADN Athlétique v2.0 (percentiles inter-utilisateurs).
+OvaFeed intégré · Mapbox (carte salles) · Pass Ova B2B · ADN Athlétique v2.0 (percentiles inter-utilisateurs).
 
 ---
 
@@ -253,7 +253,7 @@ OravaFeed intégré · Mapbox (carte salles) · Pass Orava B2B · ADN Athlétiqu
 - [ ] Option de désactivation du Fantôme dans les Paramètres (Règle UX N°7)
 
 **Onboarding**
-- [ ] Écran 1 : présentation Orava (valeur en une phrase, animation Myo placeholder)
+- [ ] Écran 1 : présentation Ova (valeur en une phrase, animation Myo placeholder)
 - [ ] Écran 2 : premier exercice guidé (sélection + 1 série de démonstration)
 - [ ] Test du parcours complet : < 60 secondes de l'installation à la 1re série
 
@@ -348,7 +348,7 @@ OravaFeed intégré · Mapbox (carte salles) · Pass Orava B2B · ADN Athlétiqu
 
 **Quand :** avant d'écrire la première ligne de code UI (Phase 0, semaine 2).
 **Comment :**
-- Créer un fichier `Orava — Design System` avec : palette de couleurs (dark/light), typographie (2 familles, 4 tailles), border-radius tokens, spacing grid.
+- Créer un fichier `Ova — Design System` avec : palette de couleurs (dark/light), typographie (2 familles, 4 tailles), border-radius tokens, spacing grid.
 - Utiliser **Figma Make** (IA intégrée) pour générer un premier jet des 5 écrans principaux : Home, Séance active, Résumé + Myo, Profile, Paywall. Prompt : *"Premium fitness app, dark mode, minimal, data-centric, one primary number per screen"*. Ajuster le résultat — ne pas partir de zéro.
 - Chaque composant Figma = un composant React Native. Nommer les composants identiquement dans Figma et dans le code.
 - **Ne pas utiliser Figma pour le Myo 3D** — l'outil n'est pas fait pour ça. Le Myo se prototype dans Spline.
@@ -437,7 +437,7 @@ Configurer Cline avec le modèle `claude-sonnet-4-5` pour les tâches quotidienn
 Créer à la racine du projet un fichier `CLAUDE.md`. Cline le lit automatiquement au début de chaque session. Contenu recommandé :
 
 ```markdown
-# Orava — Contexte projet pour Claude
+# Ova — Contexte projet pour Claude
 
 ## Stack technique
 React Native + Expo Router v3, TypeScript strict (no any), Reanimated 3,
@@ -532,33 +532,33 @@ si aucun historique. TypeScript strict avec le type GhostSet défini dans types/
 ### 11.1. Applications mobiles — références directes
 
 **Whoop** *(priorité 1 — étudier en profondeur)*
-Le meilleur design système de l'espace fitness. Fond noir, typographie large, données présentées comme du luxe. Leur écran "Recovery Score" est une masterclass : un chiffre, une couleur, une signification immédiate. Ce qu'Orava emprunte : la hiérarchie visuelle des données, ne jamais afficher 10 chiffres quand un seul suffit. Passer 30 minutes à naviguer dans l'app en analysant chaque décision de design.
+Le meilleur design système de l'espace fitness. Fond noir, typographie large, données présentées comme du luxe. Leur écran "Recovery Score" est une masterclass : un chiffre, une couleur, une signification immédiate. Ce qu'Ova emprunte : la hiérarchie visuelle des données, ne jamais afficher 10 chiffres quand un seul suffit. Passer 30 minutes à naviguer dans l'app en analysant chaque décision de design.
 
 **Spotify / Spotify Wrapped** *(priorité 1 — référence directe ADN Athlétique)*
-La référence mondiale du "data as identity". Wrapped transforme des données d'écoute en objet visuel émotionnel partageable — exactement la philosophie du Myo 3D et de l'ADN Athlétique. Ce qu'Orava emprunte : le moment de révélation, l'animation d'entrée des chiffres, le format Stories viral. Étudier les Wrapped 2022–2024 avant de designer l'ADN.
+La référence mondiale du "data as identity". Wrapped transforme des données d'écoute en objet visuel émotionnel partageable — exactement la philosophie du Myo 3D et de l'ADN Athlétique. Ce qu'Ova emprunte : le moment de révélation, l'animation d'entrée des chiffres, le format Stories viral. Étudier les Wrapped 2022–2024 avant de designer l'ADN.
 
 **Linear** *(priorité 1 — référence micro-animations)*
-Le design système le plus admiré des développeurs. Micro-animations sur chaque interaction (transitions 120ms), dark mode natif parfait. Observer l'app elle-même pendant l'utilisation quotidienne de gestion de tâches — chaque clic "répond". C'est le feeling Reanimated qu'Orava doit atteindre sur le WheelPicker et le Mode Fantôme.
+Le design système le plus admiré des développeurs. Micro-animations sur chaque interaction (transitions 120ms), dark mode natif parfait. Observer l'app elle-même pendant l'utilisation quotidienne de gestion de tâches — chaque clic "répond". C'est le feeling Reanimated qu'Ova doit atteindre sur le WheelPicker et le Mode Fantôme.
 
 **BeReal / Locket Widget** *(priorité 1 — Progressive Disclosure)*
-Interface quasi-vide pendant l'action, révélation différée du contenu. Le modèle exact de la Progressive Disclosure d'Orava. L'écran de séance active doit être aussi épuré que l'écran de capture BeReal.
+Interface quasi-vide pendant l'action, révélation différée du contenu. Le modèle exact de la Progressive Disclosure d'Ova. L'écran de séance active doit être aussi épuré que l'écran de capture BeReal.
 
 **Streaks** *(priorité 2 — reward loop)*
-L'app de suivi d'habitudes la plus belle de l'App Store. Cercles de progression animés, récompenses haptiques soignées. Le feeling "cercle qui se ferme" = ce qu'Orava doit créer à la validation d'une série.
+L'app de suivi d'habitudes la plus belle de l'App Store. Cercles de progression animés, récompenses haptiques soignées. Le feeling "cercle qui se ferme" = ce qu'Ova doit créer à la validation d'une série.
 
 **Robinhood** *(priorité 2 — célébrations et onboarding)*
-A rendu la finance belle pour une génération. Célébrations de confettis pour les transactions, onboarding en 2 minutes. Les confettis de Robinhood = les haptics + son de Orava sur un PR Or.
+A rendu la finance belle pour une génération. Célébrations de confettis pour les transactions, onboarding en 2 minutes. Les confettis de Robinhood = les haptics + son de Ova sur un PR Or.
 
 **Carrot Weather / Clime** *(priorité 2 — donnée émotionnelle)*
 Transforment une donnée froide (température) en expérience visuelle émotionnelle. Principe que des données fonctionnelles peuvent être belles — exactement ce que fait le Myo 3D.
 
 **Nike Training Club** *(priorité 2 — cohérence de marque fitness)*
-La différence entre NTC et une app fitness générique, c'est la cohérence de l'identité visuelle à travers chaque écran. Chaque transition, typo et couleur sent la même marque. Référence directe pour le Design System Orava.
+La différence entre NTC et une app fitness générique, c'est la cohérence de l'identité visuelle à travers chaque écran. Chaque transition, typo et couleur sent la même marque. Référence directe pour le Design System Ova.
 
 ### 11.2. Systèmes design et entreprises
 
 **Apple — iOS natif** *(étude obligatoire)*
-Les transitions de l'app Santé, le scroll physics de UIKit, le Taptic Engine sur les WheelPickers de l'alarme — ce sont les standards que l'utilisateur compare inconsciemment à Orava. Le WheelPicker natif de l'alarme iOS est la référence exacte pour les composants poids/reps. Étudier la physique du scroll (friction, snap, momentum) et répliquer précisément en Reanimated.
+Les transitions de l'app Santé, le scroll physics de UIKit, le Taptic Engine sur les WheelPickers de l'alarme — ce sont les standards que l'utilisateur compare inconsciemment à Ova. Le WheelPicker natif de l'alarme iOS est la référence exacte pour les composants poids/reps. Étudier la physique du scroll (friction, snap, momentum) et répliquer précisément en Reanimated.
 
 ### 11.3. Art numérique et data viz — référence Myo 3D
 
@@ -570,7 +570,7 @@ Base de milliers de shaders GLSL commentés. Recherches utiles : "ceramic", "org
 
 ### 11.4. Règles d'application des inspirations
 
-1. **Observer, ne pas copier.** Chaque référence doit déclencher une question : *"Pourquoi ils ont fait ça ? Quel problème ça résout ? Comment adapter ce principe à Orava ?"*
+1. **Observer, ne pas copier.** Chaque référence doit déclencher une question : *"Pourquoi ils ont fait ça ? Quel problème ça résout ? Comment adapter ce principe à Ova ?"*
 2. **Prioriser le feeling sur le visuel.** Ce qui compte n'est pas que l'app ressemble à Whoop, mais qu'elle procure le même sentiment de qualité et de confiance.
 3. **Tester sur des vrais utilisateurs.** Une inspiration valide si des utilisateurs beta réagissent positivement, pas si le designer la trouve belle.
 4. **Documenter les décisions.** Pour chaque choix design majeur (couleur, animation, layout), noter quelle inspiration l'a motivé et pourquoi dans les notes Figma.
@@ -629,7 +629,7 @@ Si l'utilisateur ne le regarde pas, tant mieux — il travaille.
 
 ```
 [RÈGLE N°8] - La Prédiction est une promesse :
-Orava ne prédit que quand il est confiant (seuil minimum : 60 %).
+Ova ne prédit que quand il est confiant (seuil minimum : 60 %).
 Une prédiction ratée abîme la relation plus qu'une absence de prédiction.
 Le modèle doit afficher sa propre incertitude — jamais de fausse précision.
 ```

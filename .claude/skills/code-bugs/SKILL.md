@@ -1,6 +1,6 @@
 ---
 name: code-bugs
-description: Chasse aux vrais bugs dans le codebase Orava (mobile_app) — erreurs de logique, races, async/await mal géré, null/undefined, divisions par zéro, closures périmées (RAF/setInterval), pièges Reanimated/expo-gl/SQLite, edge cases. Chaque bug candidat est vérifié de façon adversariale (tenter de le réfuter en lisant le chemin réel) avant d'être retenu. Lecture seule. Invocable seul (/code-bugs) ou appelé par /code-audit.
+description: Chasse aux vrais bugs dans le codebase Ova (mobile_app) — erreurs de logique, races, async/await mal géré, null/undefined, divisions par zéro, closures périmées (RAF/setInterval), pièges Reanimated/expo-gl/SQLite, edge cases. Chaque bug candidat est vérifié de façon adversariale (tenter de le réfuter en lisant le chemin réel) avant d'être retenu. Lecture seule. Invocable seul (/code-bugs) ou appelé par /code-audit.
 ---
 
 # Audit code — Bugs

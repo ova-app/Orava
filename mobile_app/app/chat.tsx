@@ -19,7 +19,7 @@ export default function ChatScreen() {
         >
           <ChevronLeft size={24} color={colors.textPrimary} strokeWidth={1.5} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Orava Chat</Text>
+        <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Ova Chat</Text>
         <View style={{ width: 24 }} />
       </View>
 

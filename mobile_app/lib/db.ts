@@ -11,7 +11,7 @@ export function getDB(): SQLite.SQLiteDatabase {
 const SCHEMA_VERSION = 1
 
 export async function initDB(): Promise<void> {
-  const db = await SQLite.openDatabaseAsync('orava.db')
+  const db = await SQLite.openDatabaseAsync('ova.db')
   _db = db
   // Schéma de base — idempotent. local_sessions a désormais une PRIMARY KEY (ORA-062) :
   // sur une install neuve la table est directement correcte ; les installs existantes

@@ -22,7 +22,7 @@ Podium : `gold` = nouveau record absolu · `silver` = 2e · `bronze` = 3e · `nu
 - **[Phase 0]** Snapshot MMKV à chaque mutation → crash-safe ✅
 
 ## Session UI — comportements clés (25/05/2026)
-- **Header** : Logo Orava 48px (bullseye) + timer séance centré (elapsedSeconds, 32px mono) + bouton TERMINER
+- **Header** : Logo Ova 48px (bullseye) + timer séance centré (elapsedSeconds, 32px mono) + bouton TERMINER
 - **WheelPickerModal** : composant dédié `workout/wheel-picker-modal.tsx` — bottom-sheet 80% hauteur, 3 roues (poids/reps/RPE), snap damping 18
 - **Rest timer post-validation** :
   - Avec PR → délai 2500ms (laisse le flash PR respirer)

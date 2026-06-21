@@ -1,10 +1,10 @@
 {
   "expo": {
-    "name": "Orava",
-    "slug": "orava",
+    "name": "Ova",
+    "slug": "ova",
     "version": "1.0.0",
     "orientation": "portrait",
-    "scheme": "orava",
+    "scheme": "ova",
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "icon": "./assets/icon.png",
@@ -14,15 +14,15 @@
       "backgroundColor": "#0A0A0F"
     },
     "ios": {
-      "bundleIdentifier": "com.orava.app",
+      "bundleIdentifier": "com.ova.app",
       "supportsTablet": false,
       "infoPlist": {
-        "NSCameraUsageDescription": "Orava utilise la caméra pour les photos de profil.",
-        "NSPhotoLibraryUsageDescription": "Orava accède à ta galerie pour les photos de profil."
+        "NSCameraUsageDescription": "Ova utilise la caméra pour les photos de profil.",
+        "NSPhotoLibraryUsageDescription": "Ova accède à ta galerie pour les photos de profil."
       }
     },
     "android": {
-      "package": "com.orava.app",
+      "package": "com.ova.app",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0A0A0F"

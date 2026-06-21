@@ -100,7 +100,7 @@ export default function LoginScreen(): React.JSX.Element {
         {/* Hero */}
         <View style={styles.hero}>
           <LogoOrava />
-          <Text style={styles.wordmark}>ORAVA</Text>
+          <Text style={styles.wordmark}>OVA</Text>
           <Text style={styles.tagline}>Chaque séance devient une œuvre.</Text>
         </View>
 

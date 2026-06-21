@@ -1,6 +1,6 @@
 ---
 name: audit-produit
-description: Audit expert Produit, Vision & Expérience de l'entreprise Orava — proposition de valeur, les 4 piliers de différenciation (Myo, Fantôme, Prédictif, ADN), product-market fit, maturité de la roadmap, qualité d'expérience, et surtout l'écart entre l'ambition promise (Master Plan) et ce qui est réellement livré. Produit une sous-note /20. Invocable seul (/audit-produit) ou appelé par /audit.
+description: Audit expert Produit, Vision & Expérience de l'entreprise Ova — proposition de valeur, les 4 piliers de différenciation (Myo, Fantôme, Prédictif, ADN), product-market fit, maturité de la roadmap, qualité d'expérience, et surtout l'écart entre l'ambition promise (Master Plan) et ce qui est réellement livré. Produit une sous-note /20. Invocable seul (/audit-produit) ou appelé par /audit.
 ---
 
 # Audit — Produit, Vision & Expérience
@@ -12,9 +12,9 @@ Expert produit / CPO. Auditer la **solidité du produit en tant qu'actif d'entre
 On note **uniquement ce qui est évaluable depuis le repo** (docs, code, config, git, mémoire). Pas de données externes. Ce qui devrait exister mais **est absent du repo** (beta, mesure de PMF, retours users) = un **constat (angle mort)**, pas une recherche externe. Le cœur de l'audit = l'**écart entre l'ambition documentée (Master Plan) et ce qui est réellement codé**.
 
 ## Sources à lire (obligatoire)
-1. `Orava___Master_Plan_v4.md` — §1 Vision & proposition de valeur, §4 Ambitions écosystème (les 4 piliers), §7 Feuille de route, §12 UX Guidelines, §13 KPIs produit.
+1. `Ova___Master_Plan_v4.md` — §1 Vision & proposition de valeur, §4 Ambitions écosystème (les 4 piliers), §7 Feuille de route, §12 UX Guidelines, §13 KPIs produit.
 2. `BACKLOG.md` — état réel du dev (ce qui est ✅ codé vs ⏳ à faire).
-3. `onboarding/01-cest-quoi-orava.md` + `05-concepts-metier.md` — le produit raconté simplement.
+3. `onboarding/01-cest-quoi-ova.md` + `05-concepts-metier.md` — le produit raconté simplement.
 4. Le repo (`mobile_app/app/`) pour vérifier ce qui **existe vraiment** vs promis.
 
 ## Ce qu'on évalue

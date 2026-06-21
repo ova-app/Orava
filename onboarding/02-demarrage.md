@@ -50,7 +50,7 @@ npm --version    # 10.x ou +
 
 ```bash
 git clone <url-du-repo>
-cd orava/mobile_app
+cd ova/mobile_app
 ```
 
 > Le repo est sur l'organisation GitHub **`ova-app`**. Demande l'accès si tu ne l'as pas.

@@ -1,6 +1,6 @@
-# 5 — Les concepts métier d'Orava
+# 5 — Les concepts métier d'Ova
 
-Les idées propres à l'app. C'est ce qui fait Orava plutôt qu'un énième tracker.
+Les idées propres à l'app. C'est ce qui fait Ova plutôt qu'un énième tracker.
 Comprends-les **avant** de coder une feature qui les touche.
 
 > Références détaillées : [`.claude/rules/workout.md`](../.claude/rules/workout.md) (PR,
@@ -10,7 +10,7 @@ Comprends-les **avant** de coder une feature qui les touche.
 
 ## 🏆 Le système de PR (Personal Records)
 
-Un **PR** = un record personnel. Orava en suit **4 types** à des échelles différentes :
+Un **PR** = un record personnel. Ova en suit **4 types** à des échelles différentes :
 
 | Type | Échelle | Définition | Stocké dans |
 |---|---|---|---|
@@ -51,7 +51,7 @@ L'**Armurerie** (`app/prs.tsx`) affiche tes records par exercice façon podium.
 
 ## 🧬 La Myo — la signature de séance
 
-C'est **l'identité visuelle d'Orava**. À la fin d'une séance, on résume tout ce que tu as
+C'est **l'identité visuelle d'Ova**. À la fin d'une séance, on résume tout ce que tu as
 fait en **53 dimensions**, regroupées en **8 familles**. Chaque dimension est un score
 normalisé entre 0 et 1 (affiché 0→100).
 

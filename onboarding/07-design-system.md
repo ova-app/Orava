@@ -1,6 +1,6 @@
 # 7 — Le Design System
 
-Orava a une identité visuelle **forte et stricte**. Ce n'est pas négociable : le design
+Ova a une identité visuelle **forte et stricte**. Ce n'est pas négociable : le design
 EST le produit. Avant de coder le moindre écran, tu respectes ces règles.
 
 > Référence complète (tous les tokens, anti-patterns, haptique) : [`.claude/rules/ui.md`](../.claude/rules/ui.md).
@@ -47,7 +47,7 @@ textTertiary:  #4A4A5A   (placeholders)
 
 ### L'accent — UN SEUL, partout pareil
 ```
-accent: #FFDD00   ← le jaune électrique signature Orava
+accent: #FFDD00   ← le jaune électrique signature Ova
 ```
 Règles d'usage de l'accent :
 - Il apparaît **uniquement** sur : le CTA principal, un PR actif, la métrique « hero ».
@@ -96,7 +96,7 @@ touchMin=44   touchComfort=52 (standard)   touchHero=64 (session active)
 
 ## Les animations — des ressorts, jamais du linéaire
 
-L'animation est un **langage** dans Orava. Règles :
+L'animation est un **langage** dans Ova. Règles :
 - **Spring (ressort) sur toute réponse à un geste.** **Zéro easing linéaire** sur un
   élément visible. Jamais.
 - Le type de ressort encode l'intention :

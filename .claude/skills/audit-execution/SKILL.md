@@ -1,6 +1,6 @@
 ---
 name: audit-execution
-description: Audit expert Exécution, Process & Organisation de l'entreprise Orava, évalué depuis le repo — vélocité et régularité (git history), maturité du process (CI/CD, branch protection, conventions, tests gate), qualité de la documentation et reprenabilité (onboarding, rules, bus factor), fiabilité de release (EAS, OTA, monitoring), et organisation/gouvernance documentée (association, futur associé). Produit une sous-note /20. Invocable seul (/audit-execution) ou appelé par /audit.
+description: Audit expert Exécution, Process & Organisation de l'entreprise Ova, évalué depuis le repo — vélocité et régularité (git history), maturité du process (CI/CD, branch protection, conventions, tests gate), qualité de la documentation et reprenabilité (onboarding, rules, bus factor), fiabilité de release (EAS, OTA, monitoring), et organisation/gouvernance documentée (association, futur associé). Produit une sous-note /20. Invocable seul (/audit-execution) ou appelé par /audit.
 ---
 
 # Audit — Exécution, Process & Organisation (vue repo)

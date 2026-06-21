@@ -1,4 +1,4 @@
-# BACKLOG — Audit Orava
+# BACKLOG — Audit Ova
 
 > Audit multi-experts (architecture, sécurité/RGPD, performance, data/offline, design-system/a11y, tests/devops/produit).
 > Lecture seule du code à date. Chaque ticket cite `fichier:ligne` réel.
@@ -120,7 +120,7 @@ RevenueCat (ORA-010), suppression compte (ORA-001), RGPD UI (ORA-003), service_r
 
 ### ORA-010 · [PRODUIT] Aucune monétisation branchée — revenu = 0
 `react-native-purchases` absent de `package.json`, `app/paywall.tsx` inexistant, `users.plan` jamais lu pour gater une feature (le Mode Fantôme « Pro illimité » n'est jamais distingué à l'exécution).
-**Action :** intégrer RevenueCat + paywall + gating réel sur `plan` (produits `orava_pro_monthly/yearly`, `orava_coach_monthly`).
+**Action :** intégrer RevenueCat + paywall + gating réel sur `plan` (produits `ova_pro_monthly/yearly`, `ova_coach_monthly`).
 
 ### ORA-011 · [DEVOPS] Zéro monitoring d'erreurs en prod (volet Sentry)
 `@sentry/react-native` absent → échecs invisibles en prod, impossible de savoir qu'un % d'utilisateurs perd ses séances.
@@ -195,7 +195,7 @@ RevenueCat (ORA-010), suppression compte (ORA-001), RGPD UI (ORA-003), service_r
 `lib/claims.ts` (claims résolus) — pas de notification quand un claim est tenu/raté ni quand l'échéance approche. **Action :** push `expo-notifications` : « Claim réussi 🔥 », « ton claim expire demain », « X a tenu son claim ». **Dépend d'ORA-042** (infra push) et idéalement d'ORA-077 (résolution serveur = trigger fiable).
 
 ### ORA-079 · ✅ [PRODUIT] Suggestion de claim depuis le moteur prédictif
-`lib/predictor.ts` (`computePrediction` → PR prédit + confiance) → `app/claim/new.tsx` / bande claim. Le robot prédit déjà un PR ; l'humain devrait pouvoir l'assumer en 1 tap. **Action :** quand une prédiction `confidence ≥ 0.6` existe, proposer « Orava te prédit X kg — tu le claim ? » → `createClaim` prérempli (exercice + cible). Boucle robot→humain qui amorce les claims (mitige le cold-start).
+`lib/predictor.ts` (`computePrediction` → PR prédit + confiance) → `app/claim/new.tsx` / bande claim. Le robot prédit déjà un PR ; l'humain devrait pouvoir l'assumer en 1 tap. **Action :** quand une prédiction `confidence ≥ 0.6` existe, proposer « Ova te prédit X kg — tu le claim ? » → `createClaim` prérempli (exercice + cible). Boucle robot→humain qui amorce les claims (mitige le cold-start).
 
 ### ORA-080 · ✅ [TESTS] Couverture `lib/claims.ts` + `lib/featuredPr.ts`
 `lib/claims.ts` et `lib/featuredPr.ts` à **0 %** (logique de résolution `weight`/`sessions`, toggle de vote, auto-pick gold, calcul de delta — non testés). Contraire à la culture ORA-045/ORA-074 (gate de couverture). **Action :** extraire les bouts de logique pure (décision de résolution, math de toggle believe/doubt, sélection du meilleur PR) et les tester par import réel ; remonter le plancher `coverageThreshold`.

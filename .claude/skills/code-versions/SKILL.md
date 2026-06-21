@@ -1,6 +1,6 @@
 ---
 name: code-versions
-description: Audit des dépendances du codebase Orava (mobile_app) — paquets obsolètes/dépréciés, vulnérabilités connues (npm audit), conflits de peer-deps et dette --legacy-peer-deps, alignement Expo SDK 54 / React Native 0.81.5, versions de TypeScript/Jest/Three/Skia, et risques des bumps majeurs Dependabot. Lecture seule. Invocable seul (/code-versions) ou appelé par /code-audit.
+description: Audit des dépendances du codebase Ova (mobile_app) — paquets obsolètes/dépréciés, vulnérabilités connues (npm audit), conflits de peer-deps et dette --legacy-peer-deps, alignement Expo SDK 54 / React Native 0.81.5, versions de TypeScript/Jest/Three/Skia, et risques des bumps majeurs Dependabot. Lecture seule. Invocable seul (/code-versions) ou appelé par /code-audit.
 ---
 
 # Audit code — Versions & dépendances
