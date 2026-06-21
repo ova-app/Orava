@@ -12,9 +12,12 @@ Signaler TOUTE modification avant de coder. Ajouter les migrations SQL en fin de
 users             : id, email, username, full_name, first_name(TEXT NULL), last_name(TEXT NULL),
                     name_display(TEXT DEFAULT 'full_name' — 'full_name'|'username', affichage tête de profil),
                     avatar_url, weight_unit(kg|lbs), plan(free|premium),
-                    locale, date_naissance(DATE NULL), featured_pr(JSONB NULL — PR vedette épinglé profil), created_at
+                    locale, date_naissance(DATE NULL), featured_pr(JSONB NULL — PR vedette épinglé profil),
+                    featured_photo(JSONB NULL - photo vitrine epinglee {id,photo_url,source,workout_id} - ORA-084),
+                    bio(TEXT NULL — bio courte profil ≤70, CHECK serveur, ORA-085), created_at
                     ⚠️ full_name = concaténation maintenue (first_name + last_name) → lectures feed/profil intactes
                        · first_name/last_name/name_display = migration profile_name_fields.sql · client isolé (lib/displayName.ts), no-op pré-migration
+                       · bio = migration ora085_profile_bio.sql · client isolé (lib/profileBio.ts), no-op pré-migration
 follows           : follower_id → users.id, following_id → users.id, created_at
 gyms              : id, name, address, lat, lng, is_home, created_by → users.id, created_at
 muscles           : id, name, muscle_group, body_side, myo_dim(SMALLINT NULL)
@@ -56,6 +59,10 @@ claims            : id, user_id → users.id, type(weight|sessions), exercise_id
                     ⚠️ called-shot social · 1 seul actif/user (index partiel unique) · résolu client au save (summary.tsx)
 claim_votes       : claim_id → claims.id, user_id → users.id, vote(believe|doubt), created_at
                     ⚠️ pronostics · PK (claim_id,user_id) = 1 vote/user · JAMAIS like/dislike
+claim_likes       : claim_id → claims.id, user_id → users.id, created_at
+                    ⚠️ ORA-083 · PK (claim_id,user_id) = 1 like/user · claim résolu (validé/annulé)
+claim_comments    : id, claim_id → claims.id, user_id → users.id, content(1-500), created_at
+                    ⚠️ ORA-083 · commentaires d'un claim résolu (pas de like par commentaire)
 ```
 
 ## RPCs Postgres
@@ -374,4 +381,7 @@ Le client génère `id` (workout), `exercises[].id` (workout_exercise) et `exerc
 - `users.featured_pr (jsonb NULL)` — PR épinglé en vitrine. Snapshot `{ set_id, exercise_id, exercise_name, weight_kg, reps, achieved_at, delta_kg, manual }`. NULL → auto-pick côté client (`lib/featuredPr.ts`, meilleur gold `pr_charge`). `manual:true` jamais écrasé.
 - `claims` — called-shot social. **1 actif/user** (`idx_claims_one_active` partiel unique). Résolution **client au save** (`lib/claims.ts` `resolveClaimsAfterWorkout` depuis `summary.tsx`) : `weight` résolu si l'exo visé est travaillé (≥ cible → `succeeded`, sinon `failed`) ; `sessions` incrémente `progress_current` (cible atteinte → `succeeded`). Échéances `week` dépassées → `expireOverdueClaims` (`failed`) à l'ouverture profil/feed **+ côté serveur** par le cron horaire `resolve_overdue_claims()` (ORA-077, `supabase/planned/ora077_resolve_claims_cron.sql` — couvre les users inactifs ; `succeeded` reste client au save). Pin manuel lu en requête **isolée** `getManualFeaturedPr` (hors `select` profil → pas de 400 pré-migration). Near-miss privé d'un claim `failed` ≤ 7 j + re-claim 1 tap (ORA-081).
 - `claim_votes` — pronostics `believe`/`doubt` (PK `(claim_id,user_id)` = 1 vote/user, toggle/retract côté client). RLS insert : interdit sur son propre claim + claim doit être `active`.
+- **[ORA-083] `claim_likes` + `claim_comments`** — SQL : [`supabase/planned/ora083_claim_social.sql`](../../supabase/planned/ora083_claim_social.sql). Un claim résolu (succeeded/failed) refait surface dans le feed comme une publication → mêmes interactions qu'une activité (likes + commentaires, helpers `lib/claims.ts`, agrégés dans `useFeedData`). Distinct de `claim_votes` (pronostics, réservés aux claims actifs). Le feed affiche aussi le moment d'annonce (`created_at`) sur ces claims, et le corps dit « Claim validé » (plus « a tenu son claim »). RLS gouvernée par la visibilité du claim parent ; pas de like par commentaire (table dédiée non créée).
+- **[ORA-084] `users.featured_photo (jsonb NULL)`** — SQL : [`supabase/planned/ora084_featured_photo.sql`](../../supabase/planned/ora084_featured_photo.sql). Photo épinglée en tête de vitrine, snapshot `{ id, photo_url, source, workout_id }`. NULL → la plus récente fait foi (fallback client). Lecture/écriture isolée best-effort (`lib/featuredPhoto.ts`, no-op pré-migration). Client codé (`PhotoStack` hero + badge 📌, toggle épingler dans le zoom vitrine).
+- **[ORA-085] `users.bio (text NULL)`** — SQL : [`supabase/planned/ora085_profile_bio.sql`](../../supabase/planned/ora085_profile_bio.sql). Bio courte affichée **sous l'avatar** (bande à gauche, extensible jusqu'à la pile vitrine à droite, au-dessus de la carte « cette semaine »), plafonnée à 70 caractères (CHECK serveur en défense en profondeur) ; saisie dans Modifier le profil (section IDENTITÉ, compteur live). Aperçu profil = 3 lignes max (`numberOfLines`), espaces normalisés à l'écriture. Lecture/écriture isolée best-effort (`lib/profileBio.ts`, no-op pré-migration). Tap sur la bio (ou sur « + Ajouter une bio » si vide) → `/edit-profile`.
 - RLS : lecture publique si `is_public` (cohérent feed) ; écriture propriétaire strict (cohérent ORA-020). Échec d'un claim = **discret** (feed n'affiche que `active`+`succeeded`) ; track record profil = `succeeded/(succeeded+failed)`, `expired` exclu.

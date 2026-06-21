@@ -1,14 +1,24 @@
 import React, { useState, useEffect } from 'react'
-import { View, Text, Pressable, ScrollView, StyleSheet, StatusBar, ViewStyle } from 'react-native'
+import {
+  View,
+  Text,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  StatusBar,
+  ViewStyle,
+  Modal,
+} from 'react-native'
 import Animated, { useSharedValue, withSpring, useAnimatedStyle } from 'react-native-reanimated'
 import { useRouter } from 'expo-router'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { ChevronLeft, ChevronRight } from 'lucide-react-native'
+import { ChevronLeft, ChevronRight, Check } from 'lucide-react-native'
 import { useTheme } from '@/context/ThemeContext'
 import { spacing, radius, typography, spring, font } from '@/constants/theme'
 import { toggleRecipe } from '@/constants/recipes'
 import { supabase } from '@/lib/supabase'
 import { cacheUserPlan } from '@/lib/plan'
+import { storage } from '@/lib/storage'
 
 // ─── ToggleRow (inline) ──────────────────────────────────────────────────────
 // Custom toggle wired via toggleRecipe + Reanimated spring (snappy).
@@ -83,10 +93,25 @@ interface SettingsState {
 const STORAGE_KEYS = {
   weightUnit: 'settings_weight_unit',
   vibration: 'settings_vibration',
-  defaultTimer: 'settings_default_timer',
   publicWorkouts: 'settings_public_workouts',
   ghost: 'settings_ghost',
 } as const
+
+// ⚠️ Le timer par défaut est lu par timer.tsx via le wrapper `storage` (synchrone,
+// cache RAM hydraté au boot) — pas via AsyncStorage. On écrit donc dans la même clé.
+const TIMER_PRESET_KEY = 'timer_default_preset'
+
+const TIMER_PRESETS = [
+  { label: '30s', value: 30 },
+  { label: '1 min', value: 60 },
+  { label: '1:30', value: 90 },
+  { label: '2 min', value: 120 },
+  { label: '3 min', value: 180 },
+] as const
+
+function formatTimerLabel(seconds: number): string {
+  return TIMER_PRESETS.find((p) => p.value === seconds)?.label ?? `${seconds}s`
+}
 
 // ─── Screen ──────────────────────────────────────────────────────────────────
 
@@ -102,16 +127,16 @@ export default function SettingsScreen(): React.JSX.Element {
     ghostEnabled: true,
   })
   const [userPlan, setUserPlan] = useState<'free' | 'premium'>('free')
+  const [timerPickerVisible, setTimerPickerVisible] = useState(false)
 
   // ─── Persistance load ─────────────────────────────────────────────────────
 
   useEffect(() => {
     async function loadSettings(): Promise<void> {
       try {
-        const [unit, vibration, timer, publicWorkouts, ghost] = await Promise.all([
+        const [unit, vibration, publicWorkouts, ghost] = await Promise.all([
           AsyncStorage.getItem(STORAGE_KEYS.weightUnit),
           AsyncStorage.getItem(STORAGE_KEYS.vibration),
-          AsyncStorage.getItem(STORAGE_KEYS.defaultTimer),
           AsyncStorage.getItem(STORAGE_KEYS.publicWorkouts),
           AsyncStorage.getItem(STORAGE_KEYS.ghost),
         ])
@@ -120,7 +145,8 @@ export default function SettingsScreen(): React.JSX.Element {
           ...prev,
           weightUnit: (unit === 'lbs' ? 'lbs' : 'kg') as WeightUnit,
           vibrationEnabled: vibration !== 'false',
-          defaultTimerSeconds: timer ? parseInt(timer, 10) : 90,
+          // lu depuis le wrapper `storage` (cache RAM synchrone) — même source que timer.tsx
+          defaultTimerSeconds: storage.getNumber(TIMER_PRESET_KEY) ?? 90,
           publicWorkoutsByDefault: publicWorkouts === 'true',
           ghostEnabled: ghost !== 'false',
         }))
@@ -167,6 +193,12 @@ export default function SettingsScreen(): React.JSX.Element {
   async function setGhostEnabled(enabled: boolean): Promise<void> {
     setSettings((prev) => ({ ...prev, ghostEnabled: enabled }))
     await AsyncStorage.setItem(STORAGE_KEYS.ghost, String(enabled))
+  }
+
+  function setDefaultTimer(seconds: number): void {
+    setSettings((prev) => ({ ...prev, defaultTimerSeconds: seconds }))
+    storage.setNumber(TIMER_PRESET_KEY, seconds) // cache RAM + AsyncStorage (lu par timer.tsx)
+    setTimerPickerVisible(false)
   }
 
   const s = buildStyles(colors)
@@ -232,15 +264,13 @@ export default function SettingsScreen(): React.JSX.Element {
           {/* Timer par défaut */}
           <Pressable
             style={[s.row, s.rowPressable]}
-            onPress={() => {
-              // Navigation vers un picker timer — Phase 1
-            }}
+            onPress={() => setTimerPickerVisible(true)}
             accessibilityRole="button"
-            accessibilityLabel={`Timer par défaut : ${settings.defaultTimerSeconds}s`}
+            accessibilityLabel={`Timer par défaut : ${formatTimerLabel(settings.defaultTimerSeconds)}`}
           >
             <Text style={s.rowLabel}>Timer par défaut</Text>
             <View style={s.rowRight}>
-              <Text style={s.rowValue}>{settings.defaultTimerSeconds}s</Text>
+              <Text style={s.rowValue}>{formatTimerLabel(settings.defaultTimerSeconds)}</Text>
               <ChevronRight size={16} color={colors.textTertiary} strokeWidth={2} />
             </View>
           </Pressable>
@@ -334,6 +364,40 @@ export default function SettingsScreen(): React.JSX.Element {
 
         <View style={s.bottomPad} />
       </ScrollView>
+
+      {/* Picker timer par défaut — bottom-sheet */}
+      <Modal
+        visible={timerPickerVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setTimerPickerVisible(false)}
+      >
+        <Pressable style={s.sheetBackdrop} onPress={() => setTimerPickerVisible(false)}>
+          <Pressable style={s.sheet} onPress={(e) => e.stopPropagation()}>
+            <View style={s.sheetHandle} />
+            <Text style={s.sheetTitle}>Timer par défaut</Text>
+            {TIMER_PRESETS.map((preset) => {
+              const selected = settings.defaultTimerSeconds === preset.value
+              return (
+                <Pressable
+                  key={preset.value}
+                  style={s.sheetRow}
+                  onPress={() => setDefaultTimer(preset.value)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected }}
+                  accessibilityLabel={preset.label}
+                >
+                  <Text style={[s.sheetRowLabel, selected && s.sheetRowLabelActive]}>
+                    {preset.label}
+                  </Text>
+                  {selected ? <Check size={20} color={colors.accent} strokeWidth={2.5} /> : null}
+                </Pressable>
+              )
+            })}
+            <View style={s.bottomPad} />
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   )
 }
@@ -483,6 +547,47 @@ function buildStyles(colors: ReturnType<typeof useTheme>['colors']) {
     },
     bottomPad: {
       height: spacing.s12,
+    },
+    // Bottom-sheet picker timer
+    sheetBackdrop: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.5)',
+      justifyContent: 'flex-end',
+    },
+    sheet: {
+      backgroundColor: colors.backgroundTertiary,
+      borderTopLeftRadius: radius.xl,
+      borderTopRightRadius: radius.xl,
+      paddingHorizontal: spacing.s4,
+      paddingTop: spacing.s3,
+    },
+    sheetHandle: {
+      alignSelf: 'center',
+      width: 36,
+      height: 4,
+      borderRadius: radius.full,
+      backgroundColor: colors.textTertiary,
+      marginBottom: spacing.s4,
+    },
+    sheetTitle: {
+      ...typography.subtitle,
+      fontFamily: font.bold,
+      color: colors.textPrimary,
+      marginBottom: spacing.s2,
+    },
+    sheetRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      minHeight: 52,
+    },
+    sheetRowLabel: {
+      ...typography.body,
+      color: colors.textPrimary,
+    },
+    sheetRowLabelActive: {
+      color: colors.accent,
+      fontFamily: font.bold,
     },
   })
 }

@@ -13,6 +13,7 @@ import {
   claimDeadline,
   decideWeightResolution,
   decideSessionProgress,
+  decideManualValidation,
   nextVoteAction,
   isOverdue,
   computeTrackRecord,
@@ -29,6 +30,22 @@ describe('claimDeadline', () => {
     const d = claimDeadline('week', now)
     expect(d).toBe(new Date(now + 7 * 86400000).toISOString())
     expect(new Date(d!).getTime() - now).toBe(7 * 86400000)
+  })
+
+  it("scope 'month' → now + 30 jours", () => {
+    const now = Date.UTC(2026, 5, 20, 0, 0, 0)
+    expect(claimDeadline('month', now)).toBe(new Date(now + 30 * 86400000).toISOString())
+  })
+
+  it("scope 'custom' → la date fournie", () => {
+    const now = Date.UTC(2026, 5, 20)
+    const target = Date.UTC(2026, 8, 1, 22, 0, 0)
+    expect(claimDeadline('custom', now, target)).toBe(new Date(target).toISOString())
+  })
+
+  it("scope 'custom' sans date → pas d'échéance (garde-fou)", () => {
+    expect(claimDeadline('custom', Date.now(), null)).toBeNull()
+    expect(claimDeadline('custom', Date.now())).toBeNull()
   })
 })
 
@@ -56,6 +73,21 @@ describe('decideWeightResolution', () => {
   it('reached 0 → failed (0 = vraie valeur travaillée, pas une absence)', () => {
     expect(decideWeightResolution(0, 100)).toBe('failed')
   })
+
+  it("échéance datée + sous la cible → null (reste actif jusqu'à la deadline)", () => {
+    expect(decideWeightResolution(97.5, 100, 'week')).toBeNull()
+    expect(decideWeightResolution(97.5, 100, 'month')).toBeNull()
+    expect(decideWeightResolution(97.5, 100, 'custom')).toBeNull()
+  })
+
+  it('échéance datée + cible atteinte → succeeded (succès anticipé)', () => {
+    expect(decideWeightResolution(100, 100, 'week')).toBe('succeeded')
+    expect(decideWeightResolution(105, 100, 'custom')).toBe('succeeded')
+  })
+
+  it('next_session explicite + sous la cible → failed (un seul essai promis)', () => {
+    expect(decideWeightResolution(97.5, 100, 'next_session')).toBe('failed')
+  })
 })
 
 describe('decideSessionProgress', () => {
@@ -70,6 +102,18 @@ describe('decideSessionProgress', () => {
 
   it('dépasse la cible → succeeded', () => {
     expect(decideSessionProgress(5, 4)).toEqual({ next: 6, status: 'succeeded' })
+  })
+})
+
+describe('decideManualValidation (« Valider » — tranche toujours)', () => {
+  it('atteint la cible → succeeded', () => {
+    expect(decideManualValidation(100, 100)).toBe('succeeded')
+    expect(decideManualValidation(105, 100)).toBe('succeeded')
+  })
+
+  it('sous la cible → failed (peu importe le scope, on force la résolution)', () => {
+    expect(decideManualValidation(97.5, 100)).toBe('failed')
+    expect(decideManualValidation(0, 100)).toBe('failed')
   })
 })
 

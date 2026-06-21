@@ -54,14 +54,19 @@ export async function uploadProfilePhoto(uri: string): Promise<ProfilePhoto | nu
     const id = crypto.randomUUID()
     const path = photoPath(user.id, id)
 
+    // En React Native, blob.arrayBuffer() n'existe pas (Hermes) → TypeError.
+    // response.arrayBuffer() est le chemin fiable recommandé par Supabase pour RN
+    // (cf. edit-profile.tsx uploadAvatarToStorage).
     const response = await fetch(uri)
-    const blob = await response.blob()
-    const arrayBuffer = await blob.arrayBuffer()
-    const uint8 = new Uint8Array(arrayBuffer)
+    const arrayBuffer = await response.arrayBuffer()
+    if (!arrayBuffer || arrayBuffer.byteLength === 0) {
+      log.error('[profilePhotos] fichier image vide (0 octet)')
+      return null
+    }
 
     const { error: upErr } = await supabase.storage
       .from(BUCKET)
-      .upload(path, uint8, { contentType: 'image/jpeg', upsert: true })
+      .upload(path, arrayBuffer, { contentType: 'image/jpeg', upsert: true })
     if (upErr) {
       log.error('[profilePhotos] upload storage', upErr)
       return null

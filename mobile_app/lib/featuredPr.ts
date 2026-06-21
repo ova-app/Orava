@@ -18,6 +18,21 @@ export interface FeaturedPr {
   achieved_at: number // UNIX ms
   delta_kg: number | null // vs ancien record du même exercice (null si premier)
   manual: boolean // true = épinglé à la main → l'auto-pick ne l'écrase pas
+  hidden?: boolean // true = l'utilisateur a masqué la vitrine → slot CTA, pas d'auto-pick
+}
+
+// Sentinelle « vitrine masquée » : distincte de NULL (= auto-pick). Stockée dans
+// users.featured_pr pour neutraliser l'auto-pick → le profil affiche un slot CTA.
+const HIDDEN_FEATURED_PR: FeaturedPr = {
+  set_id: null,
+  exercise_id: null,
+  exercise_name: '',
+  weight_kg: 0,
+  reps: null,
+  achieved_at: 0,
+  delta_kg: null,
+  manual: true,
+  hidden: true,
 }
 
 interface WeRow {
@@ -150,6 +165,39 @@ export async function pinFeaturedPr(pr: Omit<FeaturedPr, 'manual'>): Promise<boo
     .eq('id', user.id)
   if (error) {
     log.error('[featuredPr] pinFeaturedPr', error)
+    return false
+  }
+  return true
+}
+
+// Dé-épingle le PR vedette manuel → retour au choix automatique (meilleur gold).
+// Met users.featured_pr à NULL. Renvoie true si l'écriture a réussi (false pré-migration).
+export async function clearFeaturedPr(): Promise<boolean> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return false
+  const { error } = await supabase.from('users').update({ featured_pr: null }).eq('id', user.id)
+  if (error) {
+    log.error('[featuredPr] clearFeaturedPr', error)
+    return false
+  }
+  return true
+}
+
+// Masque la vitrine PR (sentinelle hidden) → le profil affiche un slot CTA au lieu
+// d'un record. Réversible via pin manuel ou clearFeaturedPr (retour à l'auto-pick).
+export async function hideFeaturedPr(): Promise<boolean> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return false
+  const { error } = await supabase
+    .from('users')
+    .update({ featured_pr: HIDDEN_FEATURED_PR })
+    .eq('id', user.id)
+  if (error) {
+    log.error('[featuredPr] hideFeaturedPr', error)
     return false
   }
   return true

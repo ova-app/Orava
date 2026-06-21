@@ -19,7 +19,7 @@ import { useTheme } from '@/context/ThemeContext'
 import { spacing, radius, typography, font, touchTarget } from '@/constants/theme'
 import { emptyStateRecipe } from '@/constants/recipes'
 import { muscleGroupLabel } from '@/lib/muscles'
-import { pinExerciseAsFeatured, getManualFeaturedPr } from '@/lib/featuredPr'
+import { pinExerciseAsFeatured, clearFeaturedPr, getManualFeaturedPr } from '@/lib/featuredPr'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -189,70 +189,151 @@ function buildExercisePRs(rows: RawSetRow[]): ExercisePR[] {
   return result
 }
 
-// ─── PodiumSlotView (inline) ──────────────────────────────────────────────────
+// ─── Podium à hauteurs (charge max) ───────────────────────────────────────────
+// Or au centre surélevé (hero), Argent à gauche, Bronze à droite — plus bas.
+// La hiérarchie est portée par la HAUTEUR de la marche, pas par la couleur seule.
 
-interface PodiumSlotViewProps {
-  slot: PodiumSlot
-  type: 'charge' | 'serie'
+const CARD_W = Dimensions.get('window').width - spacing.s4 * 2
+
+const BAR_HEIGHT: Record<PrLevel, number> = { gold: 84, silver: 56, bronze: 42 }
+const VISUAL_ORDER: PrLevel[] = ['silver', 'gold', 'bronze'] // disposition olympique
+
+function levelColorOf(level: PrLevel, colors: ReturnType<typeof useTheme>['colors']): string {
+  return level === 'gold' ? colors.prGold : level === 'silver' ? colors.prSilver : colors.prBronze
+}
+
+// Lueur radiale derrière la marche Or — dramatise le record absolu.
+function GoldGlow(): React.JSX.Element {
+  const r = CARD_W * 0.42
+  const cx = CARD_W / 2
+  const H = BAR_HEIGHT.gold + 40
+  return (
+    <Canvas
+      style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: H }}
+      pointerEvents="none"
+    >
+      <SkiaCircle cx={cx} cy={H} r={r}>
+        <RadialGradient c={vec(cx, H)} r={r} colors={['#FAC77533', '#FAC77500']} />
+      </SkiaCircle>
+    </Canvas>
+  )
+}
+
+interface PodiumStepProps {
+  slot: PodiumSlot | undefined
+  level: PrLevel
   colors: ReturnType<typeof useTheme>['colors']
 }
 
-function PodiumSlotView({ slot, type, colors }: PodiumSlotViewProps): React.JSX.Element {
-  const levelColor =
-    slot.level === 'gold'
-      ? colors.prGold
-      : slot.level === 'silver'
-        ? colors.prSilver
-        : colors.prBronze
+function PodiumStep({ slot, level, colors }: PodiumStepProps): React.JSX.Element {
+  const c = levelColorOf(level, colors)
+  const isGold = level === 'gold'
 
-  const iconColor = type === 'charge' ? colors.prGold : colors.accent
+  if (!slot) {
+    // Marche vide — réserve l'emprise pour garder l'alignement du podium
+    return (
+      <View style={podSt.col}>
+        <View style={podSt.metricSpacer} />
+        <View
+          style={[
+            podSt.bar,
+            {
+              height: BAR_HEIGHT[level] * 0.5,
+              backgroundColor: colors.backgroundTertiary,
+              opacity: 0.4,
+            },
+          ]}
+        />
+      </View>
+    )
+  }
 
   return (
-    <View style={slotSt.col}>
-      <View style={[slotSt.iconBadge, { backgroundColor: `${levelColor}18` }]}>
-        {type === 'charge' ? (
-          <Zap size={13} color={iconColor} fill={iconColor} strokeWidth={0} />
-        ) : (
-          <Flame size={13} color={iconColor} fill={iconColor} strokeWidth={0} />
+    <View style={podSt.col}>
+      <View style={podSt.metric}>
+        <Text
+          style={[podSt.weight, isGold && podSt.weightGold, { color: c }]}
+          accessibilityLabel={`${slot.weight_kg} kilogrammes`}
+        >
+          {slot.weight_kg}
+          <Text style={[podSt.unit, { color: c }]}> kg</Text>
+        </Text>
+        {slot.reps !== null && slot.reps > 0 && (
+          <Text style={[podSt.reps, { color: colors.textTertiary }]}>× {slot.reps}</Text>
         )}
       </View>
-      <Text
-        style={[slotSt.weight, { color: levelColor }]}
-        accessibilityLabel={`${slot.weight_kg} kilogrammes`}
+      <View
+        style={[
+          podSt.bar,
+          {
+            height: BAR_HEIGHT[level],
+            backgroundColor: `${c}1A`,
+            borderColor: `${c}55`,
+          },
+        ]}
       >
-        {slot.weight_kg}
-        <Text style={slotSt.unit}> kg</Text>
-      </Text>
-      {slot.reps !== null && slot.reps > 0 && (
-        <Text style={[slotSt.reps, { color: colors.textTertiary }]}>{slot.reps} reps</Text>
-      )}
-      <Text style={[slotSt.levelLabel, { color: levelColor }]}>{levelShortLabel(slot.level)}</Text>
+        {isGold && <View style={[podSt.barCap, { backgroundColor: c }]} />}
+        <Text style={[podSt.medal, { color: c }]}>{levelShortLabel(level)}</Text>
+      </View>
     </View>
   )
 }
 
-const slotSt = StyleSheet.create({
+function ChargePodium({
+  slots,
+  colors,
+}: {
+  slots: PodiumSlot[]
+  colors: ReturnType<typeof useTheme>['colors']
+}): React.JSX.Element {
+  const byLevel = new Map<PrLevel, PodiumSlot>(slots.map((s) => [s.level, s]))
+  const hasGold = byLevel.has('gold')
+  return (
+    <View style={podSt.wrap}>
+      {hasGold && <GoldGlow />}
+      <View style={podSt.row}>
+        {VISUAL_ORDER.map((level) => (
+          <PodiumStep key={level} slot={byLevel.get(level)} level={level} colors={colors} />
+        ))}
+      </View>
+    </View>
+  )
+}
+
+const podSt = StyleSheet.create({
+  wrap: {
+    justifyContent: 'flex-end',
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: spacing.s2,
+  },
   col: {
     flex: 1,
     alignItems: 'center',
-    gap: spacing.s1,
-    paddingVertical: spacing.s2,
   },
-  iconBadge: {
-    width: 28,
-    height: 28,
-    borderRadius: radius.full,
+  metric: {
     alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.s1,
+    marginBottom: spacing.s2,
+  },
+  metricSpacer: {
+    height: 24,
+    marginBottom: spacing.s2,
   },
   weight: {
-    fontSize: 18,
+    fontSize: 20,
     fontFamily: font.bold,
-    letterSpacing: -0.3,
-    lineHeight: 22,
+    letterSpacing: -0.4,
+    lineHeight: 24,
     fontVariant: ['tabular-nums'],
     textAlign: 'center',
+  },
+  weightGold: {
+    fontSize: 30,
+    fontFamily: font.extraBold,
+    letterSpacing: -0.8,
+    lineHeight: 32,
   },
   unit: {
     fontSize: 12,
@@ -260,41 +341,35 @@ const slotSt = StyleSheet.create({
     letterSpacing: 0,
   },
   reps: {
-    ...typography.caption,
+    ...typography.micro,
     fontVariant: ['tabular-nums'],
-    textAlign: 'center',
+    marginTop: 1,
   },
-  levelLabel: {
+  bar: {
+    width: '100%',
+    borderTopLeftRadius: radius.sm,
+    borderTopRightRadius: radius.sm,
+    borderWidth: 1,
+    borderBottomWidth: 0,
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    paddingBottom: spacing.s2,
+    overflow: 'hidden',
+  },
+  barCap: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 3,
+  },
+  medal: {
     fontSize: 10,
     fontFamily: font.bold,
     letterSpacing: 1.2,
     textTransform: 'uppercase',
-    textAlign: 'center',
-    lineHeight: 14,
   },
 })
-
-// ─── PodiumGlow ──────────────────────────────────────────────────────────────
-
-const CARD_W = Dimensions.get('window').width - spacing.s4 * 2
-
-function PodiumGlow({ level }: { level: PrLevel }): React.JSX.Element {
-  const COLS: Record<PrLevel, string> = { gold: '#FAC775', silver: '#C0C0C0', bronze: '#CD7F32' }
-  const c = COLS[level]
-  const r = CARD_W / 2
-  const H = 72
-
-  return (
-    <Canvas
-      style={{ position: 'absolute', top: 0, left: 0, right: 0, height: H }}
-      pointerEvents="none"
-    >
-      <SkiaCircle cx={CARD_W / 2} cy={0} r={r}>
-        <RadialGradient c={vec(CARD_W / 2, 0)} r={r} colors={[`${c}28`, `${c}00`]} />
-      </SkiaCircle>
-    </Canvas>
-  )
-}
 
 // ─── ExerciseCard (inline) ────────────────────────────────────────────────────
 
@@ -309,12 +384,17 @@ function ExerciseCard({ item, colors, onPin, isPinned }: ExerciseCardProps): Rea
   const hasCharge = item.podiumCharge.length > 0
   const hasSerie = item.podiumSerie.length > 0
   const hasGold = item.podiumCharge.some((s) => s.level === 'gold')
+  // Meilleure série = la plus haute marche disponible (gold > silver > bronze)
+  const bestSerie = item.podiumSerie[0]
 
   return (
-    <View style={[cardSt.card, { backgroundColor: colors.backgroundSecondary }]}>
-      {/* Glow pour les cards gold */}
-      {hasGold && <PodiumGlow level="gold" />}
-
+    <View
+      style={[
+        cardSt.card,
+        { backgroundColor: colors.backgroundSecondary, borderColor: colors.border },
+        hasGold && { borderColor: `${colors.prGold}40` },
+      ]}
+    >
       {/* En-tête exercice */}
       <View style={cardSt.header}>
         <View style={cardSt.headerText}>
@@ -326,78 +406,55 @@ function ExerciseCard({ item, colors, onPin, isPinned }: ExerciseCardProps): Rea
           </Text>
         </View>
 
-        <View style={cardSt.headerRight}>
-          {hasGold && (
-            <View style={[cardSt.goldPill, { backgroundColor: `${colors.prGold}18` }]}>
-              <Zap size={11} color={colors.prGold} fill={colors.prGold} strokeWidth={0} />
-              <Text style={[cardSt.goldPillText, { color: colors.prGold }]}>OR</Text>
-            </View>
-          )}
-          {/* ORA-076 — épingle ce PR en vitrine du profil (best-effort, no-op pré-migration) */}
-          {hasCharge && (
-            <Pressable
-              onPress={() => onPin(item)}
-              style={({ pressed }) => [cardSt.pinBtn, pressed && { opacity: 0.6 }]}
-              accessibilityRole="button"
-              accessibilityLabel={
-                isPinned
-                  ? 'PR vedette épinglé sur le profil'
-                  : 'Épingler ce PR en vitrine du profil'
-              }
-              accessibilityState={{ selected: isPinned }}
-              hitSlop={6}
-            >
-              <Pin
-                size={16}
-                color={isPinned ? colors.accent : colors.textTertiary}
-                fill={isPinned ? colors.accent : 'transparent'}
-                strokeWidth={2}
-              />
-            </Pressable>
-          )}
-        </View>
+        {/* ORA-076 — épingle ce PR en vitrine du profil (best-effort, no-op pré-migration) */}
+        {hasCharge && (
+          <Pressable
+            onPress={() => onPin(item)}
+            style={({ pressed }) => [cardSt.pinBtn, pressed && { opacity: 0.6 }]}
+            accessibilityRole="button"
+            accessibilityLabel={
+              isPinned
+                ? 'Dé-épingler ce PR de la vitrine du profil'
+                : 'Épingler ce PR en vitrine du profil'
+            }
+            accessibilityState={{ selected: isPinned }}
+            hitSlop={6}
+          >
+            <Pin
+              size={16}
+              color={isPinned ? colors.accent : colors.textTertiary}
+              fill={isPinned ? colors.accent : 'transparent'}
+              strokeWidth={2}
+            />
+          </Pressable>
+        )}
       </View>
 
-      {/* Section charge max */}
+      {/* Podium charge max — hero de la card */}
       {hasCharge && (
-        <View style={cardSt.section}>
+        <View style={cardSt.podiumSection}>
           <View style={cardSt.sectionHeader}>
             <Zap size={11} color={colors.prGold} fill={colors.prGold} strokeWidth={0} />
             <Text style={[cardSt.sectionLabel, { color: colors.textTertiary }]}>CHARGE MAX</Text>
           </View>
-          <View style={cardSt.podiumRow}>
-            {item.podiumCharge.map((slot) => (
-              <PodiumSlotView key={slot.level} slot={slot} type="charge" colors={colors} />
-            ))}
-            {Array.from({ length: 3 - item.podiumCharge.length }).map((_, i) => (
-              <View key={`ec-${i}`} style={slotSt.col} />
-            ))}
-          </View>
+          <ChargePodium slots={item.podiumCharge} colors={colors} />
         </View>
       )}
 
-      {/* Séparateur */}
-      {hasCharge && hasSerie && (
-        <View style={[cardSt.divider, { backgroundColor: colors.separator }]} />
-      )}
-
-      {/* Section meilleure série */}
-      {hasSerie && (
-        <View style={cardSt.section}>
-          <View style={cardSt.sectionHeader}>
-            <Flame size={11} color={colors.accent} fill={colors.accent} strokeWidth={0} />
-            <Text style={[cardSt.sectionLabel, { color: colors.textTertiary }]}>
-              MEILLEURE SÉRIE
-            </Text>
+      {/* Footer compact — meilleure série */}
+      {hasSerie && bestSerie && (
+        <View style={[cardSt.serieFooter, { borderTopColor: colors.separator }]}>
+          <View style={cardSt.serieLeft}>
+            <Flame size={12} color={colors.accent} fill={colors.accent} strokeWidth={0} />
+            <Text style={[cardSt.serieLabel, { color: colors.textTertiary }]}>MEILLEURE SÉRIE</Text>
           </View>
-          <View style={cardSt.podiumRow}>
-            {item.podiumSerie.map((slot) => (
-              <PodiumSlotView key={slot.level} slot={slot} type="serie" colors={colors} />
-            ))}
-            {Array.from({ length: 3 - item.podiumSerie.length }).map((_, i) => (
-              <View key={`es-${i}`} style={slotSt.col} />
-            ))}
-          </View>
+          <Text style={[cardSt.serieValue, { color: colors.textSecondary }]}>
+            {bestSerie.weight_kg}
+            <Text style={cardSt.serieUnit}> kg</Text>
+            {bestSerie.reps !== null && bestSerie.reps > 0 && (
+              <Text style={{ color: colors.textTertiary }}> × {bestSerie.reps}</Text>
+            )}
+          </Text>
         </View>
       )}
     </View>
@@ -406,58 +463,45 @@ function ExerciseCard({ item, colors, onPin, isPinned }: ExerciseCardProps): Rea
 
 const cardSt = StyleSheet.create({
   card: {
-    borderRadius: radius.md,
+    borderRadius: radius.lg,
+    borderWidth: 1,
     paddingVertical: spacing.s4,
     paddingHorizontal: spacing.s4,
     marginHorizontal: spacing.s4,
     marginBottom: spacing.s3,
+    overflow: 'hidden',
   },
   header: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
     marginBottom: spacing.s4,
   },
   headerText: {
     flex: 1,
     gap: spacing.s1,
-    marginRight: spacing.s3,
+    marginRight: spacing.s2,
   },
   exerciseName: {
-    fontSize: 15,
+    fontSize: 16,
     fontFamily: font.bold,
-    letterSpacing: 0,
+    letterSpacing: -0.2,
     lineHeight: 20,
   },
   muscleGroup: {
-    ...typography.caption,
+    ...typography.micro,
     textTransform: 'uppercase',
-  },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.s2,
+    letterSpacing: 1,
   },
   pinBtn: {
     width: touchTarget.min,
     height: touchTarget.min,
+    marginTop: -spacing.s2,
+    marginRight: -spacing.s2,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  goldPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.s1,
-    paddingHorizontal: spacing.s2,
-    paddingVertical: spacing.s1,
-    borderRadius: radius.full,
-  },
-  goldPillText: {
-    fontSize: 10,
-    fontFamily: font.bold,
-    letterSpacing: 1,
-  },
-  section: {
+  podiumSection: {
     gap: spacing.s3,
   },
   sectionHeader: {
@@ -466,17 +510,37 @@ const cardSt = StyleSheet.create({
     gap: spacing.s1,
   },
   sectionLabel: {
-    ...typography.caption,
+    ...typography.micro,
     textTransform: 'uppercase',
-    letterSpacing: 0.8,
+    letterSpacing: 1,
   },
-  podiumRow: {
+  serieFooter: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: spacing.s4,
+    paddingTop: spacing.s3,
+    borderTopWidth: 1,
   },
-  divider: {
-    height: 1,
-    marginVertical: spacing.s4,
+  serieLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.s2,
+  },
+  serieLabel: {
+    ...typography.micro,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  serieValue: {
+    fontSize: 15,
+    fontFamily: font.bold,
+    letterSpacing: -0.2,
+    fontVariant: ['tabular-nums'],
+  },
+  serieUnit: {
+    fontSize: 11,
+    fontFamily: font.regular,
   },
 })
 
@@ -491,7 +555,12 @@ function SkeletonCard({
     <View
       style={[
         cardSt.card,
-        { backgroundColor: colors.backgroundSecondary, gap: spacing.s4, marginBottom: spacing.s3 },
+        {
+          backgroundColor: colors.backgroundSecondary,
+          borderColor: colors.border,
+          gap: spacing.s4,
+          marginBottom: spacing.s3,
+        },
       ]}
     >
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -702,13 +771,21 @@ export default function PrsScreen(): React.JSX.Element {
     void fetchPRs()
   }, [fetchPRs])
 
-  // ORA-076 — épingle le meilleur PR de l'exercice en vitrine du profil (1 tap).
-  const handlePin = useCallback((item: ExercisePR): void => {
-    void (async () => {
-      const ok = await pinExerciseAsFeatured(item.exerciseId, item.nameFr)
-      if (ok) setPinnedId(item.exerciseId)
-    })()
-  }, [])
+  // ORA-076 — toggle vitrine profil : 1er tap épingle, 2e tap dé-épingle (retour auto-pick).
+  const handlePin = useCallback(
+    (item: ExercisePR): void => {
+      void (async () => {
+        if (pinnedId === item.exerciseId) {
+          const ok = await clearFeaturedPr()
+          if (ok) setPinnedId(null)
+        } else {
+          const ok = await pinExerciseAsFeatured(item.exerciseId, item.nameFr)
+          if (ok) setPinnedId(item.exerciseId)
+        }
+      })()
+    },
+    [pinnedId]
+  )
 
   const s = buildStyles(colors)
   const empty = emptyStateRecipe('history', colors)

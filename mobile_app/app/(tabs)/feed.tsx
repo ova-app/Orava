@@ -56,6 +56,7 @@ import {
   Trophy,
   Target,
   Sparkles,
+  Flag,
 } from 'lucide-react-native'
 import { useTheme } from '@/context/ThemeContext'
 import { useRouter } from 'expo-router'
@@ -73,7 +74,14 @@ import {
   type PRLevel,
   type WorkoutPRSummary,
 } from '@/lib/hooks/useFeedData'
-import { type ClaimVote } from '@/lib/claims'
+import {
+  type ClaimVote,
+  fetchClaimComments,
+  fetchClaimLikeUsers,
+  postClaimComment,
+  deleteClaimComment,
+} from '@/lib/claims'
+import { consumeFeedDirty } from '@/lib/feedSignal'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -525,12 +533,16 @@ function LikesModal({ visible, likes, onClose }: LikesModalProps) {
 
 interface CommentsModalProps {
   visible: boolean
-  workoutId: string
+  // Cible générique : séance ('workout') ou claim résolu ('claim') — tables distinctes.
+  kind: 'workout' | 'claim'
+  targetId: string
   comments: Comment[]
   currentUserId: string | null
   onClose: () => void
   onCommentAdded: () => void
+  // Likes par commentaire : présents pour les séances, absents pour les claims (pas de table).
   onCommentLike: (commentId: string, hasLiked: boolean) => void
+  showCommentLikes?: boolean
 }
 
 const SCREEN_HEIGHT = Dimensions.get('window').height
@@ -541,12 +553,14 @@ const SHEET_FULL = SCREEN_HEIGHT * 0.9
 
 function CommentsModal({
   visible,
-  workoutId,
+  kind,
+  targetId,
   comments,
   currentUserId,
   onClose,
   onCommentAdded,
   onCommentLike,
+  showCommentLikes = true,
 }: CommentsModalProps) {
   const { colors } = useTheme()
   const insets = useSafeAreaInsets()
@@ -609,11 +623,15 @@ function CommentsModal({
     if (!text.trim() || !currentUserId) return
     setSubmitting(true)
     try {
-      await supabase.from('comments').insert({
-        workout_id: workoutId,
-        user_id: currentUserId,
-        content: text,
-      })
+      if (kind === 'claim') {
+        await postClaimComment(targetId, text)
+      } else {
+        await supabase.from('comments').insert({
+          workout_id: targetId,
+          user_id: currentUserId,
+          content: text,
+        })
+      }
       setText('')
       onCommentAdded()
     } catch (err) {
@@ -625,7 +643,11 @@ function CommentsModal({
 
   const handleDeleteComment = async (commentId: string) => {
     try {
-      await supabase.from('comments').delete().eq('id', commentId)
+      if (kind === 'claim') {
+        await deleteClaimComment(commentId)
+      } else {
+        await supabase.from('comments').delete().eq('id', commentId)
+      }
       onCommentAdded()
     } catch (err) {
       log.error('Failed to delete comment:', err)
@@ -711,20 +733,24 @@ function CommentsModal({
                     </Text>
                   </View>
                   <View style={{ alignItems: 'center', gap: spacing.s1 }}>
-                    <TouchableOpacity
-                      onPress={() => onCommentLike(item.id, item.user_has_liked)}
-                      hitSlop={{ top: 8, right: 8, bottom: 4, left: 8 }}
-                    >
-                      <Heart
-                        size={14}
-                        color={item.user_has_liked ? colors.error : colors.textTertiary}
-                        fill={item.user_has_liked ? colors.error : 'transparent'}
-                      />
-                    </TouchableOpacity>
-                    {item.likes_count > 0 && (
-                      <Text style={[typography.micro, { color: colors.textTertiary }]}>
-                        {item.likes_count}
-                      </Text>
+                    {showCommentLikes && (
+                      <>
+                        <TouchableOpacity
+                          onPress={() => onCommentLike(item.id, item.user_has_liked)}
+                          hitSlop={{ top: 8, right: 8, bottom: 4, left: 8 }}
+                        >
+                          <Heart
+                            size={14}
+                            color={item.user_has_liked ? colors.error : colors.textTertiary}
+                            fill={item.user_has_liked ? colors.error : 'transparent'}
+                          />
+                        </TouchableOpacity>
+                        {item.likes_count > 0 && (
+                          <Text style={[typography.micro, { color: colors.textTertiary }]}>
+                            {item.likes_count}
+                          </Text>
+                        )}
+                      </>
                     )}
                     {isOwner && (
                       <TouchableOpacity
@@ -974,7 +1000,13 @@ function FeedItemBase({ item, currentUserId, onLike, onNavigateDetail }: FeedIte
           {/* Row 1 — Avatar + Meta + PR Pill en haut-droit */}
           <View style={styles.row1}>
             <View style={[styles.avatarMed, { backgroundColor: bgColor }]}>
-              <Text style={[styles.avatarInitials, { color: colors.textPrimary }]}>{initials}</Text>
+              {item.user.avatar_url ? (
+                <Image source={{ uri: item.user.avatar_url }} style={styles.avatarImageFill} />
+              ) : (
+                <Text style={[styles.avatarInitials, { color: colors.textPrimary }]}>
+                  {initials}
+                </Text>
+              )}
             </View>
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text
@@ -1226,7 +1258,8 @@ function FeedItemBase({ item, currentUserId, onLike, onNavigateDetail }: FeedIte
       />
       <CommentsModal
         visible={commentsModalVisible}
-        workoutId={item.id}
+        kind="workout"
+        targetId={item.id}
         comments={comments}
         currentUserId={currentUserId}
         onClose={() => setCommentsModalVisible(false)}
@@ -1252,12 +1285,45 @@ function FeedClaimCardBase({
   claim,
   currentUserId,
   onVote,
+  onLike,
 }: {
   claim: ClaimFeedItem
   currentUserId: string | null
   onVote: (claimId: string, vote: ClaimVote) => void
+  onLike: (claimId: string, hasLiked: boolean) => void
 }) {
   const { colors } = useTheme()
+  const [likesModalVisible, setLikesModalVisible] = useState(false)
+  const [commentsModalVisible, setCommentsModalVisible] = useState(false)
+  const [likes, setLikes] = useState<Like[]>([])
+  const [comments, setComments] = useState<Comment[]>([])
+
+  // Commentaires d'un claim → forme Comment (likes par commentaire absents : 0/false).
+  const fetchComments = async () => {
+    const rows = await fetchClaimComments(claim.id)
+    setComments(
+      rows.map((c) => ({
+        id: c.id,
+        content: c.content,
+        created_at: c.created_at,
+        user_id: c.user_id,
+        users: c.users,
+        likes_count: 0,
+        user_has_liked: false,
+      }))
+    )
+  }
+
+  const openLikesModal = async () => {
+    const rows = await fetchClaimLikeUsers(claim.id)
+    setLikes(rows.map((l) => ({ user_id: l.user_id, created_at: l.created_at, users: l.users })))
+    setLikesModalVisible(true)
+  }
+
+  const openCommentsModal = async () => {
+    await fetchComments()
+    setCommentsModalVisible(true)
+  }
   const displayName = claim.user.username ?? claim.user.full_name ?? '?'
   const initials = displayName
     .split(' ')
@@ -1267,7 +1333,14 @@ function FeedClaimCardBase({
   const bg = avatarColor(claim.user.id || claim.id)
   const isOwn = currentUserId === claim.user.id
   const resolved = claim.status === 'succeeded'
+  const failed = claim.status === 'failed'
+  const isResolved = resolved || failed
   const targetLabel = `${claim.target_value} ${claim.unit}`
+  // Écart d'un claim raté (sobre, sans drama) : « manqué à X près ».
+  const missGap =
+    failed && claim.resolved_value != null
+      ? Math.max(0, claim.target_value - claim.resolved_value)
+      : null
   const dLeft = claimDaysUntil(claim.deadline)
   const deadlineLabel =
     claim.scope === 'next_session'
@@ -1275,8 +1348,9 @@ function FeedClaimCardBase({
       : dLeft === 0
         ? 'dernier jour'
         : `J-${dLeft}`
-  const ts = resolved ? (claim.resolved_at ?? claim.created_at) : claim.created_at
-  const accentCol = resolved ? colors.prGold : colors.accent
+  const ts = isResolved ? (claim.resolved_at ?? claim.created_at) : claim.created_at
+  // Code couleur : réussi = vert (validé) · raté/annulé = rouge · actif = accent.
+  const accentCol = resolved ? colors.success : failed ? colors.error : colors.accent
   const believeOn = claim.myVote === 'believe'
   const doubtOn = claim.myVote === 'doubt'
 
@@ -1310,7 +1384,11 @@ function FeedClaimCardBase({
         {/* Header */}
         <View style={styles.row1}>
           <View style={[styles.avatarMed, avatarDyn]}>
-            <Text style={[styles.avatarInitials, nameDyn]}>{initials}</Text>
+            {claim.user.avatar_url ? (
+              <Image source={{ uri: claim.user.avatar_url }} style={styles.avatarImageFill} />
+            ) : (
+              <Text style={[styles.avatarInitials, nameDyn]}>{initials}</Text>
+            )}
           </View>
           <View style={claimStyles.nameCol}>
             <Text style={[typography.caption, claimStyles.metaName, nameDyn]} numberOfLines={1}>
@@ -1320,25 +1398,33 @@ function FeedClaimCardBase({
           </View>
           <View style={[claimStyles.tag, tagDyn]}>
             {resolved ? (
-              <Sparkles size={12} color={colors.prGold} />
+              <Sparkles size={12} color={colors.success} />
+            ) : failed ? (
+              <Flag size={12} color={colors.error} strokeWidth={2.5} />
             ) : (
               <Target size={12} color={colors.accent} strokeWidth={2.5} />
             )}
-            <Text style={[claimStyles.tagText, tagTextDyn]}>{resolved ? 'RÉUSSI' : 'CLAIM'}</Text>
+            <Text style={[claimStyles.tagText, tagTextDyn]}>
+              {resolved ? 'RÉUSSI' : failed ? 'MANQUÉ' : 'CLAIM'}
+            </Text>
           </View>
         </View>
 
         {/* Corps */}
         <Text style={[typography.subtitle, claimStyles.body, bodyDyn]}>
-          {resolved ? `A tenu son claim : ${targetLabel}` : `Vise ${targetLabel}`}
+          {resolved
+            ? `Claim validé : ${targetLabel}`
+            : failed
+              ? `Claim manqué : ${targetLabel}`
+              : `Vise ${targetLabel}`}
         </Text>
         {claim.type === 'weight' && claim.exercise_name && (
           <Text style={[typography.body, claimStyles.sub, subDyn]}>
             {claim.exercise_name}
-            {!resolved ? ` · ${deadlineLabel}` : ''}
+            {!isResolved ? ` · ${deadlineLabel}` : ''}
           </Text>
         )}
-        {claim.type === 'sessions' && !resolved && (
+        {claim.type === 'sessions' && !isResolved && (
           <View style={claimStyles.progressWrap}>
             <View style={[claimStyles.progressTrack, trackDyn]}>
               <View style={[claimStyles.progressFill, fillDyn]} />
@@ -1351,9 +1437,25 @@ function FeedClaimCardBase({
 
         {/* Footer — pronostics */}
         {resolved ? (
-          <Text style={[typography.caption, claimStyles.resolvedNote, subDyn]}>
-            {claim.believe > 0 ? `${claim.believe} y croyaient. Pari tenu.` : 'Pari tenu.'}
-          </Text>
+          <View style={[claimStyles.resolvedHeadRow, claimStyles.resolvedNote]}>
+            <Text style={[typography.caption, claimStyles.resolvedNoteText, subDyn]}>
+              {claim.believe > 0 ? `${claim.believe} y croyaient. Pari tenu.` : 'Pari tenu.'}
+            </Text>
+            <Text style={[typography.caption, claimStyles.announced, mutedDyn]}>
+              Annoncé il y a {timeAgo(claim.created_at)}
+            </Text>
+          </View>
+        ) : failed ? (
+          <View style={[claimStyles.resolvedHeadRow, claimStyles.resolvedNote]}>
+            <Text style={[typography.caption, claimStyles.resolvedNoteText, mutedDyn]}>
+              {missGap != null && missGap > 0
+                ? `Manqué à ${missGap} ${claim.unit} près. Prochaine fois.`
+                : 'Pas cette fois. Prochaine fois.'}
+            </Text>
+            <Text style={[typography.caption, claimStyles.announced, mutedDyn]}>
+              Annoncé il y a {timeAgo(claim.created_at)}
+            </Text>
+          </View>
         ) : isOwn ? (
           <View style={[claimStyles.ownRow, footerDyn]}>
             <Text style={[typography.caption, subDyn]}>
@@ -1388,7 +1490,79 @@ function FeedClaimCardBase({
             </TouchableOpacity>
           </View>
         )}
+
+        {/* Claim résolu (validé/annulé) = publication → moment de l'annonce + likes/comments */}
+        {isResolved && (
+          <>
+            <View style={[claimStyles.actionsRow, footerDyn]}>
+              <TouchableOpacity
+                onPress={() => onLike(claim.id, claim.user_has_liked)}
+                onLongPress={openLikesModal}
+                style={claimStyles.actionBtn}
+              >
+                <Heart
+                  size={16}
+                  color={claim.user_has_liked ? colors.error : colors.textTertiary}
+                  fill={claim.user_has_liked ? colors.error : 'transparent'}
+                />
+                <Text style={[typography.caption, claimStyles.actionCount, mutedDyn]}>
+                  {claim.likes_count}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity onPress={openCommentsModal} style={claimStyles.actionBtn}>
+                <MessageCircle size={16} color={colors.textTertiary} />
+                <Text style={[typography.caption, claimStyles.actionCount, mutedDyn]}>
+                  {claim.comments_count}
+                </Text>
+              </TouchableOpacity>
+
+              {claim.first_comment && (
+                <View style={styles.firstCommentInline}>
+                  <View
+                    style={[
+                      styles.firstCommentAvatar,
+                      { backgroundColor: avatarColor(claim.first_comment.user_id) },
+                    ]}
+                  >
+                    <Text
+                      style={{ fontSize: 9, fontFamily: 'Barlow_700Bold', color: dark.textPrimary }}
+                    >
+                      {(claim.first_comment.username ?? '·').charAt(0).toUpperCase()}
+                    </Text>
+                  </View>
+                  <View style={styles.firstCommentText}>
+                    <Text style={[typography.caption, subDyn]} numberOfLines={1}>
+                      <Text style={{ fontFamily: 'Barlow_700Bold', color: colors.textPrimary }}>
+                        {claim.first_comment.username ?? '·'}{' '}
+                      </Text>
+                      {claim.first_comment.content}
+                    </Text>
+                  </View>
+                </View>
+              )}
+            </View>
+          </>
+        )}
       </View>
+
+      {/* Modals — likes + commentaires (claim résolu uniquement) */}
+      <LikesModal
+        visible={likesModalVisible}
+        likes={likes}
+        onClose={() => setLikesModalVisible(false)}
+      />
+      <CommentsModal
+        visible={commentsModalVisible}
+        kind="claim"
+        targetId={claim.id}
+        comments={comments}
+        currentUserId={currentUserId}
+        onClose={() => setCommentsModalVisible(false)}
+        onCommentAdded={fetchComments}
+        onCommentLike={() => {}}
+        showCommentLikes={false}
+      />
     </View>
   )
 }
@@ -1417,6 +1591,13 @@ const claimStyles = StyleSheet.create({
   progressFill: { height: 6, borderRadius: 3 },
   progressLabel: { marginTop: spacing.s1 },
   resolvedNote: { marginTop: spacing.s3 },
+  resolvedHeadRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    gap: spacing.s2,
+  },
+  resolvedNoteText: { flex: 1 },
   ownRow: {
     flexDirection: 'row',
     gap: spacing.s4,
@@ -1442,6 +1623,17 @@ const claimStyles = StyleSheet.create({
     borderRadius: radius.md,
   },
   voteBtnText: { fontFamily: 'Barlow_700Bold', fontSize: 13 },
+  announced: { textAlign: 'right', flexShrink: 0 },
+  actionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.s4,
+    marginTop: spacing.s3,
+    paddingTop: spacing.s3,
+    borderTopWidth: 1,
+  },
+  actionBtn: { flexDirection: 'row', alignItems: 'center', gap: spacing.s1 },
+  actionCount: { marginLeft: 2 },
 })
 
 // ─── KPIs Bandeau ────────────────────────────────────────────────────────────
@@ -2115,10 +2307,12 @@ export default function FeedScreen() {
     feedEntries,
     currentUserId,
     currentUserFirstName,
+    currentUserAvatarUrl,
     kpis,
     fetchFeed,
     handleLike,
     voteOnClaim,
+    handleClaimLike,
   } = useFeedData()
   const { workoutsThisMonth, trendPercent, volumeThisMonth, prsThisMonth, avgDurationMin } = kpis
   const [loading, setLoading] = useState(true)
@@ -2341,8 +2535,10 @@ export default function FeedScreen() {
         listOpacity.value = withTiming(1, { duration: 220, easing: Easing.bezier(0.16, 1, 0.3, 1) })
         listTranslateY.value = 0
         // ORA-067 — ne re-fetch que si les données sont périmées (>20s) : évite de marteler
-        // Supabase (8 requêtes) à chaque aller-retour rapide entre tabs.
-        if (Date.now() - lastFetchAtRef.current < 20000) return
+        // Supabase (8 requêtes) à chaque aller-retour rapide entre tabs. Exception : une
+        // action claim (résolution/abandon) a marqué le feed dirty → refetch forcé.
+        const forced = consumeFeedDirty()
+        if (!forced && Date.now() - lastFetchAtRef.current < 20000) return
         lastFetchAtRef.current = Date.now()
         setRefreshing(true)
         Promise.all([fetchFeed(), new Promise((r) => setTimeout(r, 1500))]).finally(() => {
@@ -2386,7 +2582,12 @@ export default function FeedScreen() {
     ({ item }: { item: FeedEntry }) => {
       if (item.kind === 'claim') {
         return (
-          <FeedClaimCard claim={item.claim} currentUserId={currentUserId} onVote={voteOnClaim} />
+          <FeedClaimCard
+            claim={item.claim}
+            currentUserId={currentUserId}
+            onVote={voteOnClaim}
+            onLike={handleClaimLike}
+          />
         )
       }
       return (
@@ -2398,7 +2599,7 @@ export default function FeedScreen() {
         />
       )
     },
-    [currentUserId, handleLike, handleNavigateDetail, voteOnClaim]
+    [currentUserId, handleLike, handleNavigateDetail, voteOnClaim, handleClaimLike]
   )
 
   // ─── Render ─────────────────────────────────────────────────────────────────
@@ -2444,9 +2645,13 @@ export default function FeedScreen() {
                 { backgroundColor: colors.backgroundSecondary, borderColor: colors.accent },
               ]}
             >
-              <Text style={[styles.avatarInitialsSmall, { color: colors.textPrimary }]}>
-                {currentUserFirstName.charAt(0).toUpperCase()}
-              </Text>
+              {currentUserAvatarUrl ? (
+                <Image source={{ uri: currentUserAvatarUrl }} style={styles.avatarImageFill} />
+              ) : (
+                <Text style={[styles.avatarInitialsSmall, { color: colors.textPrimary }]}>
+                  {currentUserFirstName.charAt(0).toUpperCase()}
+                </Text>
+              )}
             </View>
           </View>
         </TouchableOpacity>
@@ -2563,6 +2768,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1.5,
+    overflow: 'hidden',
+  },
+  avatarImageFill: {
+    width: '100%',
+    height: '100%',
   },
   kpiBandeau: {
     flexDirection: 'row',
@@ -2602,6 +2812,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
+    overflow: 'hidden',
   },
   avatarInitials: {
     fontSize: 14,

@@ -18,7 +18,7 @@ import { log } from '@/lib/logger'
 import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/context/ThemeContext'
 import { spacing, radius, typography, font, touchTarget } from '@/constants/theme'
-import { createClaim, type ClaimType } from '@/lib/claims'
+import { createClaim, type ClaimScope, type ClaimType } from '@/lib/claims'
 import { muscleGroupLabel } from '@/lib/muscles'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -31,7 +31,28 @@ interface ExerciseRow {
   muscle_group: string
 }
 
-const SESSION_OPTIONS = [2, 3, 4, 5, 6]
+const SESSION_OPTIONS = [1, 2, 3, 4, 5, 6, 7]
+
+// Échéances proposées pour un claim de charge.
+const SCOPE_OPTIONS: { value: ClaimScope; label: string }[] = [
+  { value: 'next_session', label: 'Prochaine séance' },
+  { value: 'week', label: 'Cette semaine' },
+  { value: 'month', label: 'Ce mois-ci' },
+  { value: 'custom', label: 'Autre…' },
+]
+
+// jj/mm/aaaa → ms epoch (fin de journée locale). null si incomplet/invalide ou passé.
+function customDeadlineMs(day: string, month: string, year: string): number | null {
+  if (day.length !== 2 || month.length !== 2 || year.length !== 4) return null
+  const d = parseInt(day, 10),
+    m = parseInt(month, 10),
+    y = parseInt(year, 10)
+  if (isNaN(d) || isNaN(m) || isNaN(y)) return null
+  if (d < 1 || d > 31 || m < 1 || m > 12 || y < 2026 || y > 2100) return null
+  const date = new Date(y, m - 1, d, 23, 59, 59, 0)
+  if (date.getMonth() !== m - 1 || date.getDate() !== d) return null // date inexistante (ex. 31/02)
+  return date.getTime() <= Date.now() ? null : date.getTime()
+}
 
 // ─── Screen ──────────────────────────────────────────────────────────────────
 
@@ -60,6 +81,11 @@ export default function NewClaimScreen(): React.JSX.Element {
   const [weightTarget, setWeightTarget] = useState(
     typeof params.target === 'string' ? params.target : ''
   )
+  // Moment du claim de charge (échéance). Sessions = toujours 'week'.
+  const [scope, setScope] = useState<ClaimScope>('next_session')
+  const [customDay, setCustomDay] = useState('')
+  const [customMonth, setCustomMonth] = useState('')
+  const [customYear, setCustomYear] = useState('')
 
   // sessions
   const [sessionTarget, setSessionTarget] = useState<number>(4)
@@ -93,8 +119,18 @@ export default function NewClaimScreen(): React.JSX.Element {
     return exercises.filter((e) => normalize(e.name_fr).includes(q)).slice(0, 30)
   }, [exercises, search])
 
+  // Échéance custom valide (ms) — uniquement pertinente quand scope === 'custom'.
+  const customMs = useMemo(
+    () => customDeadlineMs(customDay, customMonth, customYear),
+    [customDay, customMonth, customYear]
+  )
+
   const canSubmit =
-    type === 'weight' ? selectedExercise !== null && Number(weightTarget) > 0 : sessionTarget > 0
+    type === 'weight'
+      ? selectedExercise !== null &&
+        Number(weightTarget) > 0 &&
+        (scope !== 'custom' || customMs !== null)
+      : sessionTarget > 0
 
   async function handleSubmit(): Promise<void> {
     if (!canSubmit || submitting) return
@@ -106,7 +142,8 @@ export default function NewClaimScreen(): React.JSX.Element {
             exerciseId: selectedExercise!.id,
             exerciseName: selectedExercise!.name_fr,
             targetValue: Number(weightTarget),
-            scope: 'next_session',
+            scope,
+            customDeadlineMs: scope === 'custom' ? customMs : null,
             isPublic,
           }
         : {
@@ -259,7 +296,78 @@ export default function NewClaimScreen(): React.JSX.Element {
                     />
                     <Text style={s.weightUnit}>kg</Text>
                   </View>
-                  <Text style={s.scopeNote}>À ta prochaine séance avec cet exercice.</Text>
+
+                  <Text style={[s.sectionLabel, { marginTop: spacing.s6 }]}>MOMENT</Text>
+                  <View style={s.scopeChips}>
+                    {SCOPE_OPTIONS.map((opt) => {
+                      const active = scope === opt.value
+                      return (
+                        <Pressable
+                          key={opt.value}
+                          style={[s.scopeChip, active && s.scopeChipActive]}
+                          onPress={() => setScope(opt.value)}
+                        >
+                          <Text
+                            style={[s.scopeChipText, active && { color: colors.background }]}
+                            numberOfLines={1}
+                          >
+                            {opt.label}
+                          </Text>
+                        </Pressable>
+                      )
+                    })}
+                  </View>
+
+                  {scope === 'custom' ? (
+                    <>
+                      <View style={s.dateRow}>
+                        <TextInput
+                          value={customDay}
+                          onChangeText={(t) => setCustomDay(t.replace(/[^0-9]/g, '').slice(0, 2))}
+                          placeholder="JJ"
+                          placeholderTextColor={colors.textTertiary}
+                          keyboardType="number-pad"
+                          maxLength={2}
+                          style={[s.dateInput, { flex: 1 }]}
+                        />
+                        <Text style={s.dateSep}>/</Text>
+                        <TextInput
+                          value={customMonth}
+                          onChangeText={(t) => setCustomMonth(t.replace(/[^0-9]/g, '').slice(0, 2))}
+                          placeholder="MM"
+                          placeholderTextColor={colors.textTertiary}
+                          keyboardType="number-pad"
+                          maxLength={2}
+                          style={[s.dateInput, { flex: 1 }]}
+                        />
+                        <Text style={s.dateSep}>/</Text>
+                        <TextInput
+                          value={customYear}
+                          onChangeText={(t) => setCustomYear(t.replace(/[^0-9]/g, '').slice(0, 4))}
+                          placeholder="AAAA"
+                          placeholderTextColor={colors.textTertiary}
+                          keyboardType="number-pad"
+                          maxLength={4}
+                          style={[s.dateInput, { flex: 1.4 }]}
+                        />
+                      </View>
+                      <Text style={s.scopeNote}>
+                        {customDay || customMonth || customYear
+                          ? customMs !== null
+                            ? 'Cible à atteindre avant cette date.'
+                            : 'Date invalide — format jj / mm / aaaa, dans le futur.'
+                          : 'Choisis la date limite (jj / mm / aaaa).'}
+                      </Text>
+                    </>
+                  ) : (
+                    <Text style={s.scopeNote}>
+                      {scope === 'next_session'
+                        ? 'À ta prochaine séance avec cet exercice.'
+                        : scope === 'week'
+                          ? 'À atteindre dans les 7 prochains jours.'
+                          : 'À atteindre dans les 30 prochains jours.'}
+                    </Text>
+                  )}
                 </>
               )}
             </>
@@ -530,10 +638,10 @@ function buildStyles(colors: ReturnType<typeof useTheme>['colors']) {
     },
     sessionChips: {
       flexDirection: 'row',
-      gap: spacing.s3,
+      gap: spacing.s2,
     },
     sessionChip: {
-      width: 52,
+      flex: 1,
       height: 52,
       borderRadius: radius.md,
       backgroundColor: colors.backgroundSecondary,
@@ -541,6 +649,55 @@ function buildStyles(colors: ReturnType<typeof useTheme>['colors']) {
       borderColor: colors.border,
       alignItems: 'center',
       justifyContent: 'center',
+    },
+    scopeChips: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: spacing.s2,
+    },
+    scopeChip: {
+      paddingHorizontal: spacing.s4,
+      height: touchTarget.min,
+      borderRadius: radius.full,
+      backgroundColor: colors.backgroundSecondary,
+      borderWidth: 1,
+      borderColor: colors.border,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    scopeChipActive: {
+      backgroundColor: colors.accent,
+      borderColor: colors.accent,
+    },
+    scopeChipText: {
+      ...typography.caption,
+      fontFamily: font.bold,
+      color: colors.textSecondary,
+      textTransform: 'none',
+      letterSpacing: 0,
+    },
+    dateRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.s2,
+      marginTop: spacing.s3,
+    },
+    dateInput: {
+      backgroundColor: colors.backgroundSecondary,
+      borderRadius: radius.md,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingHorizontal: spacing.s3,
+      height: touchTarget.comfort,
+      textAlign: 'center',
+      ...typography.subtitle,
+      fontFamily: font.bold,
+      color: colors.textPrimary,
+      fontVariant: ['tabular-nums'],
+    },
+    dateSep: {
+      ...typography.subtitle,
+      color: colors.textTertiary,
     },
     sessionChipActive: {
       backgroundColor: colors.accent,

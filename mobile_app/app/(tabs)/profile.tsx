@@ -41,14 +41,18 @@ import {
   Target,
   Plus,
   Crown,
+  EyeOff,
   Flame,
   RotateCcw,
+  CheckCircle2,
   Trash2,
   X,
   CalendarDays,
   ChevronLeft,
+  Pin,
 } from 'lucide-react-native'
 import Svg, { Path as SvgPath, Circle, Defs, LinearGradient, Stop } from 'react-native-svg'
+import * as Haptics from 'expo-haptics'
 import { supabase } from '@/lib/supabase'
 
 import { useTheme } from '@/context/ThemeContext'
@@ -63,9 +67,18 @@ import {
   type SessionDay,
   type PhotoItem,
 } from '@/lib/hooks/useProfileData'
-import { createClaim, nearMissGap, type Claim, type ClaimVoteCounts } from '@/lib/claims'
-import { type FeaturedPr } from '@/lib/featuredPr'
+import {
+  createClaim,
+  abandonClaim,
+  validateClaimNow,
+  nearMissGap,
+  type Claim,
+  type ClaimVoteCounts,
+} from '@/lib/claims'
+import { markFeedDirty } from '@/lib/feedSignal'
+import { clearFeaturedPr, hideFeaturedPr, type FeaturedPr } from '@/lib/featuredPr'
 import { uploadProfilePhoto, deleteProfilePhoto } from '@/lib/profilePhotos'
+import { pinFeaturedPhoto, clearFeaturedPhoto } from '@/lib/featuredPhoto'
 import { resolveDisplayName } from '@/lib/displayName'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -167,6 +180,9 @@ function ClaimBand({
   colors,
   onCreate,
   onReclaim,
+  onCancel,
+  onValidate,
+  onRefresh,
 }: {
   claim: Claim | null
   recentFailed: Claim | null
@@ -174,6 +190,9 @@ function ClaimBand({
   colors: ReturnType<typeof useTheme>['colors']
   onCreate: () => void
   onReclaim: (claim: Claim) => void
+  onCancel: (claim: Claim) => void
+  onValidate: (claim: Claim) => Promise<Claim | null>
+  onRefresh: () => void
 }) {
   const s = buildStyles(colors)
   const mount = useSharedValue(0)
@@ -184,6 +203,37 @@ function ClaimBand({
     opacity: mount.value,
     transform: [{ translateY: (1 - mount.value) * 10 }],
   }))
+
+  // Validation manuelle (« Valider ») : barre de progression + emoji pendant le scan réel
+  // des séances (lib/claims.validateClaimNow). Délai mini ⇒ la vérif est perceptible.
+  const [validating, setValidating] = useState(false)
+  const scan = useSharedValue(0)
+  const scanStyle = useAnimatedStyle(() => ({ width: `${scan.value * 100}%` }))
+
+  function confirmCancel(c: Claim): void {
+    Alert.alert('Annuler le claim', 'Ton claim sera retiré. Aucune trace, aucun jugement.', [
+      { text: 'Garder', style: 'cancel' },
+      { text: 'Annuler le claim', style: 'destructive', onPress: () => onCancel(c) },
+    ])
+  }
+
+  function runValidate(c: Claim): void {
+    void (async () => {
+      setValidating(true)
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+      // Durée mini 3 s même si le scan répond avant — perception « vérification » (design).
+      scan.value = withTiming(1, { duration: 3000, easing: Easing.inOut(Easing.cubic) })
+      const minDelay = new Promise<void>((r) => setTimeout(r, 3000))
+      // onValidate scanne + résout MAIS ne refresh pas (sinon activeClaim flipperait avant
+      // la fin de l'animation). On refresh seulement après les 3 s → l'overlay tient bien
+      // 3 s puis se démonte en révélant le résultat (claim résolu dans feed + historique).
+      const [resolved] = await Promise.all([onValidate(c), minDelay])
+      onRefresh()
+      // Succès : on laisse `validating` true → le démontage (activeClaim → null) révèle le
+      // résultat sans flash de la carte active. Échec (claim resté actif) : on rend la main.
+      if (!resolved) setValidating(false)
+    })()
+  }
 
   // Progress bar (claims 'sessions')
   const progress = useSharedValue(0)
@@ -316,19 +366,58 @@ function ClaimBand({
           </View>
         )}
 
-        {/* pronostics (lecture seule sur son propre profil) */}
-        <View style={s.claimVotesRow}>
-          <View style={s.claimVoteChip}>
-            <Flame size={12} color={colors.accent} strokeWidth={2.5} />
-            <Text style={s.claimVoteCount}>{votes.believe}</Text>
-            <Text style={s.claimVoteLabel}>y croient</Text>
+        {validating ? (
+          /* Vérification en cours : scan réel des séances (emoji + barre de progression) */
+          <View style={s.claimScanWrap}>
+            <View style={s.claimScanHeader}>
+              <Text style={s.claimScanEmoji} allowFontScaling={false}>
+                🔍
+              </Text>
+              <Text style={s.claimScanLabel}>Vérification de ton claim…</Text>
+            </View>
+            <View style={s.claimProgressTrack}>
+              <Animated.View style={[s.claimProgressFill, scanStyle]} />
+            </View>
           </View>
-          <Text style={s.claimVoteSep}>·</Text>
-          <View style={s.claimVoteChip}>
-            <Text style={s.claimVoteCount}>{votes.doubt}</Text>
-            <Text style={s.claimVoteLabel}>sceptiques</Text>
-          </View>
-        </View>
+        ) : (
+          <>
+            {/* pronostics (lecture seule sur son propre profil) */}
+            <View style={s.claimVotesRow}>
+              <View style={s.claimVoteChip}>
+                <Flame size={12} color={colors.accent} strokeWidth={2.5} />
+                <Text style={s.claimVoteCount}>{votes.believe}</Text>
+                <Text style={s.claimVoteLabel}>y croient</Text>
+              </View>
+              <Text style={s.claimVoteSep}>·</Text>
+              <View style={s.claimVoteChip}>
+                <Text style={s.claimVoteCount}>{votes.doubt}</Text>
+                <Text style={s.claimVoteLabel}>sceptiques</Text>
+              </View>
+            </View>
+
+            {/* Actions : annuler (retrait) ou valider (scan réel → réussi/raté) */}
+            <View style={s.claimActionsRow}>
+              <Pressable
+                style={({ pressed }) => [s.claimCancelBtn, pressed && { opacity: 0.6 }]}
+                onPress={() => confirmCancel(claim)}
+                accessibilityRole="button"
+                accessibilityLabel="Annuler le claim"
+              >
+                <Trash2 size={14} color={colors.textSecondary} strokeWidth={2} />
+                <Text style={s.claimCancelText}>Annuler</Text>
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [s.claimValidateBtn, pressed && { opacity: 0.85 }]}
+                onPress={() => runValidate(claim)}
+                accessibilityRole="button"
+                accessibilityLabel="Valider le claim, vérifier dans mes séances"
+              >
+                <CheckCircle2 size={15} color={colors.background} strokeWidth={2.5} />
+                <Text style={s.claimValidateText}>Valider</Text>
+              </Pressable>
+            </View>
+          </>
+        )}
       </View>
     </Animated.View>
   )
@@ -340,10 +429,12 @@ function PrVedetteCard({
   pr,
   colors,
   onPress,
+  onLongPress,
 }: {
   pr: FeaturedPr | null
   colors: ReturnType<typeof useTheme>['colors']
   onPress: () => void
+  onLongPress: () => void
 }) {
   const s = buildStyles(colors)
   const mount = useSharedValue(0)
@@ -355,6 +446,7 @@ function PrVedetteCard({
     transform: [{ translateY: (1 - mount.value) * 10 }],
   }))
 
+  // Pas encore de PR : message passif (rien à épingler).
   if (!pr) {
     return (
       <Animated.View style={[s.prVedetteEmpty, mountStyle]}>
@@ -366,6 +458,29 @@ function PrVedetteCard({
     )
   }
 
+  // Vitrine masquée par l'utilisateur : slot CTA → invite à accrocher un PR vedette.
+  if (pr.hidden) {
+    return (
+      <Animated.View style={mountStyle}>
+        <TouchableOpacity
+          style={s.prVedetteEmpty}
+          onPress={onPress}
+          onLongPress={onLongPress}
+          delayLongPress={300}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Accrocher un PR vedette"
+          accessibilityHint="Choisis un record à mettre en avant sur ton profil"
+        >
+          <Crown size={16} color={colors.textTertiary} strokeWidth={1.5} />
+          <Text style={s.prVedetteEmptyText}>
+            Accroche un PR vedette si tu veux le mettre en avant.
+          </Text>
+        </TouchableOpacity>
+      </Animated.View>
+    )
+  }
+
   const recent = isThisMonth(pr.achieved_at)
 
   return (
@@ -373,9 +488,12 @@ function PrVedetteCard({
       <TouchableOpacity
         style={s.prVedetteCard}
         onPress={onPress}
+        onLongPress={onLongPress}
+        delayLongPress={300}
         activeOpacity={0.85}
         accessibilityRole="button"
         accessibilityLabel="Voir l'Armurerie"
+        accessibilityHint="Appui long pour changer le PR vedette"
       >
         <View style={s.prVedetteHeaderRow}>
           <View style={s.prVedetteTag}>
@@ -896,8 +1014,11 @@ function PhotoStack({
     transform: [{ scale: 0.94 + mount.value * 0.06 }],
   }))
 
-  const shown = photos.slice(0, STACK_MAX)
-  const extra = photos.length - shown.length
+  // Hero = photo épinglée (remontée en tête par useProfileData) ou, à défaut, la plus
+  // récente. Toujours photos[0] → vignette agrandie qui met la vitrine en avant.
+  const hero = photos[0] ?? null
+  const rest = photos.slice(1, STACK_MAX) // petites vignettes empilées derrière le hero
+  const extra = photos.length - 1 - rest.length
   const countLabel =
     photos.length > 0 ? `${photos.length} photo${photos.length > 1 ? 's' : ''}` : 'Aucune photo'
 
@@ -907,38 +1028,57 @@ function PhotoStack({
         style={({ pressed }) => [s.vitrineBtn, pressed && { opacity: 0.7 }]}
         onPress={onOpen}
         accessibilityRole="button"
-        accessibilityLabel={`Vitrine — ${countLabel}`}
+        accessibilityLabel={`Vitrine — ${countLabel}${hero?.isPinned ? ', photo épinglée' : ''}`}
       >
         {photos.length === 0 ? (
           // Aucune photo → pile de cartes vides empilées (même langage visuel que l'aperçu réel)
           <View style={s.vitrineThumbs}>
-            {[0, 1, 2].map((i) => (
+            <View style={[s.vitrineHero, s.vitrineThumbEmpty]}>
+              <ImageIcon size={18} color={colors.textTertiary} strokeWidth={1.75} />
+            </View>
+            {[0, 1].map((i) => (
               <View
                 key={i}
-                style={[
-                  s.vitrineThumb,
-                  s.vitrineThumbEmpty,
-                  { marginLeft: i === 0 ? 0 : -13, zIndex: 3 - i },
-                ]}
-              >
-                {i === 0 && <ImageIcon size={15} color={colors.textTertiary} strokeWidth={1.75} />}
-              </View>
+                style={[s.vitrineThumb, s.vitrineThumbEmpty, { marginLeft: -13, zIndex: -i }]}
+              />
             ))}
           </View>
         ) : (
           <View style={s.vitrineThumbs}>
-            {shown.map((p, i) => (
+            {/* Hero agrandi — met en avant la photo épinglée (ou la plus récente) */}
+            <View style={s.vitrineHeroWrap}>
+              <ExpoImage
+                source={{ uri: hero!.photoUrl }}
+                style={[s.vitrineHero, hero!.isPinned && s.vitrineHeroPinned]}
+                contentFit="cover"
+                transition={120}
+                cachePolicy="memory-disk"
+              />
+              {hero!.isPinned && (
+                <View style={s.vitrinePinBadge}>
+                  <Pin
+                    size={9}
+                    color={colors.background}
+                    fill={colors.background}
+                    strokeWidth={2}
+                  />
+                </View>
+              )}
+            </View>
+            {rest.map((p, i) => (
               <ExpoImage
                 key={p.id}
                 source={{ uri: p.photoUrl }}
-                style={[s.vitrineThumb, { marginLeft: i === 0 ? 0 : -13, zIndex: STACK_MAX - i }]}
+                style={[s.vitrineThumb, { marginLeft: -13, zIndex: -1 - i }]}
                 contentFit="cover"
                 transition={120}
                 cachePolicy="memory-disk"
               />
             ))}
             {extra > 0 && (
-              <View style={[s.vitrineThumb, s.vitrineMore, { marginLeft: -13, zIndex: 0 }]}>
+              <View
+                style={[s.vitrineThumb, s.vitrineMore, { marginLeft: -13, zIndex: -STACK_MAX }]}
+              >
                 <Text style={s.vitrineMoreText} allowFontScaling={false}>
                   +{extra}
                 </Text>
@@ -984,24 +1124,53 @@ function VitrineModal({
     onClose()
   }
 
-  // Ajout d'une photo à la vitrine (hors séance) → picker → upload → refetch.
-  async function handleAdd(): Promise<void> {
-    if (busy) return
+  // Upload de l'URI choisie → refetch (la BDD reste source de vérité).
+  async function uploadAndRefresh(uri: string): Promise<void> {
+    setBusy(true)
+    const created = await uploadProfilePhoto(uri)
+    setBusy(false)
+    if (created) onChanged()
+    else Alert.alert('Échec', "Impossible d'ajouter la photo. Réessaie.")
+  }
+
+  // Prise de photo en direct (caméra) → upload → refetch.
+  async function takePhoto(): Promise<void> {
+    const perm = await ImagePicker.requestCameraPermissionsAsync()
+    if (!perm.granted) {
+      Alert.alert('Accès refusé', "Autorise l'accès à l'appareil photo pour prendre une photo.")
+      return
+    }
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ['images'],
+      quality: 0.8,
+    })
+    if (result.canceled || !result.assets?.[0]) return
+    await uploadAndRefresh(result.assets[0].uri)
+  }
+
+  // Choix d'une photo depuis la galerie → upload → refetch.
+  async function pickFromLibrary(): Promise<void> {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync()
     if (!perm.granted) {
       Alert.alert('Accès refusé', "Autorise l'accès aux photos pour en ajouter à ta vitrine.")
       return
     }
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ['images'],
       quality: 0.8,
     })
     if (result.canceled || !result.assets?.[0]) return
-    setBusy(true)
-    const created = await uploadProfilePhoto(result.assets[0].uri)
-    setBusy(false)
-    if (created) onChanged()
-    else Alert.alert('Échec', "Impossible d'ajouter la photo. Réessaie.")
+    await uploadAndRefresh(result.assets[0].uri)
+  }
+
+  // Ajout d'une photo à la vitrine (hors séance) → choix caméra / galerie.
+  function handleAdd(): void {
+    if (busy) return
+    Alert.alert('Ajouter une photo', 'Choisis la source de ta photo.', [
+      { text: 'Prendre une photo', onPress: () => void takePhoto() },
+      { text: 'Choisir dans la galerie', onPress: () => void pickFromLibrary() },
+      { text: 'Annuler', style: 'cancel' },
+    ])
   }
 
   // Suppression d'une photo de profil (source 'profile' uniquement).
@@ -1023,6 +1192,30 @@ function VitrineModal({
         },
       },
     ])
+  }
+
+  // Épingle / désépingle la photo en tête de vitrine (ORA-084) — n'importe quelle source.
+  // Optimiste : le zoom reflète l'état tout de suite, refetch reclasse ensuite la grille.
+  async function togglePin(photo: PhotoItem): Promise<void> {
+    if (busy) return
+    const willPin = !photo.isPinned
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+    setBusy(true)
+    const ok = willPin
+      ? await pinFeaturedPhoto({
+          id: photo.id,
+          photo_url: photo.photoUrl,
+          source: photo.source,
+          workout_id: photo.workoutId,
+        })
+      : await clearFeaturedPhoto()
+    setBusy(false)
+    if (!ok) {
+      Alert.alert('Échec', "Impossible d'épingler la photo. Réessaie.")
+      return
+    }
+    setZoom({ ...photo, isPinned: willPin })
+    onChanged()
   }
 
   return (
@@ -1055,7 +1248,7 @@ function VitrineModal({
               <View style={s.galleryGrid}>
                 {/* Tuile d'ajout — toujours en tête (visible même vitrine vide) */}
                 <Pressable
-                  onPress={() => void handleAdd()}
+                  onPress={handleAdd}
                   disabled={busy}
                   style={({ pressed }) => [
                     s.galleryAddTile,
@@ -1095,6 +1288,16 @@ function VitrineModal({
                         <Lock size={11} color={colors.textPrimary} strokeWidth={2.5} />
                       </View>
                     )}
+                    {p.isPinned && (
+                      <View style={s.galleryPinBadge}>
+                        <Pin
+                          size={12}
+                          color={colors.background}
+                          fill={colors.background}
+                          strokeWidth={2}
+                        />
+                      </View>
+                    )}
                   </Pressable>
                 ))}
               </View>
@@ -1127,6 +1330,23 @@ function VitrineModal({
                 accessibilityLabel="Fermer le zoom"
               >
                 <X size={24} color={colors.textPrimary} strokeWidth={2} />
+              </Pressable>
+
+              {/* Épingler / désépingler — met la photo en tête de vitrine (toute source) */}
+              <Pressable
+                style={s.lightboxPin}
+                onPress={() => void togglePin(zoom)}
+                disabled={busy}
+                hitSlop={12}
+                accessibilityRole="button"
+                accessibilityLabel={zoom.isPinned ? 'Désépingler la photo' : 'Épingler la photo'}
+              >
+                <Pin
+                  size={22}
+                  color={zoom.isPinned ? colors.accent : colors.textPrimary}
+                  fill={zoom.isPinned ? colors.accent : 'transparent'}
+                  strokeWidth={2}
+                />
               </Pressable>
 
               {zoom.source === 'workout' && zoom.workoutId ? (
@@ -1266,6 +1486,104 @@ function HistoryRowInProfile({ item, onPress, colors }: HistoryRowProps) {
   )
 }
 
+// ─── Ligne historique : claim résolu (réussi = vert / raté = rouge) ─────────────
+
+function ClaimHistoryRowInProfile({
+  claim,
+  colors,
+}: {
+  claim: Claim
+  colors: ReturnType<typeof useTheme>['colors']
+}) {
+  const succeeded = claim.status === 'succeeded'
+  const tone = succeeded ? colors.success : colors.error
+  const d = new Date(claim.resolved_at ?? claim.created_at)
+  const day = d.getDate().toString()
+  const weekday = DAYS_FR[d.getDay()]
+  const isWeight = claim.type === 'weight'
+  const sub = isWeight ? (claim.exercise_name ?? 'Claim de charge') : 'Claim de séances'
+
+  return (
+    <View
+      style={[
+        styles.card,
+        {
+          backgroundColor: colors.backgroundSecondary,
+          marginBottom: spacing.s2,
+          borderLeftWidth: 3,
+          borderLeftColor: tone,
+        },
+      ]}
+    >
+      <View style={styles.cardInner}>
+        {/* Bloc date (résolution) */}
+        <View style={styles.dateBlock}>
+          <Text
+            style={[
+              typography.title,
+              {
+                color: colors.textPrimary,
+                fontSize: 22,
+                lineHeight: 26,
+                letterSpacing: -0.3,
+                fontFamily: font.bold,
+              },
+            ]}
+          >
+            {day}
+          </Text>
+          <Text
+            style={[
+              typography.caption,
+              { color: colors.textTertiary, textTransform: 'uppercase', marginTop: 2 },
+            ]}
+          >
+            {weekday}
+          </Text>
+        </View>
+
+        {/* Centre : cible + contexte */}
+        <View style={styles.centerCol}>
+          <Text
+            style={[typography.body, { color: colors.textPrimary, fontFamily: font.bold }]}
+            numberOfLines={1}
+          >
+            Claim · {claim.target_value} {claim.unit}
+          </Text>
+          <Text
+            style={[typography.caption, { color: colors.textSecondary, marginTop: 2 }]}
+            numberOfLines={1}
+          >
+            {sub}
+          </Text>
+        </View>
+
+        {/* Badge statut (vert réussi / rouge raté) */}
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: spacing.s1,
+            paddingVertical: 4,
+            paddingHorizontal: spacing.s2,
+            borderRadius: radius.full,
+            backgroundColor: `${tone}1A`,
+          }}
+        >
+          {succeeded ? (
+            <CheckCircle2 size={13} color={tone} strokeWidth={2.5} />
+          ) : (
+            <X size={13} color={tone} strokeWidth={2.5} />
+          )}
+          <Text style={{ fontSize: 10, fontFamily: font.bold, color: tone, letterSpacing: 0.8 }}>
+            {succeeded ? 'RÉUSSI' : 'MANQUÉ'}
+          </Text>
+        </View>
+      </View>
+    </View>
+  )
+}
+
 // ─── Animated counter ────────────────────────────────────────────────────────
 
 const easeOutCubic = Easing.bezier(0.215, 0.61, 0.355, 1)
@@ -1338,6 +1656,31 @@ export default function ProfileScreen(): React.JSX.Element {
   const [lightboxOpen, setLightboxOpen] = useState<boolean>(false)
   const [vitrineOpen, setVitrineOpen] = useState<boolean>(false)
   const [monthOpen, setMonthOpen] = useState<boolean>(false)
+  const [prSheetOpen, setPrSheetOpen] = useState<boolean>(false)
+
+  // PR vedette — appui long sur la carte → action sheet (changer / revenir à l'auto).
+  function openPrSheet(): void {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+    setPrSheetOpen(true)
+  }
+  function handleChangePr(): void {
+    setPrSheetOpen(false)
+    router.push('/prs')
+  }
+  function handleResetPr(): void {
+    setPrSheetOpen(false)
+    void (async () => {
+      await clearFeaturedPr()
+      onRefresh()
+    })()
+  }
+  function handleHidePr(): void {
+    setPrSheetOpen(false)
+    void (async () => {
+      await hideFeaturedPr()
+      onRefresh()
+    })()
+  }
 
   // Re-claim 1 tap (ORA-081) : réannonce le même objectif (createClaim expire l'ancien actif
   // s'il existe) puis refetch → la bande repasse en « claim actif ».
@@ -1355,6 +1698,31 @@ export default function ProfileScreen(): React.JSX.Element {
     })()
   }
 
+  // Annuler le claim actif : marqué raté (rouge), reste visible dans le feed + l'historique.
+  function handleCancelClaim(c: Claim): void {
+    void (async () => {
+      await abandonClaim(c)
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning)
+      markFeedDirty() // force le refresh du feed même dans la fenêtre anti-refetch (ORA-067)
+      onRefresh()
+    })()
+  }
+
+  // Valider : scan réel des séances → réussi/raté (status change). NE refresh PAS ici —
+  // c'est la ClaimBand qui déclenche le refresh après les 3 s mini d'animation (sinon
+  // activeClaim passerait à null trop tôt et l'overlay se démonterait avant la fin).
+  // Le claim refait surface dans le feed + l'historique au refresh.
+  async function handleValidateClaim(c: Claim): Promise<Claim | null> {
+    const resolved = await validateClaimNow(c)
+    void Haptics.notificationAsync(
+      resolved?.status === 'succeeded'
+        ? Haptics.NotificationFeedbackType.Success
+        : Haptics.NotificationFeedbackType.Warning
+    )
+    markFeedDirty()
+    return resolved
+  }
+
   async function seDeconnecter(): Promise<void> {
     setDeconnexionLoading(true)
     await supabase.auth.signOut()
@@ -1370,6 +1738,7 @@ export default function ProfileScreen(): React.JSX.Element {
   const fullName = profile ? getDisplayName(profile) : 'Athlète'
   const isPro = profile?.plan === 'premium'
   const avatarUrl = profile?.avatar_url ?? null
+  const bio = profile?.bio ?? null
 
   function handleAvatarPress(): void {
     if (avatarUrl) setLightboxOpen(true)
@@ -1453,20 +1822,53 @@ export default function ProfileScreen(): React.JSX.Element {
               </Pressable>
               <View style={s.socialStats}>
                 <SocialStat value={stats.seances} label="SÉANCES" colors={colors} />
-                <SocialStat value={followers} label="ABONNÉS" colors={colors} />
+                <View style={s.socialStat}>
+                  <Text style={s.socialStatValue} allowFontScaling={false}>
+                    {followers}
+                  </Text>
+                  <Text style={s.socialStatLabel}>ABONNÉS</Text>
+                  {trackRecord.total > 0 && (
+                    <Text
+                      style={s.claimsUnder}
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                      allowFontScaling={false}
+                    >
+                      {Math.round((trackRecord.succeeded / trackRecord.total) * 100)}% claims sur{' '}
+                      {trackRecord.total}
+                    </Text>
+                  )}
+                </View>
                 <SocialStat value={follows} label="ABONNEMENTS" colors={colors} />
               </View>
             </View>
 
-            {/* Track record claims (centré) */}
-            {trackRecord.total > 0 && (
-              <Text style={s.trackRecord}>
-                {trackRecord.succeeded}/{trackRecord.total} claims
-              </Text>
-            )}
-
-            {/* Vitrine — pile photos (entre stats sociales et calendrier) */}
-            <PhotoStack photos={photoGallery} colors={colors} onOpen={() => setVitrineOpen(true)} />
+            {/* Bio (sous l'avatar, à gauche) + vitrine photos (à droite) — ORA-085.
+                Bande comprise entre l'avatar et la carte « cette semaine ». Tap bio → édition. */}
+            <View style={s.bioVitrineRow}>
+              <Pressable
+                style={s.bioBlock}
+                onPress={() => router.push('/edit-profile')}
+                hitSlop={6}
+                accessibilityRole="button"
+                accessibilityLabel={bio ? 'Modifier la bio' : 'Ajouter une bio'}
+              >
+                {bio ? (
+                  <Text style={s.bioText} numberOfLines={3}>
+                    {bio}
+                  </Text>
+                ) : (
+                  <Text style={s.bioPlaceholder} numberOfLines={1}>
+                    + Ajouter une bio
+                  </Text>
+                )}
+              </Pressable>
+              <PhotoStack
+                photos={photoGallery}
+                colors={colors}
+                onOpen={() => setVitrineOpen(true)}
+              />
+            </View>
 
             {/* Streak + calendrier 7 jours + volume hebdo (haut du profil) */}
             <View style={s.statsCard}>
@@ -1518,10 +1920,18 @@ export default function ProfileScreen(): React.JSX.Element {
               colors={colors}
               onCreate={() => router.push('/claim/new')}
               onReclaim={handleReclaim}
+              onCancel={handleCancelClaim}
+              onValidate={handleValidateClaim}
+              onRefresh={onRefresh}
             />
 
             {/* PR VEDETTE — preuve (passé) */}
-            <PrVedetteCard pr={featuredPr} colors={colors} onPress={() => router.push('/prs')} />
+            <PrVedetteCard
+              pr={featuredPr}
+              colors={colors}
+              onPress={() => router.push('/prs')}
+              onLongPress={openPrSheet}
+            />
 
             {/* Historique title */}
             <Text style={[s.sectionTitle, { marginTop: spacing.s4, marginBottom: spacing.s4 }]}>
@@ -1532,13 +1942,17 @@ export default function ProfileScreen(): React.JSX.Element {
         ListHeaderComponentStyle={s.headerContent}
         contentContainerStyle={s.contentContainer}
         renderSectionHeader={({ section }) => <Text style={s.sectionHeader}>{section.title}</Text>}
-        renderItem={({ item }) => (
-          <HistoryRowInProfile
-            item={item}
-            onPress={() => router.push(`/history/${item.id}` as const)}
-            colors={colors}
-          />
-        )}
+        renderItem={({ item }) =>
+          item.kind === 'claim' ? (
+            <ClaimHistoryRowInProfile claim={item.claim} colors={colors} />
+          ) : (
+            <HistoryRowInProfile
+              item={item}
+              onPress={() => router.push(`/history/${item.id}` as const)}
+              colors={colors}
+            />
+          )
+        }
         ItemSeparatorComponent={() => null}
         SectionSeparatorComponent={() => null}
         ListFooterComponent={() => (
@@ -1594,6 +2008,63 @@ export default function ProfileScreen(): React.JSX.Element {
             accessibilityLabel="Fermer"
           >
             <X size={24} color={colors.textPrimary} strokeWidth={2} />
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Action sheet PR vedette — appui long sur la carte */}
+      <Modal
+        visible={prSheetOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPrSheetOpen(false)}
+      >
+        <Pressable style={s.prSheetBackdrop} onPress={() => setPrSheetOpen(false)}>
+          <Pressable style={s.prSheet} onPress={(e) => e.stopPropagation()}>
+            <View style={s.prSheetHandle} />
+            <Text style={s.prSheetTitle}>PR VEDETTE</Text>
+
+            <Pressable
+              style={({ pressed }) => [s.prSheetItem, pressed && { opacity: 0.6 }]}
+              onPress={handleChangePr}
+              accessibilityRole="button"
+            >
+              <Trophy size={18} color={colors.prGold} strokeWidth={2} />
+              <Text style={s.prSheetItemText}>
+                {featuredPr?.hidden ? 'Accrocher un PR vedette' : 'Choisir un autre record'}
+              </Text>
+            </Pressable>
+
+            {/* Masquer : neutralise l'auto-pick → slot CTA. Caché si déjà masqué. */}
+            {!featuredPr?.hidden && (
+              <Pressable
+                style={({ pressed }) => [s.prSheetItem, pressed && { opacity: 0.6 }]}
+                onPress={handleHidePr}
+                accessibilityRole="button"
+              >
+                <EyeOff size={18} color={colors.textSecondary} strokeWidth={2} />
+                <Text style={s.prSheetItemText}>Masquer le PR vedette</Text>
+              </Pressable>
+            )}
+
+            {featuredPr?.manual && (
+              <Pressable
+                style={({ pressed }) => [s.prSheetItem, pressed && { opacity: 0.6 }]}
+                onPress={handleResetPr}
+                accessibilityRole="button"
+              >
+                <RotateCcw size={18} color={colors.textSecondary} strokeWidth={2} />
+                <Text style={s.prSheetItemText}>Revenir au choix automatique</Text>
+              </Pressable>
+            )}
+
+            <Pressable
+              style={({ pressed }) => [s.prSheetCancel, pressed && { opacity: 0.6 }]}
+              onPress={() => setPrSheetOpen(false)}
+              accessibilityRole="button"
+            >
+              <Text style={s.prSheetCancelText}>Annuler</Text>
+            </Pressable>
           </Pressable>
         </Pressable>
       </Modal>
@@ -1696,9 +2167,32 @@ function buildStyles(colors: ReturnType<typeof useTheme>['colors']) {
       flex: 1,
       flexDirection: 'row',
       justifyContent: 'space-around',
-      alignItems: 'center',
-      marginTop: -spacing.s4,
+      alignItems: 'flex-start',
       paddingLeft: spacing.s6,
+    },
+    // Bande sous l'avatar : bio (gauche, extensible) + pile vitrine (droite).
+    bioVitrineRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: spacing.s3,
+      marginBottom: spacing.s2,
+    },
+    bioBlock: {
+      flex: 1,
+    },
+    bioText: {
+      fontSize: 13,
+      lineHeight: 17,
+      fontFamily: font.regular,
+      color: colors.textSecondary,
+      letterSpacing: -0.1,
+    },
+    bioPlaceholder: {
+      fontSize: 13,
+      lineHeight: 17,
+      fontFamily: font.medium,
+      color: colors.textTertiary,
     },
     socialStat: {
       alignItems: 'center',
@@ -1721,6 +2215,14 @@ function buildStyles(colors: ReturnType<typeof useTheme>['colors']) {
       marginTop: 1,
       textAlign: 'center',
     },
+    claimsUnder: {
+      fontSize: 11,
+      fontFamily: font.medium,
+      color: colors.textTertiary,
+      fontVariant: ['tabular-nums'],
+      textAlign: 'center',
+      marginTop: spacing.s2,
+    },
 
     proBadge: {
       backgroundColor: colors.accent,
@@ -1735,13 +2237,6 @@ function buildStyles(colors: ReturnType<typeof useTheme>['colors']) {
       fontFamily: font.bold,
       color: colors.background,
       letterSpacing: 1,
-    },
-    trackRecord: {
-      ...typography.caption,
-      color: colors.textTertiary,
-      fontVariant: ['tabular-nums'],
-      textAlign: 'center',
-      marginBottom: spacing.s3,
     },
 
     // ── Actions ──
@@ -1895,6 +2390,62 @@ function buildStyles(colors: ReturnType<typeof useTheme>['colors']) {
     claimVoteSep: {
       color: colors.textTertiary,
       fontSize: 13,
+    },
+
+    // ── Actions claim actif (annuler / valider) ──
+    claimActionsRow: {
+      flexDirection: 'row',
+      gap: spacing.s2,
+      marginTop: spacing.s4,
+    },
+    claimCancelBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: spacing.s1,
+      paddingVertical: spacing.s2,
+      paddingHorizontal: spacing.s4,
+      borderRadius: radius.full,
+      backgroundColor: colors.backgroundTertiary,
+    },
+    claimCancelText: {
+      ...typography.caption,
+      fontFamily: font.bold,
+      color: colors.textSecondary,
+    },
+    claimValidateBtn: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: spacing.s2,
+      paddingVertical: spacing.s2,
+      borderRadius: radius.full,
+      backgroundColor: colors.accent,
+    },
+    claimValidateText: {
+      ...typography.caption,
+      fontFamily: font.bold,
+      color: colors.background,
+    },
+
+    // ── Validation en cours (scan réel des séances) ──
+    claimScanWrap: {
+      gap: spacing.s3,
+      marginTop: spacing.s2,
+    },
+    claimScanHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.s2,
+    },
+    claimScanEmoji: {
+      fontSize: 16,
+    },
+    claimScanLabel: {
+      ...typography.caption,
+      fontFamily: font.bold,
+      color: colors.textPrimary,
     },
 
     // ── Near-miss (claim raté, ORA-081) — discret, ni rouge ni accent ──
@@ -2060,6 +2611,60 @@ function buildStyles(colors: ReturnType<typeof useTheme>['colors']) {
       ...typography.caption,
       color: colors.textTertiary,
       flex: 1,
+    },
+
+    // ── Action sheet PR vedette ──
+    prSheetBackdrop: {
+      flex: 1,
+      backgroundColor: 'rgba(10,10,15,0.55)',
+      justifyContent: 'flex-end',
+    },
+    prSheet: {
+      backgroundColor: colors.backgroundTertiary,
+      borderTopLeftRadius: radius.xl,
+      borderTopRightRadius: radius.xl,
+      paddingHorizontal: spacing.s5,
+      paddingTop: spacing.s3,
+      paddingBottom: spacing.s8,
+    },
+    prSheetHandle: {
+      alignSelf: 'center',
+      width: 36,
+      height: 4,
+      borderRadius: radius.full,
+      backgroundColor: colors.border,
+      marginBottom: spacing.s4,
+    },
+    prSheetTitle: {
+      fontSize: 10,
+      fontFamily: font.bold,
+      color: colors.textTertiary,
+      letterSpacing: 1.2,
+      marginBottom: spacing.s3,
+    },
+    prSheetItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.s3,
+      height: touchTarget.comfort,
+    },
+    prSheetItemText: {
+      ...typography.body,
+      fontFamily: font.medium,
+      color: colors.textPrimary,
+    },
+    prSheetCancel: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      height: touchTarget.comfort,
+      marginTop: spacing.s2,
+      borderRadius: radius.md,
+      backgroundColor: colors.backgroundSecondary,
+    },
+    prSheetCancelText: {
+      ...typography.body,
+      fontFamily: font.bold,
+      color: colors.textSecondary,
     },
 
     // ── Stats card ──
@@ -2338,8 +2943,6 @@ function buildStyles(colors: ReturnType<typeof useTheme>['colors']) {
     // ── Vitrine — pile compacte (aperçu profil) ──
     vitrineWrap: {
       alignItems: 'flex-end',
-      marginTop: spacing.s1,
-      marginBottom: spacing.s2,
     },
     vitrineBtn: {
       paddingVertical: spacing.s1,
@@ -2354,6 +2957,34 @@ function buildStyles(colors: ReturnType<typeof useTheme>['colors']) {
       height: 36,
       borderRadius: radius.sm,
       backgroundColor: colors.backgroundTertiary,
+      borderWidth: 2,
+      borderColor: colors.background,
+    },
+    // Hero — vignette agrandie en tête (photo épinglée ou la plus récente)
+    vitrineHeroWrap: {
+      zIndex: STACK_MAX, // au-dessus des petites vignettes empilées derrière
+    },
+    vitrineHero: {
+      width: 52,
+      height: 52,
+      borderRadius: radius.md,
+      backgroundColor: colors.backgroundTertiary,
+      borderWidth: 2,
+      borderColor: colors.background,
+    },
+    vitrineHeroPinned: {
+      borderColor: colors.accent, // liseré accent = photo épinglée mise en avant
+    },
+    vitrinePinBadge: {
+      position: 'absolute',
+      top: -4,
+      right: -4,
+      width: 18,
+      height: 18,
+      borderRadius: 9,
+      backgroundColor: colors.accent,
+      alignItems: 'center',
+      justifyContent: 'center',
       borderWidth: 2,
       borderColor: colors.background,
     },
@@ -2445,6 +3076,17 @@ function buildStyles(colors: ReturnType<typeof useTheme>['colors']) {
       alignItems: 'center',
       justifyContent: 'center',
     },
+    galleryPinBadge: {
+      position: 'absolute',
+      top: spacing.s2,
+      right: spacing.s2,
+      width: 24,
+      height: 24,
+      borderRadius: 12,
+      backgroundColor: colors.accent,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
     galleryEmptyText: {
       ...typography.caption,
       color: colors.textTertiary,
@@ -2496,6 +3138,15 @@ function buildStyles(colors: ReturnType<typeof useTheme>['colors']) {
       position: 'absolute',
       top: 56,
       right: 24,
+      width: 44,
+      height: 44,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    lightboxPin: {
+      position: 'absolute',
+      top: 56,
+      left: 24,
       width: 44,
       height: 44,
       alignItems: 'center',

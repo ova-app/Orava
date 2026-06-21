@@ -31,6 +31,7 @@ Les fichiers de `migrations/` ci-dessous sont les **changements incrémentaux do
 | `ora023_comment_length_check.sql` | CHECK `comments.content` ≤ 500 | ⚠️ À appliquer |
 | `claims_and_featured_pr.sql` | `users.featured_pr` (jsonb) + tables `claims` + `claim_votes` (+RLS) — vitrine sociale du profil (called-shot + PR vedette) | ⚠️ **À appliquer** (client déjà codé : profil/feed/summary) |
 | `profile_name_fields.sql` | `users.first_name` + `last_name` + `name_display` — nom décomposé (prénom/nom) + préférence d'affichage profil. Backfill du `full_name` existant | ⚠️ **À appliquer** (client déjà codé : edit-profile/profile, lecture/écriture isolée no-op pré-migration) |
+| `ora085_profile_bio.sql` | `users.bio` (text, CHECK ≤ 70) — bio courte affichée sous l'avatar sur le profil | ⚠️ **À appliquer** (client déjà codé : edit-profile/profile, lecture/écriture isolée no-op pré-migration) |
 | `ora077_resolve_claims_cron.sql` | Cron horaire `resolve_overdue_claims()` — expiration serveur des claims (ORA-077) | ⚠️ À appliquer **après** `claims_and_featured_pr.sql` (active pg_cron) |
 | `phase3_athletic_dna.sql` · `phase3_programs_marketplace.sql` | Phase 3 (ADN, marketplace) | ⏳ à l'implémentation |
 

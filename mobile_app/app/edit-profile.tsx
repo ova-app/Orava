@@ -34,6 +34,7 @@ import {
   joinFullName,
   type NameDisplay,
 } from '@/lib/displayName'
+import { getProfileBio, saveProfileBio, BIO_MAX } from '@/lib/profileBio'
 import { useTheme } from '@/context/ThemeContext'
 import { spacing, radius, typography, font, touchTarget } from '@/constants/theme'
 import { inputRecipe, InputState } from '@/constants/recipes'
@@ -45,6 +46,7 @@ interface ProfileForm {
   username: string
   firstName: string
   lastName: string
+  bio: string // bio courte (≤ BIO_MAX) affichée à droite de l'avatar sur le profil
   nameDisplay: NameDisplay // ce qui s'affiche en tête de profil
   dateDay: string // "DD"
   dateMonth: string // "MM"
@@ -132,6 +134,7 @@ export default function EditProfileScreen(): React.JSX.Element {
     username: '',
     firstName: '',
     lastName: '',
+    bio: '',
     nameDisplay: 'full_name',
     dateDay: '',
     dateMonth: '',
@@ -186,9 +189,12 @@ export default function EditProfileScreen(): React.JSX.Element {
           : { day: '', month: '', year: '' }
         const fullName = (data as { full_name?: string | null }).full_name ?? ''
 
-        // Colonnes décomposées + préférence : lecture isolée (no-op pré-migration).
+        // Colonnes décomposées + préférence + bio : lectures isolées (no-op pré-migration).
         // Repli sur le découpage de full_name tant que first_name/last_name sont vides.
-        const nameFields = await getProfileNameFields(user.id)
+        const [nameFields, bio] = await Promise.all([
+          getProfileNameFields(user.id),
+          getProfileBio(user.id),
+        ])
         const split = splitFullName(fullName)
         const firstName = nameFields?.first_name ?? split.firstName
         const lastName = nameFields?.last_name ?? split.lastName
@@ -199,6 +205,7 @@ export default function EditProfileScreen(): React.JSX.Element {
           username: (data as { username?: string | null }).username ?? '',
           firstName,
           lastName,
+          bio: bio ?? '',
           nameDisplay: nameFields?.name_display ?? 'full_name',
           dateDay: dateParts.day,
           dateMonth: dateParts.month,
@@ -296,6 +303,9 @@ export default function EditProfileScreen(): React.JSX.Element {
         lastName: form.lastName,
         nameDisplay: form.nameDisplay,
       })
+
+      // Bio : écriture isolée best-effort (no-op tant que ora085_profile_bio.sql non appliquée).
+      await saveProfileBio(userId, form.bio)
 
       if (form.poidsKg) {
         const poidsNum = parseFloat(form.poidsKg)
@@ -559,6 +569,34 @@ export default function EditProfileScreen(): React.JSX.Element {
               </View>
             )
           })()}
+
+          <View style={s.fieldSep} />
+
+          {/* Bio — présentation courte affichée à droite de l'avatar sur le profil */}
+          <View style={s.fieldGroup}>
+            <View style={s.bioHeader}>
+              <Text style={s.bioLabel}>BIO</Text>
+              <Text
+                style={[s.bioCounter, form.bio.length >= BIO_MAX && { color: colors.accent }]}
+                allowFontScaling={false}
+              >
+                {form.bio.length}/{BIO_MAX}
+              </Text>
+            </View>
+            <View style={s.bioInputWrap}>
+              <TextInput
+                style={s.bioInput}
+                value={form.bio}
+                onChangeText={(v) => setForm((f) => ({ ...f, bio: v }))}
+                placeholder="Quelques mots sur toi — objectif, style, devise…"
+                placeholderTextColor={colors.textTertiary}
+                multiline
+                maxLength={BIO_MAX}
+                textAlignVertical="top"
+                scrollEnabled={false}
+              />
+            </View>
+          </View>
 
           <View style={s.fieldSep} />
 
@@ -1007,6 +1045,38 @@ function buildStyles(colors: ReturnType<typeof useTheme>['colors']) {
     displayPrefSample: {
       ...typography.caption,
       color: colors.textTertiary,
+    },
+
+    // ── Bio ──
+    bioHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    bioLabel: {
+      ...typography.caption,
+      color: colors.textSecondary,
+      textTransform: 'uppercase',
+      letterSpacing: 0.4,
+    },
+    bioCounter: {
+      ...typography.caption,
+      color: colors.textTertiary,
+      fontVariant: ['tabular-nums'],
+    },
+    bioInputWrap: {
+      borderRadius: radius.md,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingHorizontal: spacing.s4,
+      paddingVertical: spacing.s3,
+      minHeight: 76,
+    },
+    bioInput: {
+      ...typography.body,
+      color: colors.textPrimary,
+      padding: 0,
+      minHeight: 48,
     },
 
     // ── Date ──

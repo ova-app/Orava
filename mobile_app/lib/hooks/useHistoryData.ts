@@ -40,14 +40,22 @@ function sectionKeyFromDate(dateStr: string): string {
   return `${MONTHS_FR[d.getMonth()]} ${d.getFullYear()}`
 }
 
-export function groupByMonth(rows: WorkoutRow[]): HistorySection[] {
-  const map = new Map<string, WorkoutRow[]>()
+// Regroupement par mois générique (réutilisé par le profil pour mêler séances + claims).
+// L'ordre d'entrée est préservé dans chaque section (les rows doivent déjà être triées).
+export function groupByMonthOf<T extends { started_at: string }>(
+  rows: T[]
+): { title: string; data: T[] }[] {
+  const map = new Map<string, T[]>()
   for (const row of rows) {
     const key = sectionKeyFromDate(row.started_at)
     if (!map.has(key)) map.set(key, [])
     map.get(key)!.push(row)
   }
   return Array.from(map.entries()).map(([title, data]) => ({ title, data }))
+}
+
+export function groupByMonth(rows: WorkoutRow[]): HistorySection[] {
+  return groupByMonthOf(rows)
 }
 
 export function useHistoryData(): { sections: HistorySection[]; loading: boolean } {

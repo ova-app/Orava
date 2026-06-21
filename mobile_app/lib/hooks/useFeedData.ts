@@ -10,6 +10,8 @@ import { sessionValuesFromSignature } from '@/lib/myo'
 import {
   getClaimVotes,
   voteClaim as voteClaimApi,
+  getClaimSocialAgg,
+  toggleClaimLike,
   type ClaimType,
   type ClaimScope,
   type ClaimStatus,
@@ -43,6 +45,7 @@ export interface FeedWorkout {
     id: string
     username: string | null
     full_name: string | null
+    avatar_url: string | null
   }
   likes_count: number
   comments_count: number
@@ -60,7 +63,7 @@ export interface FeedWorkout {
 // Claim affiché dans le feed (called-shot social). Échec exclu (succès public, échec discret).
 export interface ClaimFeedItem {
   id: string
-  user: { id: string; username: string | null; full_name: string | null }
+  user: { id: string; username: string | null; full_name: string | null; avatar_url: string | null }
   type: ClaimType
   exercise_name: string | null
   target_value: number
@@ -75,6 +78,11 @@ export interface ClaimFeedItem {
   believe: number
   doubt: number
   myVote: ClaimVote | null
+  // Social (claims résolus uniquement) — mêmes interactions qu'une activité (ORA-083).
+  likes_count: number
+  comments_count: number
+  user_has_liked: boolean
+  first_comment: { content: string; username: string | null; user_id: string } | null
 }
 
 // Timeline unifiée : séances + claims, triés chronologiquement.
@@ -103,10 +111,12 @@ export interface FeedData {
   feedEntries: FeedEntry[]
   currentUserId: string | null
   currentUserFirstName: string
+  currentUserAvatarUrl: string | null
   kpis: FeedKPIs
   fetchFeed: () => Promise<void>
   handleLike: (workoutId: string, hasLiked: boolean) => Promise<void>
   voteOnClaim: (claimId: string, vote: ClaimVote) => Promise<void>
+  handleClaimLike: (claimId: string, hasLiked: boolean) => Promise<void>
 }
 
 // ─── KPIs du mois (volume / tendance / PRs / durée moyenne) ────────────────────
@@ -164,11 +174,19 @@ function computeKPIs(allWorkouts: FeedWorkout[]): FeedKPIs {
 
 const PR_RANK: Record<PRLevel, number> = { gold: 3, silver: 2, bronze: 1 }
 
+// Supabase renvoie un embed to-one tantôt comme objet, tantôt comme tableau
+// selon la version PostgREST. Normaliser pour ne jamais perdre nom/avatar.
+function embedOne<T>(v: T | T[] | null | undefined): T | null {
+  if (Array.isArray(v)) return v[0] ?? null
+  return v ?? null
+}
+
 export function useFeedData(): FeedData {
   const [workouts, setWorkouts] = useState<FeedWorkout[]>([])
   const [claimItems, setClaimItems] = useState<ClaimFeedItem[]>([])
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [currentUserFirstName, setCurrentUserFirstName] = useState<string>('')
+  const [currentUserAvatarUrl, setCurrentUserAvatarUrl] = useState<string | null>(null)
   const [kpis, setKpis] = useState<FeedKPIs>(EMPTY_KPIS)
 
   useEffect(() => {
@@ -185,13 +203,14 @@ export function useFeedData(): FeedData {
     // Profil courant (prénom pour le greeting)
     const { data: userData } = await supabase
       .from('users')
-      .select('id, full_name, username')
+      .select('id, full_name, username, avatar_url')
       .eq('id', uid)
       .single()
 
     if (userData) {
       const firstName = (userData.full_name ?? userData.username ?? 'Athlète').split(' ')[0]
       setCurrentUserFirstName(firstName)
+      setCurrentUserAvatarUrl((userData as { avatar_url?: string | null }).avatar_url ?? null)
     }
 
     // Workouts publics
@@ -211,7 +230,8 @@ export function useFeedData(): FeedData {
         user:user_id (
           id,
           username,
-          full_name
+          full_name,
+          avatar_url
         )
       `
       )
@@ -231,7 +251,20 @@ export function useFeedData(): FeedData {
       location_city: string | null
       gym_id: string | null
       photo_url: string | null
-      user: Array<{ id: string; username: string | null; full_name: string | null }>
+      user:
+        | Array<{
+            id: string
+            username: string | null
+            full_name: string | null
+            avatar_url: string | null
+          }>
+        | {
+            id: string
+            username: string | null
+            full_name: string | null
+            avatar_url: string | null
+          }
+        | null
     }
 
     const workoutIds = (data as unknown as RawWorkout[]).map((w) => w.id)
@@ -339,7 +372,10 @@ export function useFeedData(): FeedData {
       workout_id: string
       content: string
       user_id: string
-      users: Array<{ username: string | null; full_name: string | null }> | null
+      users:
+        | Array<{ username: string | null; full_name: string | null }>
+        | { username: string | null; full_name: string | null }
+        | null
     }
     const firstCommentMap = new Map<
       string,
@@ -347,7 +383,7 @@ export function useFeedData(): FeedData {
     >()
     for (const r of (firstCommentsRes.data ?? []) as unknown as RawFirstComment[]) {
       if (!firstCommentMap.has(r.workout_id)) {
-        const u = r.users?.[0]
+        const u = embedOne(r.users)
         firstCommentMap.set(r.workout_id, {
           content: r.content,
           username: u?.username ?? u?.full_name ?? null,
@@ -371,7 +407,7 @@ export function useFeedData(): FeedData {
         pr_seance: seance,
         location_city: w.location_city,
         gym_id: w.gym_id,
-        user: w.user?.[0] ?? { id: '', username: null, full_name: null },
+        user: embedOne(w.user) ?? { id: '', username: null, full_name: null, avatar_url: null },
         likes_count: likesCount.get(w.id) ?? 0,
         comments_count: commentsCount.get(w.id) ?? 0,
         user_has_liked: likedSet.has(w.id),
@@ -385,15 +421,16 @@ export function useFeedData(): FeedData {
     setWorkouts(mapped)
     setKpis(computeKPIs(mapped))
 
-    // ── Claims publics (called-shot) : actifs + réussis. L'échec reste discret. ──
+    // ── Claims publics (called-shot) : actifs + résolus (réussis ET ratés). Le claim
+    // résolu refait surface comme nouvelle publication ; l'échec a un rendu sobre. ──
     try {
       const { data: claimsData } = await supabase
         .from('claims')
         .select(
-          'id, user_id, type, exercise_name, target_value, unit, scope, deadline, status, progress_current, resolved_value, created_at, resolved_at, user:user_id(id, username, full_name)'
+          'id, user_id, type, exercise_name, target_value, unit, scope, deadline, status, progress_current, resolved_value, created_at, resolved_at, user:user_id(id, username, full_name, avatar_url)'
         )
         .eq('is_public', true)
-        .in('status', ['active', 'succeeded'])
+        .in('status', ['active', 'succeeded', 'failed'])
         .order('created_at', { ascending: false })
         .limit(30)
 
@@ -411,12 +448,27 @@ export function useFeedData(): FeedData {
         resolved_value: number | null
         created_at: string
         resolved_at: string | null
-        user: Array<{ id: string; username: string | null; full_name: string | null }>
+        user:
+          | Array<{
+              id: string
+              username: string | null
+              full_name: string | null
+              avatar_url: string | null
+            }>
+          | {
+              id: string
+              username: string | null
+              full_name: string | null
+              avatar_url: string | null
+            }
+          | null
       }
       const rawClaims = (claimsData ?? []) as unknown as RawClaim[]
       const claimIds = rawClaims.map((c) => c.id)
 
       const voteAgg = new Map<string, { believe: number; doubt: number; mine: ClaimVote | null }>()
+      // Social (likes + commentaires) des claims résolus — ORA-083.
+      const socialAgg = claimIds.length > 0 ? await getClaimSocialAgg(claimIds, uid) : new Map()
       if (claimIds.length > 0) {
         const { data: votesData } = await supabase
           .from('claim_votes')
@@ -437,9 +489,20 @@ export function useFeedData(): FeedData {
 
       const claimsMapped: ClaimFeedItem[] = rawClaims.map((c) => {
         const agg = voteAgg.get(c.id) ?? { believe: 0, doubt: 0, mine: null }
+        const social = socialAgg.get(c.id) ?? {
+          likes: 0,
+          comments: 0,
+          liked: false,
+          firstComment: null,
+        }
         return {
           id: c.id,
-          user: c.user?.[0] ?? { id: c.user_id, username: null, full_name: null },
+          user: embedOne(c.user) ?? {
+            id: c.user_id,
+            username: null,
+            full_name: null,
+            avatar_url: null,
+          },
           type: c.type,
           exercise_name: c.exercise_name,
           target_value: c.target_value,
@@ -454,6 +517,10 @@ export function useFeedData(): FeedData {
           believe: agg.believe,
           doubt: agg.doubt,
           myVote: agg.mine,
+          likes_count: social.likes,
+          comments_count: social.comments,
+          user_has_liked: social.liked,
+          first_comment: social.firstComment,
         }
       })
       setClaimItems(claimsMapped)
@@ -508,6 +575,25 @@ export function useFeedData(): FeedData {
     [currentUserId]
   )
 
+  // Like sur un claim résolu — optimiste avec revert (même contrat que handleLike).
+  const handleClaimLike = useCallback(
+    async (claimId: string, hasLiked: boolean): Promise<void> => {
+      if (!currentUserId) return
+      const applyDelta = (liked: boolean, delta: number) =>
+        setClaimItems((prev) =>
+          prev.map((c) =>
+            c.id === claimId
+              ? { ...c, user_has_liked: liked, likes_count: c.likes_count + delta }
+              : c
+          )
+        )
+      applyDelta(!hasLiked, hasLiked ? -1 : 1)
+      const ok = await toggleClaimLike(claimId, hasLiked)
+      if (!ok) applyDelta(hasLiked, hasLiked ? 1 : -1)
+    },
+    [currentUserId]
+  )
+
   const handleLike = useCallback(
     async (workoutId: string, hasLiked: boolean): Promise<void> => {
       if (!currentUserId) return
@@ -545,9 +631,11 @@ export function useFeedData(): FeedData {
     feedEntries,
     currentUserId,
     currentUserFirstName,
+    currentUserAvatarUrl,
     kpis,
     fetchFeed,
     handleLike,
     voteOnClaim,
+    handleClaimLike,
   }
 }

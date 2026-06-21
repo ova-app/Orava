@@ -963,13 +963,15 @@ export default function SummaryScreen() {
     // Photo : best-effort APRÈS le save atomique (la séance est déjà persistée sans elle)
     if (photoUri) {
       try {
+        // blob.arrayBuffer() n'existe pas en RN (Hermes) → response.arrayBuffer() direct.
         const response = await fetch(photoUri)
-        const blob = await response.blob()
-        const arrayBuffer = await blob.arrayBuffer()
-        const uint8 = new Uint8Array(arrayBuffer)
+        const arrayBuffer = await response.arrayBuffer()
         const { data: uploadData } = await supabase.storage
           .from('workout-photos')
-          .upload(`${user.id}/${workoutId}.jpg`, uint8, { contentType: 'image/jpeg', upsert: true })
+          .upload(`${user.id}/${workoutId}.jpg`, arrayBuffer, {
+            contentType: 'image/jpeg',
+            upsert: true,
+          })
         if (uploadData) {
           const { data: publicUrl } = supabase.storage
             .from('workout-photos')
@@ -1162,7 +1164,7 @@ export default function SummaryScreen() {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync()
     if (!permission.granted) return
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ['images'],
       allowsEditing: true,
       aspect: [4, 3],
       quality: 0.8,

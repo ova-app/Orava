@@ -12,6 +12,7 @@ import {
   getClaimVotes,
   getTrackRecord,
   getRecentFailedClaim,
+  getResolvedClaims,
   expireOverdueClaims,
   type Claim,
   type ClaimVoteCounts,
@@ -19,8 +20,20 @@ import {
 } from '@/lib/claims'
 import { getAutoFeaturedPr, getManualFeaturedPr, type FeaturedPr } from '@/lib/featuredPr'
 import { getProfilePhotos } from '@/lib/profilePhotos'
+import { getFeaturedPhoto } from '@/lib/featuredPhoto'
 import { getProfileNameFields, type NameDisplay } from '@/lib/displayName'
-import { groupByMonth, type WorkoutRow, type HistorySection } from '@/lib/hooks/useHistoryData'
+import { getProfileBio } from '@/lib/profileBio'
+import { groupByMonthOf, type WorkoutRow } from '@/lib/hooks/useHistoryData'
+
+// Historique du profil : séances ET claims résolus, mêlés chronologiquement.
+export type ProfileHistoryItem =
+  | ({ kind: 'workout' } & WorkoutRow)
+  | { kind: 'claim'; id: string; started_at: string; claim: Claim }
+
+export interface ProfileHistorySection {
+  title: string
+  data: ProfileHistoryItem[]
+}
 
 export interface UserProfile {
   id: string
@@ -30,6 +43,7 @@ export interface UserProfile {
   avatar_url: string | null
   created_at: string | null
   name_display: NameDisplay // préférence d'affichage en tête de profil (défaut 'full_name')
+  bio: string | null // bio courte affichée à droite de l'avatar (null pré-migration / vide)
 }
 
 export interface MonthStats {
@@ -54,6 +68,7 @@ export interface PhotoItem {
   isPublic: boolean // false → badge « privé » sur la vignette (visible par soi seul)
   source: 'workout' | 'profile' // 'workout' → lien séance ; 'profile' → photo ajoutée à la vitrine
   workoutId: string | null // lien séance (source 'workout' uniquement)
+  isPinned: boolean // true → épinglée en tête de vitrine (badge 📌, vignette hero)
 }
 
 export interface WeekVolume {
@@ -75,7 +90,7 @@ export interface ProfileData {
   weeklyVolume: WeekVolume[]
   monthSessions: SessionDay[]
   photoGallery: PhotoItem[]
-  historySections: HistorySection[]
+  historySections: ProfileHistorySection[]
   featuredPr: FeaturedPr | null
   activeClaim: Claim | null
   recentFailedClaim: Claim | null
@@ -98,7 +113,7 @@ export function useProfileData(): ProfileData {
   const [weeklyVolume, setWeeklyVolume] = useState<WeekVolume[]>([])
   const [monthSessions, setMonthSessions] = useState<SessionDay[]>([])
   const [photoGallery, setPhotoGallery] = useState<PhotoItem[]>([])
-  const [historySections, setHistorySections] = useState<HistorySection[]>([])
+  const [historySections, setHistorySections] = useState<ProfileHistorySection[]>([])
   const [featuredPr, setFeaturedPr] = useState<FeaturedPr | null>(null)
   const [activeClaim, setActiveClaim] = useState<Claim | null>(null)
   const [recentFailedClaim, setRecentFailedClaim] = useState<Claim | null>(null)
@@ -166,7 +181,11 @@ export function useProfileData(): ProfileData {
 
     // Profile (name_display par défaut → 'full_name' ; affiné par la lecture isolée ci-dessous)
     if (profileRes.data) {
-      setProfile({ ...(profileRes.data as object), name_display: 'full_name' } as UserProfile)
+      setProfile({
+        ...(profileRes.data as object),
+        name_display: 'full_name',
+        bio: null,
+      } as UserProfile)
       cacheUserPlan((profileRes.data as { plan: 'free' | 'premium' }).plan) // ORA-063 — cache plan offline
     }
 
@@ -177,20 +196,34 @@ export function useProfileData(): ProfileData {
     // ── Vitrine sociale : claim actif + pronostics + track record + PR vedette ──
     // Best-effort : un échec ici n'altère pas le reste du profil.
     await expireOverdueClaims(uid) // résout les claims 'week' dont l'échéance est passée
-    const [claim, record, autoPr, recentFailed, manualPr, nameFields, profilePhotos] =
-      await Promise.all([
-        getActiveClaim(uid),
-        getTrackRecord(uid),
-        getAutoFeaturedPr(uid),
-        getRecentFailedClaim(uid), // near-miss privé (ORA-081), affiché si pas de claim actif
-        getManualFeaturedPr(uid), // ORA-076 — pin manuel (lecture isolée, no-op pré-migration)
-        getProfileNameFields(uid), // préférence d'affichage du nom (lecture isolée, no-op pré-migration)
-        getProfilePhotos(uid), // vitrine — photos ajoutées à la main (lecture isolée, [] pré-migration)
-      ])
-    // Préférence d'affichage : merge dans le profil déjà posé (défaut 'full_name' pré-migration).
+    const [
+      claim,
+      record,
+      autoPr,
+      recentFailed,
+      manualPr,
+      nameFields,
+      bio,
+      profilePhotos,
+      featuredPhoto,
+      resolvedClaims,
+    ] = await Promise.all([
+      getActiveClaim(uid),
+      getTrackRecord(uid),
+      getAutoFeaturedPr(uid),
+      getRecentFailedClaim(uid), // near-miss privé (ORA-081), affiché si pas de claim actif
+      getManualFeaturedPr(uid), // ORA-076 — pin manuel (lecture isolée, no-op pré-migration)
+      getProfileNameFields(uid), // préférence d'affichage du nom (lecture isolée, no-op pré-migration)
+      getProfileBio(uid), // ORA-085 — bio courte (lecture isolée, null pré-migration)
+      getProfilePhotos(uid), // vitrine — photos ajoutées à la main (lecture isolée, [] pré-migration)
+      getFeaturedPhoto(uid), // ORA-084 — photo épinglée (lecture isolée, null pré-migration)
+      getResolvedClaims(uid), // claims réussis/ratés → mêlés à l'historique des séances
+    ])
+    // Préférence d'affichage + bio : merge dans le profil déjà posé (défauts pré-migration).
     if (nameFields) {
       setProfile((prev) => (prev ? { ...prev, name_display: nameFields.name_display } : prev))
     }
+    setProfile((prev) => (prev ? { ...prev, bio } : prev))
     setActiveClaim(claim)
     setRecentFailedClaim(recentFailed)
     setTrackRecord(record)
@@ -241,7 +274,20 @@ export function useProfileData(): ProfileData {
         total_sets: w.workout_exercises.reduce((acc, ex) => acc + ex.workout_sets.length, 0),
         pr_seance: w.pr_seance,
       }))
-      setHistorySections(groupByMonth(rows))
+
+      // Historique mêlé : séances + claims résolus, triés antichronologiquement.
+      // Le claim se place à sa date de résolution (resolved_at) → cohérent avec le feed.
+      const workoutItems: ProfileHistoryItem[] = rows.map((r) => ({ kind: 'workout', ...r }))
+      const claimItems: ProfileHistoryItem[] = resolvedClaims.map((c) => ({
+        kind: 'claim',
+        id: c.id,
+        started_at: c.resolved_at ?? c.created_at,
+        claim: c,
+      }))
+      const merged = [...workoutItems, ...claimItems].sort(
+        (a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime()
+      )
+      setHistorySections(groupByMonthOf(merged))
 
       // Jours avec séance — set + volume cumulé par jour (alimente calendrier semaine + mois)
       const today = new Date()
@@ -326,6 +372,7 @@ export function useProfileData(): ProfileData {
         isPublic: w.is_public ?? false,
         source: 'workout' as const,
         workoutId: w.id,
+        isPinned: false,
       }))
     const manualPhotos: PhotoItem[] = profilePhotos.map((p) => ({
       id: p.id,
@@ -334,8 +381,18 @@ export function useProfileData(): ProfileData {
       isPublic: p.isPublic,
       source: 'profile' as const,
       workoutId: null,
+      isPinned: false,
     }))
-    setPhotoGallery([...sessionPhotos, ...manualPhotos].sort((a, b) => b.date - a.date))
+    // Tri par date décroissante (plus récente en tête = fallback quand rien n'est épinglé),
+    // puis la photo épinglée (ORA-084) remonte en position 0, marquée isPinned.
+    const gallery = [...sessionPhotos, ...manualPhotos].sort((a, b) => b.date - a.date)
+    const pinIdx = featuredPhoto ? gallery.findIndex((p) => p.id === featuredPhoto.id) : -1
+    if (pinIdx >= 0) {
+      gallery[pinIdx] = { ...gallery[pinIdx], isPinned: true }
+      const [pinned] = gallery.splice(pinIdx, 1)
+      gallery.unshift(pinned)
+    }
+    setPhotoGallery(gallery)
   }, [router])
 
   useFocusEffect(
