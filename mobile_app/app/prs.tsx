@@ -209,10 +209,7 @@ function GoldGlow(): React.JSX.Element {
   const cx = CARD_W / 2
   const H = BAR_HEIGHT.gold + 40
   return (
-    <Canvas
-      style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: H }}
-      pointerEvents="none"
-    >
+    <Canvas style={[podSt.absBottom, { height: H }]} pointerEvents="none">
       <SkiaCircle cx={cx} cy={H} r={r}>
         <RadialGradient c={vec(cx, H)} r={r} colors={['#FAC77533', '#FAC77500']} />
       </SkiaCircle>
@@ -239,10 +236,10 @@ function PodiumStep({ slot, level, colors }: PodiumStepProps): React.JSX.Element
         <View
           style={[
             podSt.bar,
+            podSt.dim,
             {
               height: BAR_HEIGHT[level] * 0.5,
               backgroundColor: colors.backgroundTertiary,
-              opacity: 0.4,
             },
           ]}
         />
@@ -303,6 +300,16 @@ function ChargePodium({
 }
 
 const podSt = StyleSheet.create({
+  dim: { opacity: 0.4 },
+  absBottom: { position: 'absolute', left: 0, right: 0, bottom: 0 },
+  skRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  skRowAround: { flexDirection: 'row', justifyContent: 'space-around' },
+  skCol: { alignItems: 'center', gap: spacing.s2 },
+  skLine160: { width: 160, height: 15, borderRadius: radius.sm },
+  skW36: { width: 36, height: 12, borderRadius: radius.sm },
+  skDot28: { width: 28, height: 28, borderRadius: radius.full },
+  skW48: { width: 48, height: 18, borderRadius: radius.sm },
+  skW24: { width: 24, height: 10, borderRadius: radius.sm },
   wrap: {
     justifyContent: 'flex-end',
   },
@@ -566,51 +573,16 @@ function SkeletonCard({
         },
       ]}
     >
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-        <View
-          style={{
-            width: 160,
-            height: 15,
-            borderRadius: radius.sm,
-            backgroundColor: colors.backgroundTertiary,
-          }}
-        />
-        <View
-          style={{
-            width: 36,
-            height: 12,
-            borderRadius: radius.sm,
-            backgroundColor: colors.backgroundTertiary,
-          }}
-        />
+      <View style={podSt.skRow}>
+        <View style={[podSt.skLine160, { backgroundColor: colors.backgroundTertiary }]} />
+        <View style={[podSt.skW36, { backgroundColor: colors.backgroundTertiary }]} />
       </View>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-around' }}>
+      <View style={podSt.skRowAround}>
         {[0, 1, 2].map((i) => (
-          <View key={i} style={{ alignItems: 'center', gap: spacing.s2 }}>
-            <View
-              style={{
-                width: 28,
-                height: 28,
-                borderRadius: radius.full,
-                backgroundColor: colors.backgroundTertiary,
-              }}
-            />
-            <View
-              style={{
-                width: 48,
-                height: 18,
-                borderRadius: radius.sm,
-                backgroundColor: colors.backgroundTertiary,
-              }}
-            />
-            <View
-              style={{
-                width: 24,
-                height: 10,
-                borderRadius: radius.sm,
-                backgroundColor: colors.backgroundTertiary,
-              }}
-            />
+          <View key={i} style={podSt.skCol}>
+            <View style={[podSt.skDot28, { backgroundColor: colors.backgroundTertiary }]} />
+            <View style={[podSt.skW48, { backgroundColor: colors.backgroundTertiary }]} />
+            <View style={[podSt.skW24, { backgroundColor: colors.backgroundTertiary }]} />
           </View>
         ))}
       </View>
@@ -864,8 +836,10 @@ export default function PrsScreen(): React.JSX.Element {
           <View style={empty.icon}>
             <Zap size={28} color={colors.textTertiary} strokeWidth={1.5} />
           </View>
-          <Text style={empty.title}>Aucun record pour l'instant</Text>
-          <Text style={empty.subtitle}>Lance ta première séance — tes PRs s'afficheront ici.</Text>
+          <Text style={empty.title}>Aucun record pour l&apos;instant</Text>
+          <Text style={empty.subtitle}>
+            Lance ta première séance — tes PRs s&apos;afficheront ici.
+          </Text>
         </View>
       </SafeAreaView>
     )

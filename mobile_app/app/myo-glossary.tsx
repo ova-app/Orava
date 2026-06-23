@@ -1,4 +1,4 @@
-import React, { useRef } from 'react'
+import React from 'react'
 import { View, Text, ScrollView, Pressable, StyleSheet, StatusBar } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'

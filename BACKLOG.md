@@ -73,7 +73,7 @@ Vagues 0 → 1 → 2 + cœur de la Definition of Done faites. **20 tickets faits
 ### Devops / CI — lot du 19/06/2026 — ✅ FAIT
 - ✅ **ORA-008 (CI)** — `.github/workflows/ci.yml` lance lint + `tsc --noEmit` + tests sur push/PR `main` (gate de merge). Déjà en place (vérifié 19/06).
 - ✅ **ORA-070** — `.nvmrc` (20) + `engines` (node >=20) + `dependabot.yml` (npm + github-actions) déjà présents ; `buildNumber`/`versionCode` retirés d'`app.json` (source = `appVersionSource: remote`) ; **CodeQL** ajouté (`.github/workflows/codeql.yml`, SAST JS/TS).
-- ✅ **ORA-044** — plafond `--max-warnings` ratcheté 400 → **231** (= total actuel, 0 erreur) → toute régression de warning casse la CI. *Résiduel :* descente vers 0 = nettoyage `no-inline-styles` + `exhaustive-deps` (gros, à faire au fil de l'eau).
+- ✅ **ORA-044** — plafond `--max-warnings` ratcheté 400 → **231** → **0** (cf. ORA-093, 23/06/2026 : nettoyage complet `no-inline-styles` + `exhaustive-deps`) → toute régression de warning casse la CI.
 
 ### Dette code / DS — lot du 19/06/2026 — ✅ EN COURS
 - ✅ **ORA-068** — `lib/logger.ts` centralisé (`log.error/warn/info`, conditionné `__DEV__`, ancre unique pour Sentry en ORA-011). Tous les `console.*` du code app migrés (8 fichiers). Script Node `generate-logo-assets.js` laissé en `console` (hors app).
@@ -156,6 +156,15 @@ RevenueCat (ORA-010), suppression compte (ORA-001), RGPD UI (ORA-003), service_r
 
 - **ORA-038 · [A11Y] Couverture a11y quasi nulle sur les écrans cœur.** 🟡 *En cours : `feed/[id]` (like) + **`session.tsx` et `library.tsx` faits le 20/06** (role + label + `accessibilityState` sur tous les touchables du chemin de log : pickers poids/reps, LOG SET, tabs exercices, chips, favoris, recherche).* Restait 332 touchables, ~89 props d'a11y concentrées sur auth/settings/edit-profile. **Reste :** `feed.tsx` (31), `feed/[id].tsx` (40 restants), `profile.tsx` (23) + alternative `accessibilityActions` au swipe-delete de série. **Action :** `accessibilityRole` + `accessibilityLabel` sur 100 % des touchables, priorité feed.
 - **ORA-039 · [I18N] Aucune infrastructure i18n.** Pas de `expo-localization`/`i18next` ; 100 % FR hardcodé ; `users.locale` inutilisé. Internationalisation impossible sans refactor — bloquant pour scaler comme Strava. **Action :** `i18next` + `expo-localization`, externaliser les strings, brancher `users.locale`.
+
+### Dette code / lint
+
+- ✅ **ORA-093 · [DEVOPS/DETTE] Résorber les warnings lint + assainir les erreurs `.js`.** ✅ **FAIT (23/06/2026) — 263 warnings + 12 erreurs → 0/0, gate `--max-warnings` ratcheté à `0`, tsc clean, 374 tests verts.** Le gate avait **dérivé** (263 warnings `.ts/.tsx` pour un plancher à 230 → CI lint rouge) + 12 erreurs `.js` invisibles au gate. Traité :
+  - **Erreurs `.js` (12)** : override eslint dans `.eslintrc.js` (`overrides` `files: ['jest.setup.js', 'scripts/**/*.js', …]` → `env: { node, jest }`, `no-undef`/`no-require-imports` off). `eslint .` nu passe désormais 0/0.
+  - **Mécaniques (38)** : `no-unused-vars` (imports/vars/fonctions mortes supprimés, dont chaîne `getC`→`sectorBlend`→`ss` dans myo-orb), `no-unescaped-entities` (`J'AIME`→`J&apos;AIME`, etc.), `no-empty` (catch commentés), `no-constant-condition` (règle passée `{ checkLoops: false }` — `while(true){…break}` du chunking SecureStore légitime), `catch (_)`→`catch`.
+  - **`exhaustive-deps` (36)** : `eslint-disable-next-line` justifié (`-- effet de montage volontaire (ORA-093)`) — tous des effets mount-only (animations Reanimated à shared values stables, redirections, dessins skeleton) ; **zéro changement de comportement** (vs ajout de deps qui re-déclencherait les animations).
+  - **`no-inline-styles` (189, 23 fichiers)** : migrés vers `StyleSheet`. Primitives partagées **`constants/layout.ts`** (`L.flex1`/`rowCenter`/`rowBaseline`/`center`) + StyleSheet local/module par écran (`ft` feed, `pst` profile, `chartSt` summary, etc.). Règle appliquée : extraire les **props littérales** vers une entrée StyleSheet, garder les **props runtime** (couleurs theme, dimensions calculées) inline → rendu strictement identique. Couleurs dynamiques de-littéralisées en consts module (ex. `GHOST_BEHIND`, `DOT_INACTIVE`) ; 2 styles irréductiblement dynamiques (étiquette Myo animée par frame, chip feed) en `disable-line` justifié.
+  - **Cliquet** : `package.json` `lint` → `--max-warnings 0`. Toute régression (warning OU erreur) casse désormais la CI.
 
 ### Produit & tests
 
@@ -249,6 +258,31 @@ La famille 6 (17 dims = `Σ weight × reps × activation_pct`) est la **seule do
 
 #### ORA-092 · ⏳ [DOC/PRODUIT] Document onboarding « comment marche Myo »
 Aucune explication utilisateur de ce qu'est Myo, comment lire le score, les 8 familles, l'orbe 3D et la comparaison « ta moyenne ». **Action :** rédiger un document d'onboarding Myo (concept, lecture du score = vs ta norme perso, les 8 familles, interaction orbe, cold-start) — base d'un écran d'onboarding dédié (`app/onboarding/`) et/ou d'une section enrichie du glossaire (`app/myo-glossary.tsx`). Prérequis : ORA-086 (sémantique du score stabilisée) + idéalement ORA-087 (familles honnêtes) pour ne pas documenter une version trompeuse.
+
+---
+
+## Phase D — Suites du lot Myo Tier 2/3 (décisions + dette, 23/06/2026)
+
+> Issu de l'implémentation d'ORA-088→092 (branche `worktree-agent-a4fd569276124aaab`, rebasée sur tier1). Code livré : `tsc` 0 erreur, 287 tests verts. Ces tickets capturent les **décisions produit à trancher** et les **2 blockers CI pré-existants** révélés par le lot. Tant qu'ORA-093/094 ne sont pas faits, **le merge sur `main` est rouge** (indépendamment du Myo).
+
+### Blockers merge (CI rouge — pré-existants sur la branche feat, PAS causés par le lot Myo)
+
+#### ORA-093 · ⏳ [DEVOPS] Lint au-dessus du plafond `--max-warnings` — bloque le merge
+La branche `feat/fk-workout-exercises-exercise` (base tier1 ORA-086/087) compte **263 warnings ESLint** alors que le plafond CI est **231** (cliquet ORA-044). La CI échoue au lint **dès maintenant**, avant même d'ajouter le lot Myo (qui n'en a ajouté aucun). **Décision :** soit nettoyer les ~32 warnings introduits depuis 231 (probablement `no-inline-styles` / `exhaustive-deps`), soit re-ratcheter le plafond à la valeur réelle si ces warnings sont assumés. Ne pas merger sans trancher.
+
+#### ORA-094 · ⏳ [TESTS/DEVOPS] Coverage gate rouge — planchers ORA-080 périmés — bloque le merge
+`test:coverage` (lancé en CI via `npm test -- --ci --coverage`) **échoue déjà sur la base tier1** : planchers globaux (branches/functions) + `lib/claims.ts` + `lib/featuredPr.ts` sous leur `coverageThreshold` (posés en ORA-080, ne collent plus à la réalité de la branche). `npm test` simple (sans coverage) reste vert. **Décision :** recalibrer honnêtement les planchers à la couverture réelle (ratchet) **ou** ajouter les tests manquants pour repasser au-dessus. Vérifié indépendamment (stash) : non régressé par le lot Myo.
+
+### Décisions produit à valider (issues du code livré)
+
+#### ORA-095 · ⏳ [PRODUIT/DÉCISION] Valider la réduction Myo 53 → 47 dims (issu d'ORA-088)
+ORA-088 a tranché par **réduction honnête** plutôt que remplissage : `FAMILY_DIMS = [5,4,4,4,4,4,17,5]` = **47 dims** (6 placeholders `0` supprimés) au lieu de 53. Orbe « 47 dims denses » vs « 53 à moitié creux ». Les 3 producteurs (preview summary / relue feed / save) émettent enfin la **même structure**. **Décision :** valider ce parti pris, ou rétablir des dims — ce qui nécessiterait de câbler de vraies sous-dims (ex. RPE via ORA-087 option B, ou rolling perso via ORA-026). Tant que non câblé, ne pas réintroduire de `0`.
+
+#### ORA-096 · ⏳ [PRODUIT/DÉCISION] Équilibre musculaire (ORA-089) en fallback intra-séance jusqu'à ORA-026
+La carte « équilibre push/pull » d'ORA-089 devait comparer au **rolling perso 30j** (`z_extended.muscles_raw`), mais **ORA-026 (rolling perso) n'est pas fait** → le code livré compare push vs pull **de la séance courante uniquement** (fallback honnête). C'est un **demi-livrable** : à requalifier en « vs tes 30 derniers jours » dès qu'ORA-026 est livré. **Décision :** acter le fallback comme MVP, ou prioriser ORA-026 avant de mettre la carte en avant. Push = pec+delt ant.+triceps · Pull = dos+biceps+delt post. · jambes hors ratio.
+
+#### ORA-097 · ⏳ [PRODUIT/DÉCISION] Précision des insights (ORA-090) volontairement floue
+Le `%` des phrases d'insight (« Volume +18 % vs ta norme ») est un **ordre de grandeur** (~18 %/σ), pas une mesure exacte — choix anti-fausse-précision (règle UX « jamais de fausse précision »). Le preview summary dérive les `z` de la baseline **population** ; la version perso exacte vit dans `feed/[id]` post-save. **Décision :** valider la formulation et le niveau de précision affiché, ou n'afficher le `%` que sur le feed (données perso) et garder le summary qualitatif.
 
 ---
 

@@ -18,6 +18,7 @@ import { ChevronLeft, ChevronRight, Check } from 'lucide-react-native'
 import { useTheme } from '@/context/ThemeContext'
 import { useWeightUnit } from '@/context/WeightUnitContext'
 import { spacing, radius, typography, spring, font } from '@/constants/theme'
+import { L } from '@/constants/layout'
 import { toggleRecipe } from '@/constants/recipes'
 import { supabase } from '@/lib/supabase'
 import { cacheUserPlan } from '@/lib/plan'
@@ -382,16 +383,12 @@ export default function SettingsScreen(): React.JSX.Element {
         <Text style={s.groupLabel}>MYO</Text>
         <View style={s.group}>
           <Pressable
-            style={[
-              s.row,
-              s.rowPressable,
-              { height: undefined, minHeight: 56, paddingVertical: spacing.s3 },
-            ]}
+            style={[s.row, s.rowPressable, s.glossaryRow]}
             onPress={() => router.push('/myo-glossary')}
             accessibilityRole="button"
             accessibilityLabel="Guide des variables Myo"
           >
-            <View style={{ flex: 1 }}>
+            <View style={L.flex1}>
               <Text style={s.rowLabel}>Guide des variables</Text>
               <Text style={[s.rowSubtitle, { color: colors.textSecondary }]}>
                 53 variables · 8 familles
@@ -485,6 +482,7 @@ export default function SettingsScreen(): React.JSX.Element {
 
 function buildStyles(colors: ReturnType<typeof useTheme>['colors']) {
   return StyleSheet.create({
+    glossaryRow: { height: undefined, minHeight: 56, paddingVertical: spacing.s3 },
     root: {
       flex: 1,
       backgroundColor: colors.background,

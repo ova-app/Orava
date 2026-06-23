@@ -12,10 +12,10 @@ export type EmptyVariant = 'feed' | 'history' | 'library'
 // ─── SHARED HELPERS (internal) ───────────────────────────────────────────────
 
 const PR_ICON_COLORS = {
-  charge:   (c: ThemeColors) => c.prGold,
-  serie:    (c: ThemeColors) => c.prGold,
+  charge: (c: ThemeColors) => c.prGold,
+  serie: (c: ThemeColors) => c.prGold,
   exercice: (c: ThemeColors) => c.prExercice,
-  seance:   (c: ThemeColors) => c.prGold,
+  seance: (c: ThemeColors) => c.prGold,
 } as const
 
 const prLevelColor = (level: PrLevel, c: ThemeColors): string =>
@@ -30,7 +30,6 @@ const hexToRgba = (hex: string, alpha: number): string => {
 }
 
 // Glassmorphism token (rules/ui.md — glassCard v2)
-const GLASS_BG = 'rgba(18,18,26,0.75)'
 const GLASS_BORDER = 'rgba(255,255,255,0.08)'
 const BACKDROP_BASE = 'rgba(0,0,0,0.72)'
 
@@ -46,22 +45,15 @@ export interface InputRecipe {
 
 export function inputRecipe(state: InputState, colors: ThemeColors): InputRecipe {
   const borderColor =
-    state === 'active' ? colors.accent :
-    state === 'error'  ? colors.error  :
-    'transparent'
+    state === 'active' ? colors.accent : state === 'error' ? colors.error : 'transparent'
 
   const borderWidth = state === 'active' || state === 'error' ? 1.5 : 0
 
-  const backgroundColor =
-    state === 'error'
-      ? hexToRgba(colors.error, 0.08)
-      : colors.inputBackground
+  const backgroundColor = state === 'error' ? hexToRgba(colors.error, 0.08) : colors.inputBackground
 
-  const helperColor =
-    state === 'error' ? colors.error : colors.textTertiary
+  const helperColor = state === 'error' ? colors.error : colors.textTertiary
 
-  const inputTextColor =
-    state === 'default' ? colors.textTertiary : colors.textPrimary
+  const inputTextColor = state === 'default' ? colors.textTertiary : colors.textPrimary
 
   return StyleSheet.create({
     container: {
@@ -108,11 +100,7 @@ export interface PrBadgeRecipe {
   label: TextStyle
 }
 
-export function prBadgeRecipe(
-  level: PrLevel,
-  type: PrType,
-  colors: ThemeColors,
-): PrBadgeRecipe {
+export function prBadgeRecipe(level: PrLevel, type: PrType, colors: ThemeColors): PrBadgeRecipe {
   const iconColor = PR_ICON_COLORS[type](colors)
   const tint = prLevelColor(level, colors)
 
@@ -243,10 +231,7 @@ export interface EmptyStateRecipe {
   ctaLabel: TextStyle
 }
 
-export function emptyStateRecipe(
-  variant: EmptyVariant,
-  colors: ThemeColors,
-): EmptyStateRecipe {
+export function emptyStateRecipe(variant: EmptyVariant, colors: ThemeColors): EmptyStateRecipe {
   const hasCta = variant === 'history'
 
   return {

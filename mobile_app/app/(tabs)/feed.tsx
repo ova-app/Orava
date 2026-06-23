@@ -63,6 +63,7 @@ import { useWeightUnit } from '@/context/WeightUnitContext'
 import { useRouter } from 'expo-router'
 import { useFocusEffect } from '@react-navigation/core'
 import { spacing, typography, radius, dark, avatarColors, scrim } from '@/constants/theme'
+import { L } from '@/constants/layout'
 import { emptyStateRecipe } from '@/constants/recipes'
 import { supabase } from '@/lib/supabase'
 import { formatDuration } from '@/lib/utils'
@@ -129,7 +130,7 @@ function avatarColor(userId: string): string {
 // ─── Logo Orava ───────────────────────────────────────────────────────────────
 
 function OravaLogo() {
-  return <Image source={oravaLogo} style={{ width: 40, height: 40 }} resizeMode="contain" />
+  return <Image source={oravaLogo} style={ft.box40} resizeMode="contain" />
 }
 
 // ─── Temps relatif ────────────────────────────────────────────────────────────
@@ -245,6 +246,7 @@ function PRSkiaChipInner({ prs }: { prs: WorkoutPRSummary }) {
       cancelAnimation(glowOpacity)
       cancelAnimation(entryScale)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- effet de montage volontaire (ORA-093)
   }, [])
 
   const shimStyle = useAnimatedStyle(() => ({
@@ -270,15 +272,16 @@ function PRSkiaChipInner({ prs }: { prs: WorkoutPRSummary }) {
   return (
     <Animated.View style={entryStyle}>
       <View
-        style={{
-          width: CHIP_W,
-          height: CHIP_H,
-          backgroundColor: dominantColor + '1A',
-          borderRadius: CHIP_H / 2,
-          borderWidth: 1,
-          borderColor: dominantColor + '60',
-          overflow: 'hidden',
-        }}
+        style={[
+          ft.borderHidden,
+          {
+            width: CHIP_W,
+            height: CHIP_H,
+            backgroundColor: dominantColor + '1A',
+            borderRadius: CHIP_H / 2,
+            borderColor: dominantColor + '60',
+          },
+        ]}
       >
         {/* 1 seul Canvas glows — opacity pulsée par Animated.View pour gold */}
         <Animated.View style={[StyleSheet.absoluteFill, glowLayerStyle]} pointerEvents="none">
@@ -312,10 +315,7 @@ function PRSkiaChipInner({ prs }: { prs: WorkoutPRSummary }) {
 
         {/* Shimmer sweep — clip par overflow:hidden du parent pill */}
         <Animated.View
-          style={[
-            { position: 'absolute', top: 0, left: 0, width: BEAM_W, height: CHIP_H },
-            shimStyle,
-          ]}
+          style={[[ft.absTopLeft, { width: BEAM_W, height: CHIP_H }], shimStyle]}
           pointerEvents="none"
         >
           <Canvas style={{ width: BEAM_W, height: CHIP_H }}>
@@ -336,32 +336,14 @@ function PRSkiaChipInner({ prs }: { prs: WorkoutPRSummary }) {
 
         {/* Contenu overlay */}
         <View
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            flexDirection: 'row',
-            alignItems: 'center',
-            paddingHorizontal: PADDING,
-            gap: 6,
-          }}
+          style={[StyleSheet.absoluteFill, L.rowCenter, ft.gap6, { paddingHorizontal: PADDING }]}
           pointerEvents="none"
         >
-          <Text
-            style={{
-              fontSize: 13,
-              fontFamily: 'Barlow_700Bold',
-              color: dominantColor,
-              fontVariant: ['tabular-nums'],
-              letterSpacing: -0.3,
-            }}
-          >
+          <Text style={[ft.titleBold, { color: dominantColor, fontVariant: ['tabular-nums'] }]}>
             {prs.total} PR{prs.total > 1 ? 's' : ''}
           </Text>
-          <View style={{ width: 1, height: 12, backgroundColor: dominantColor + '44' }} />
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: ICON_GAP }}>
+          <View style={[ft.vsep, { backgroundColor: dominantColor + '44' }]} />
+          <View style={[L.rowCenter, { gap: ICON_GAP }]}>
             {PR_ICON_DEFS.map(({ key, Icon, colorFn }) => {
               const level = prs[key]
               if (!level) return null
@@ -398,6 +380,7 @@ function SkeletonCard() {
       -1,
       false
     )
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- effet de montage volontaire (ORA-093)
   }, [])
 
   const shimStyle = useAnimatedStyle(() => ({
@@ -416,33 +399,25 @@ function SkeletonCard() {
 
   return (
     <View
-      style={[
-        styles.skeletonCard,
-        { backgroundColor: colors.backgroundSecondary, overflow: 'hidden' },
-      ]}
+      style={[styles.skeletonCard, [ft.hidden, { backgroundColor: colors.backgroundSecondary }]]}
     >
       <View style={styles.skeletonRow}>
         <View style={[styles.skeletonAvatar, { backgroundColor: colors.backgroundTertiary }]} />
-        <View style={{ flex: 1, gap: 8 }}>
+        <View style={ft.skCol}>
           <View
-            style={[
-              styles.skeletonLine,
-              { width: '55%', backgroundColor: colors.backgroundTertiary },
-            ]}
+            style={[styles.skeletonLine, ft.skW55, { backgroundColor: colors.backgroundTertiary }]}
           />
           <View
             style={[
               styles.skeletonLine,
-              { width: '35%', height: 10, backgroundColor: colors.backgroundTertiary },
+              ft.skW35h10,
+              { backgroundColor: colors.backgroundTertiary },
             ]}
           />
         </View>
       </View>
       <Animated.View
-        style={[
-          { position: 'absolute', top: 0, left: 0, width: BEAM_W, height: CARD_H },
-          shimStyle,
-        ]}
+        style={[[ft.absTopLeft, { width: BEAM_W, height: CARD_H }], shimStyle]}
         pointerEvents="none"
       >
         <Canvas style={{ width: BEAM_W, height: CARD_H }}>
@@ -477,12 +452,7 @@ function LikesModal({ visible, likes, onClose }: LikesModalProps) {
         <View style={[styles.likesModalContent, { backgroundColor: colors.backgroundSecondary }]}>
           {/* Header */}
           <View style={[styles.likesModalHeader, { borderBottomColor: colors.separator }]}>
-            <Text
-              style={[
-                typography.subtitle,
-                { color: colors.textPrimary, fontFamily: 'Barlow_700Bold' },
-              ]}
-            >
+            <Text style={[typography.subtitle, ft.bold, { color: colors.textPrimary }]}>
               Aimé par
             </Text>
             <TouchableOpacity onPress={onClose} hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}>
@@ -510,12 +480,7 @@ function LikesModal({ visible, likes, onClose }: LikesModalProps) {
                         .join('')}
                     </Text>
                   </View>
-                  <Text
-                    style={[
-                      typography.body,
-                      { color: colors.textPrimary, fontFamily: 'Barlow_600SemiBold' },
-                    ]}
-                  >
+                  <Text style={[typography.body, ft.semibold, { color: colors.textPrimary }]}>
                     {displayName}
                   </Text>
                 </View>
@@ -583,6 +548,7 @@ function CommentsModal({
         useNativeDriver: false,
       }).start()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- effet de montage volontaire (ORA-093)
   }, [visible])
 
   const expandSheet = () => {
@@ -658,10 +624,10 @@ function CommentsModal({
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
       <KeyboardAvoidingView
-        style={{ flex: 1, backgroundColor: scrim }}
+        style={[L.flex1, { backgroundColor: scrim }]}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <Pressable style={{ flex: 1 }} onPress={onClose} />
+        <Pressable style={L.flex1} onPress={onClose} />
         <RNAnimated.View
           style={[
             styles.commentsSheetContent,
@@ -675,12 +641,7 @@ function CommentsModal({
 
           {/* Header — hors du pan responder */}
           <View style={[styles.modalHeader, { borderBottomColor: colors.separator }]}>
-            <Text
-              style={[
-                typography.subtitle,
-                { color: colors.textPrimary, fontFamily: 'Barlow_700Bold' },
-              ]}
-            >
+            <Text style={[typography.subtitle, ft.bold, { color: colors.textPrimary }]}>
               Commentaires
             </Text>
             <TouchableOpacity onPress={onClose} hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}>
@@ -709,14 +670,9 @@ function CommentsModal({
                         .join('')}
                     </Text>
                   </View>
-                  <View style={{ flex: 1, minWidth: 0 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s2 }}>
-                      <Text
-                        style={[
-                          typography.body,
-                          { color: colors.textPrimary, fontFamily: 'Barlow_600SemiBold' },
-                        ]}
-                      >
+                  <View style={ft.flexMin0}>
+                    <View style={[L.rowCenter, { gap: spacing.s2 }]}>
+                      <Text style={[typography.body, ft.semibold, { color: colors.textPrimary }]}>
                         {displayName}
                       </Text>
                       <Text style={[typography.caption, { color: colors.textTertiary }]}>
@@ -733,7 +689,7 @@ function CommentsModal({
                       {item.content}
                     </Text>
                   </View>
-                  <View style={{ alignItems: 'center', gap: spacing.s1 }}>
+                  <View style={[ft.alignCenter, { gap: spacing.s1 }]}>
                     {showCommentLikes && (
                       <>
                         <TouchableOpacity
@@ -767,7 +723,7 @@ function CommentsModal({
             }}
             contentContainerStyle={{ paddingHorizontal: spacing.s4 }}
             ListEmptyComponent={
-              <View style={{ paddingVertical: spacing.s8, alignItems: 'center' }}>
+              <View style={[ft.alignCenter, { paddingVertical: spacing.s8 }]}>
                 <Text style={[typography.body, { color: colors.textTertiary }]}>
                   Aucun commentaire
                 </Text>
@@ -808,18 +764,11 @@ function CommentsModal({
               disabled={!text.trim() || submitting}
               style={[
                 styles.commentButton,
-                {
-                  backgroundColor: text.trim() ? colors.accent : colors.backgroundTertiary,
-                  opacity: text.trim() ? 1 : 0.5,
-                },
+                { backgroundColor: text.trim() ? colors.accent : colors.backgroundTertiary },
+                !text.trim() && ft.dim05,
               ]}
             >
-              <Text
-                style={[
-                  typography.caption,
-                  { color: colors.background, fontFamily: 'Barlow_700Bold' },
-                ]}
-              >
+              <Text style={[typography.caption, ft.bold, { color: colors.background }]}>
                 Envoyer
               </Text>
             </TouchableOpacity>
@@ -994,10 +943,7 @@ function FeedItemBase({ item, currentUserId, onLike, onNavigateDetail }: FeedIte
         <TouchableOpacity
           activeOpacity={0.7}
           onPress={() => onNavigateDetail(item.id)}
-          style={[
-            styles.feedItem,
-            { backgroundColor: colors.backgroundSecondary, marginBottom: 0 },
-          ]}
+          style={[styles.feedItem, ft.mb0, { backgroundColor: colors.backgroundSecondary }]}
         >
           {/* Row 1 — Avatar + Meta + PR Pill en haut-droit */}
           <View style={styles.row1}>
@@ -1010,21 +956,14 @@ function FeedItemBase({ item, currentUserId, onLike, onNavigateDetail }: FeedIte
                 </Text>
               )}
             </View>
-            <View style={{ flex: 1, minWidth: 0 }}>
+            <View style={ft.flexMin0}>
               <Text
-                style={[
-                  typography.caption,
-                  {
-                    color: colors.textPrimary,
-                    fontFamily: 'Barlow_700Bold',
-                    textTransform: 'uppercase',
-                  },
-                ]}
+                style={[typography.caption, ft.boldUp, { color: colors.textPrimary }]}
                 numberOfLines={1}
               >
                 {displayName}
               </Text>
-              <Text style={[typography.caption, { color: colors.textSecondary, fontSize: 12 }]}>
+              <Text style={[typography.caption, ft.fs12, { color: colors.textSecondary }]}>
                 {timeAgo(item.started_at)}
               </Text>
             </View>
@@ -1035,7 +974,8 @@ function FeedItemBase({ item, currentUserId, onLike, onNavigateDetail }: FeedIte
           <Text
             style={[
               typography.subtitle,
-              { color: colors.textPrimary, fontFamily: 'Barlow_700Bold', marginTop: spacing.s3 },
+              ft.bold,
+              { color: colors.textPrimary, marginTop: spacing.s3 },
             ]}
             numberOfLines={2}
           >
@@ -1044,14 +984,7 @@ function FeedItemBase({ item, currentUserId, onLike, onNavigateDetail }: FeedIte
 
           {/* Row 4 — Lieu */}
           {item.location_city && (
-            <View
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: spacing.s2,
-                marginTop: spacing.s3,
-              }}
-            >
+            <View style={[L.rowCenter, { gap: spacing.s2, marginTop: spacing.s3 }]}>
               <MapPin size={16} color={colors.textSecondary} />
               <Text style={[typography.caption, { color: colors.textSecondary }]} numberOfLines={1}>
                 {item.location_city}
@@ -1066,40 +999,25 @@ function FeedItemBase({ item, currentUserId, onLike, onNavigateDetail }: FeedIte
               <Text
                 style={[
                   typography.body,
-                  {
-                    color: colors.textPrimary,
-                    fontFamily: 'Barlow_700Bold',
-                    fontVariant: ['tabular-nums'],
-                  },
+                  ft.bold,
+                  { color: colors.textPrimary, fontVariant: ['tabular-nums'] },
                 ]}
               >
                 {volumeStr}
                 {volumeStr !== '—' && (
-                  <Text style={{ fontSize: 12, color: colors.textSecondary }}> {weightUnit}</Text>
+                  <Text style={[ft.fs12, { color: colors.textSecondary }]}> {weightUnit}</Text>
                 )}
               </Text>
             </View>
             <View style={styles.metricCol}>
               <Text style={[typography.caption, { color: colors.textTertiary }]}>Durée</Text>
-              <Text
-                style={[
-                  typography.body,
-                  { color: colors.textPrimary, fontFamily: 'Barlow_700Bold' },
-                ]}
-              >
+              <Text style={[typography.body, ft.bold, { color: colors.textPrimary }]}>
                 {durationStr}
               </Text>
             </View>
             <View style={styles.metricCol}>
               <Text style={[typography.caption, { color: colors.textTertiary }]}>Score</Text>
-              <Text
-                style={[
-                  typography.body,
-                  { color: colors.textPrimary, fontFamily: 'Barlow_700Bold' },
-                ]}
-              >
-                —
-              </Text>
+              <Text style={[typography.body, ft.bold, { color: colors.textPrimary }]}>—</Text>
             </View>
           </View>
 
@@ -1109,7 +1027,7 @@ function FeedItemBase({ item, currentUserId, onLike, onNavigateDetail }: FeedIte
             const pageW = cardW - spacing.s3 * 2
             const hasPhoto = !!item.photo_url
             return (
-              <View style={{ marginTop: spacing.s4, overflow: 'hidden' }}>
+              <View style={[ft.hidden, { marginTop: spacing.s4 }]}>
                 <ScrollView
                   horizontal
                   pagingEnabled
@@ -1121,12 +1039,7 @@ function FeedItemBase({ item, currentUserId, onLike, onNavigateDetail }: FeedIte
                 >
                   {/* Page 0 — Myo */}
                   <View
-                    style={{
-                      width: pageW,
-                      height: pageW,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
+                    style={[ft.centerBoth, { width: pageW, height: pageW }]}
                     pointerEvents="none"
                   >
                     <MyoChart
@@ -1141,12 +1054,7 @@ function FeedItemBase({ item, currentUserId, onLike, onNavigateDetail }: FeedIte
                   {/* Page 1 — Photo */}
                   {hasPhoto && (
                     <View
-                      style={{
-                        width: pageW,
-                        height: pageW,
-                        borderRadius: radius.md,
-                        overflow: 'hidden',
-                      }}
+                      style={[ft.hidden, { width: pageW, height: pageW, borderRadius: radius.md }]}
                     >
                       <Image
                         source={{ uri: item.photo_url! }}
@@ -1158,31 +1066,9 @@ function FeedItemBase({ item, currentUserId, onLike, onNavigateDetail }: FeedIte
                 </ScrollView>
                 {/* Dots indicateurs */}
                 {hasPhoto && (
-                  <View
-                    style={{
-                      flexDirection: 'row',
-                      justifyContent: 'center',
-                      gap: 5,
-                      marginTop: spacing.s2,
-                    }}
-                  >
-                    <View
-                      style={{
-                        width: 5,
-                        height: 5,
-                        borderRadius: 3,
-                        backgroundColor: colors.accent,
-                      }}
-                    />
-                    <View
-                      style={{
-                        width: 5,
-                        height: 5,
-                        borderRadius: 3,
-                        backgroundColor: colors.textTertiary,
-                        opacity: 0.4,
-                      }}
-                    />
+                  <View style={[ft.dotsRow, { marginTop: spacing.s2 }]}>
+                    <View style={[ft.dot5, { backgroundColor: colors.accent }]} />
+                    <View style={[ft.dot5dim, { backgroundColor: colors.textTertiary }]} />
                   </View>
                 )}
               </View>
@@ -1229,9 +1115,7 @@ function FeedItemBase({ item, currentUserId, onLike, onNavigateDetail }: FeedIte
                     { backgroundColor: avatarColor(item.first_comment.user_id) },
                   ]}
                 >
-                  <Text
-                    style={{ fontSize: 9, fontFamily: 'Barlow_700Bold', color: dark.textPrimary }}
-                  >
+                  <Text style={[ft.fs9bold, { color: dark.textPrimary }]}>
                     {(item.first_comment.username ?? '·').charAt(0).toUpperCase()}
                   </Text>
                 </View>
@@ -1240,7 +1124,7 @@ function FeedItemBase({ item, currentUserId, onLike, onNavigateDetail }: FeedIte
                     style={[typography.caption, { color: colors.textSecondary }]}
                     numberOfLines={1}
                   >
-                    <Text style={{ fontFamily: 'Barlow_700Bold', color: colors.textPrimary }}>
+                    <Text style={[ft.bold, { color: colors.textPrimary }]}>
                       {item.first_comment.username ?? '·'}{' '}
                     </Text>
                     {item.first_comment.content}
@@ -1532,15 +1416,13 @@ function FeedClaimCardBase({
                       { backgroundColor: avatarColor(claim.first_comment.user_id) },
                     ]}
                   >
-                    <Text
-                      style={{ fontSize: 9, fontFamily: 'Barlow_700Bold', color: dark.textPrimary }}
-                    >
+                    <Text style={[ft.fs9bold, { color: dark.textPrimary }]}>
                       {(claim.first_comment.username ?? '·').charAt(0).toUpperCase()}
                     </Text>
                   </View>
                   <View style={styles.firstCommentText}>
                     <Text style={[typography.caption, subDyn]} numberOfLines={1}>
-                      <Text style={{ fontFamily: 'Barlow_700Bold', color: colors.textPrimary }}>
+                      <Text style={[ft.bold, { color: colors.textPrimary }]}>
                         {claim.first_comment.username ?? '·'}{' '}
                       </Text>
                       {claim.first_comment.content}
@@ -2101,36 +1983,22 @@ function KPIBandeau({
       <Text
         style={[
           typography.caption,
-          {
-            color: colors.textTertiary,
-            paddingHorizontal: spacing.s4,
-            paddingTop: spacing.s3,
-            letterSpacing: 1,
-            textTransform: 'uppercase',
-            fontFamily: 'Barlow_700Bold',
-          },
+          ft.upBold,
+          { color: colors.textTertiary, paddingHorizontal: spacing.s4, paddingTop: spacing.s3 },
         ]}
       >
         Stats ce mois
       </Text>
 
       {/* Rangée 1 */}
-      <View
-        style={[
-          styles.kpiBandeau,
-          { paddingHorizontal: spacing.s4, gap: spacing.s3, paddingBottom: 0 },
-        ]}
-      >
+      <View style={[styles.kpiBandeau, ft.pb0, { paddingHorizontal: spacing.s4, gap: spacing.s3 }]}>
         <TouchableOpacity
           onPress={() => router.push('/gyms')}
           style={[styles.kpiItem, { backgroundColor: colors.backgroundSecondary }]}
         >
           <MapPinIcon color={colors.textSecondary} drawProgress={drawMapPin} />
           <Text
-            style={[
-              typography.caption,
-              { color: colors.textSecondary, textAlign: 'center', fontSize: 9 },
-            ]}
+            style={[typography.caption, ft.legendLabel, { color: colors.textSecondary }]}
             numberOfLines={1}
           >
             Voir les salles
@@ -2143,23 +2011,15 @@ function KPIBandeau({
             <Text
               style={[
                 typography.body,
-                {
-                  color: colors.textPrimary,
-                  fontFamily: 'Barlow_700Bold',
-                  fontVariant: ['tabular-nums'],
-                  textAlign: 'center',
-                  fontSize: 11,
-                },
+                ft.legendValue,
+                { color: colors.textPrimary, fontVariant: ['tabular-nums'] },
               ]}
             >
               {workoutsThisMonth}
             </Text>
           </Animated.View>
           <Text
-            style={[
-              typography.caption,
-              { color: colors.textSecondary, textAlign: 'center', fontSize: 9 },
-            ]}
+            style={[typography.caption, ft.legendLabel, { color: colors.textSecondary }]}
             numberOfLines={1}
           >
             Séances
@@ -2172,13 +2032,8 @@ function KPIBandeau({
             <Text
               style={[
                 typography.body,
-                {
-                  color: trendColor,
-                  fontFamily: 'Barlow_700Bold',
-                  fontVariant: ['tabular-nums'],
-                  textAlign: 'center',
-                  fontSize: 11,
-                },
+                ft.legendValue,
+                { color: trendColor, fontVariant: ['tabular-nums'] },
               ]}
             >
               {trendPercent > 0 ? '+' : ''}
@@ -2186,10 +2041,7 @@ function KPIBandeau({
             </Text>
           </Animated.View>
           <Text
-            style={[
-              typography.caption,
-              { color: colors.textSecondary, textAlign: 'center', fontSize: 9 },
-            ]}
+            style={[typography.caption, ft.legendLabel, { color: colors.textSecondary }]}
             numberOfLines={1}
           >
             Tendance
@@ -2210,23 +2062,15 @@ function KPIBandeau({
             <Text
               style={[
                 typography.body,
-                {
-                  color: colors.textPrimary,
-                  fontFamily: 'Barlow_700Bold',
-                  fontVariant: ['tabular-nums'],
-                  textAlign: 'center',
-                  fontSize: 11,
-                },
+                ft.legendValue,
+                { color: colors.textPrimary, fontVariant: ['tabular-nums'] },
               ]}
             >
               {volumeStr}
             </Text>
           </Animated.View>
           <Text
-            style={[
-              typography.caption,
-              { color: colors.textSecondary, textAlign: 'center', fontSize: 9 },
-            ]}
+            style={[typography.caption, ft.legendLabel, { color: colors.textSecondary }]}
             numberOfLines={1}
           >
             Volume
@@ -2239,23 +2083,15 @@ function KPIBandeau({
             <Text
               style={[
                 typography.body,
-                {
-                  color: colors.textPrimary,
-                  fontFamily: 'Barlow_700Bold',
-                  fontVariant: ['tabular-nums'],
-                  textAlign: 'center',
-                  fontSize: 11,
-                },
+                ft.legendValue,
+                { color: colors.textPrimary, fontVariant: ['tabular-nums'] },
               ]}
             >
               {prsThisMonth}
             </Text>
           </Animated.View>
           <Text
-            style={[
-              typography.caption,
-              { color: colors.textSecondary, textAlign: 'center', fontSize: 9 },
-            ]}
+            style={[typography.caption, ft.legendLabel, { color: colors.textSecondary }]}
             numberOfLines={1}
           >
             PRs
@@ -2268,23 +2104,15 @@ function KPIBandeau({
             <Text
               style={[
                 typography.body,
-                {
-                  color: colors.textPrimary,
-                  fontFamily: 'Barlow_700Bold',
-                  fontVariant: ['tabular-nums'],
-                  textAlign: 'center',
-                  fontSize: 11,
-                },
+                ft.legendValue,
+                { color: colors.textPrimary, fontVariant: ['tabular-nums'] },
               ]}
             >
               {durationStr}
             </Text>
           </Animated.View>
           <Text
-            style={[
-              typography.caption,
-              { color: colors.textSecondary, textAlign: 'center', fontSize: 9 },
-            ]}
+            style={[typography.caption, ft.legendLabel, { color: colors.textSecondary }]}
             numberOfLines={1}
           >
             Durée moy.
@@ -2403,6 +2231,7 @@ export default function FeedScreen() {
       cancelAnimation(greetingOpacity)
       cancelAnimation(greetingTranslate)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- effet de montage volontaire (ORA-093)
   }, [])
 
   // ─── Groupe 2 : 3 KPI cards — décalé de 2.5s puis toutes les 5s ─────────────
@@ -2495,6 +2324,7 @@ export default function FeedScreen() {
       cancelAnimation(drawPRs)
       cancelAnimation(drawDuration)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- effet de montage volontaire (ORA-093)
   }, [])
 
   const greetingAnimStyle = useAnimatedStyle(() => ({
@@ -2529,6 +2359,7 @@ export default function FeedScreen() {
     } else {
       cancelAnimation(refreshSpin)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- effet de montage volontaire (ORA-093)
   }, [refreshing])
 
   useFocusEffect(
@@ -2556,6 +2387,7 @@ export default function FeedScreen() {
           setRefreshing(false)
         })
       }
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- effet de montage volontaire (ORA-093)
     }, [fetchFeed])
   )
 
@@ -2569,6 +2401,7 @@ export default function FeedScreen() {
     setRefreshing(false)
     listOpacity.value = withTiming(1, { duration: 300, easing: Easing.bezier(0.16, 1, 0.3, 1) })
     listTranslateY.value = withSpring(0, { damping: 20, stiffness: 300 })
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- effet de montage volontaire (ORA-093)
   }, [fetchFeed])
 
   // ─── Navigate to detail ─────────────────────────────────────────────────────
@@ -2628,13 +2461,10 @@ export default function FeedScreen() {
           </TouchableOpacity>
         </Animated.View>
         {/* Clip parent — le texte émerge depuis le bord gauche */}
-        <View style={{ flex: 1, marginLeft: spacing.s3 }}>
+        <View style={[L.flex1, { marginLeft: spacing.s3 }]}>
           <Animated.View style={greetingAnimStyle}>
             <Text
-              style={[
-                typography.body,
-                { color: colors.textPrimary, fontFamily: 'Barlow_600SemiBold' },
-              ]}
+              style={[typography.body, ft.semibold, { color: colors.textPrimary }]}
               numberOfLines={1}
             >
               Bonjour {currentUserFirstName},
@@ -2677,12 +2507,8 @@ export default function FeedScreen() {
           <Text
             style={[
               typography.caption,
-              {
-                color: colors.textTertiary,
-                letterSpacing: 1,
-                textTransform: 'uppercase',
-                marginLeft: spacing.s2,
-              },
+              ft.up1,
+              { color: colors.textTertiary, marginLeft: spacing.s2 },
             ]}
           >
             Actualisation...
@@ -2692,13 +2518,13 @@ export default function FeedScreen() {
 
       {/* Content */}
       {loading ? (
-        <View style={{ paddingHorizontal: spacing.s4, paddingTop: spacing.s3, flex: 1 }}>
+        <View style={[L.flex1, { paddingHorizontal: spacing.s4, paddingTop: spacing.s3 }]}>
           {Array.from({ length: 5 }).map((_, i) => (
             <SkeletonCard key={i} />
           ))}
         </View>
       ) : (
-        <Animated.View style={[{ flex: 1 }, listAnimStyle]}>
+        <Animated.View style={[L.flex1, listAnimStyle]}>
           <FlatList
             data={feedEntries}
             keyExtractor={keyExtractor}
@@ -2754,6 +2580,38 @@ export default function FeedScreen() {
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
+
+// Styles statiques sortis du inline (rendu-identique — ORA-093)
+const ft = StyleSheet.create({
+  bold: { fontFamily: 'Barlow_700Bold' },
+  semibold: { fontFamily: 'Barlow_600SemiBold' },
+  boldUp: { fontFamily: 'Barlow_700Bold', textTransform: 'uppercase' },
+  legendLabel: { textAlign: 'center', fontSize: 9 },
+  legendValue: { fontFamily: 'Barlow_700Bold', textAlign: 'center', fontSize: 11 },
+  flexMin0: { flex: 1, minWidth: 0 },
+  alignCenter: { alignItems: 'center' },
+  centerBoth: { alignItems: 'center', justifyContent: 'center' },
+  hidden: { overflow: 'hidden' },
+  borderHidden: { borderWidth: 1, overflow: 'hidden' },
+  absTopLeft: { position: 'absolute', top: 0, left: 0 },
+  dot5: { width: 5, height: 5, borderRadius: 3 },
+  dot5dim: { width: 5, height: 5, borderRadius: 3, opacity: 0.4 },
+  fs9bold: { fontSize: 9, fontFamily: 'Barlow_700Bold' },
+  fs12: { fontSize: 12 },
+  box40: { width: 40, height: 40 },
+  skCol: { flex: 1, gap: 8 },
+  skW55: { width: '55%' },
+  skW35h10: { width: '35%', height: 10 },
+  dotsRow: { flexDirection: 'row', justifyContent: 'center', gap: 5 },
+  gap6: { gap: 6 },
+  vsep: { width: 1, height: 12 },
+  titleBold: { fontSize: 13, fontFamily: 'Barlow_700Bold', letterSpacing: -0.3 },
+  upBold: { letterSpacing: 1, textTransform: 'uppercase', fontFamily: 'Barlow_700Bold' },
+  up1: { letterSpacing: 1, textTransform: 'uppercase' },
+  pb0: { paddingBottom: 0 },
+  mb0: { marginBottom: 0 },
+  dim05: { opacity: 0.5 },
+})
 
 const styles = StyleSheet.create({
   container: {

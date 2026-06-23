@@ -50,17 +50,13 @@ import {
   radius,
   typography,
   font,
-  duration,
   score as scoreScale,
   scrim,
   scrimStrong,
 } from '@/constants/theme'
 import { type PrType } from '@/constants/recipes'
-import MyoChart, {
-  FAMILY_NAMES,
-  FAMILY_NAMES_SHORT,
-  SECTOR_COLORS_HEX,
-} from '@/app/workout/myo-chart'
+import { L } from '@/constants/layout'
+import MyoChart, { FAMILY_NAMES_SHORT, SECTOR_COLORS_HEX } from '@/app/workout/myo-chart'
 import MyoGlossaryScreen from '@/app/myo-glossary'
 import { sessionValuesFromSignature } from '@/lib/myo'
 import { formatDuration } from '@/lib/utils'
@@ -127,10 +123,6 @@ interface FeedWorkoutDetail {
     full_name: string | null
     avatar_url: string | null
   }
-}
-
-interface WorkoutMetricsData {
-  [key: string]: unknown
 }
 
 interface SetRow {
@@ -777,6 +769,13 @@ const chipBaseStyle = {
   justifyContent: 'center' as const,
   flexShrink: 1 as const,
 }
+const mio = StyleSheet.create({
+  scoreCol: { marginTop: spacing.s2, gap: 6 },
+  scoreRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  unit11: { fontSize: 11 },
+  rad3: { borderRadius: 3 },
+  stretch: { alignSelf: 'stretch' },
+})
 const chipLabelBase = {
   fontSize: 9,
   fontFamily: font.bold,
@@ -803,6 +802,7 @@ function FamilyChip({
       onPress={onPress}
       style={[
         chipBaseStyle,
+        // eslint-disable-next-line react-native/no-inline-styles -- chip dynamique (couleur + état actif par render, ORA-093)
         {
           borderColor: color,
           backgroundColor: isActive ? `${color}22` : 'transparent',
@@ -867,6 +867,7 @@ export default function HistoryDetailScreen(): React.JSX.Element {
         easing: Easing.bezier(0.16, 1, 0.3, 1),
       })
     )
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- effet de montage volontaire (ORA-093)
   }, [workout?.id])
 
   // Animation hint "GUIDE" sur le bouton HelpCircle
@@ -902,6 +903,7 @@ export default function HistoryDetailScreen(): React.JSX.Element {
       -1,
       false
     )
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- effet de montage volontaire (ORA-093)
   }, [myoFullscreen])
 
   const hintAnimStyle = useAnimatedStyle(() => ({
@@ -915,18 +917,12 @@ export default function HistoryDetailScreen(): React.JSX.Element {
     glossarySlide.value = myoGlossaryOpen
       ? withTiming(0, { duration: 380, easing: Easing.bezier(0.16, 1, 0.3, 1) })
       : withTiming(screenHeight, { duration: 280, easing: Easing.bezier(0.4, 0, 1, 1) })
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- effet de montage volontaire (ORA-093)
   }, [myoGlossaryOpen])
 
   const glossaryAnimStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: glossarySlide.value }],
   }))
-
-  const familyScores = useMemo(() => {
-    if (!sessionValues) return new Array(8).fill(0) as number[]
-    return sessionValues.map((fam) =>
-      Math.round((fam.reduce((s, v) => s + v, 0) / fam.length) * 100)
-    )
-  }, [sessionValues])
 
   const globalScore = useMemo(() => {
     if (!sessionValues) return 0
@@ -936,8 +932,6 @@ export default function HistoryDetailScreen(): React.JSX.Element {
     )
     return Math.round((sum / sessionValues.length) * 100)
   }, [sessionValues])
-  const scoreColor =
-    globalScore >= 66 ? scoreScale.high : globalScore >= 33 ? scoreScale.mid : scoreScale.low
 
   const openMyoFullscreen = useCallback(() => {
     setMyoFullscreen(true)
@@ -1228,7 +1222,10 @@ export default function HistoryDetailScreen(): React.JSX.Element {
         message: `${title} · ${vol} · ${date} — via Ova`,
         title,
       })
-    } catch {}
+    } catch {
+      /* partage annulé par l'utilisateur — non bloquant */
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- effet de montage volontaire (ORA-093)
   }, [workout])
 
   const handleMenu = useCallback(() => {
@@ -1419,15 +1416,15 @@ export default function HistoryDetailScreen(): React.JSX.Element {
                 <Text style={[s.myoMiniSub, { color: colors.textSecondary }]}>
                   8 familles · Tap pour détailler
                 </Text>
-                <View style={{ marginTop: spacing.s2, gap: 6 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <View style={mio.scoreCol}>
+                  <View style={mio.scoreRow}>
                     <GradientScoreText score={globalScore} size={44} />
-                    <Text style={[s.myoMiniSub, { color: colors.textTertiary, fontSize: 11 }]}>
+                    <Text style={[s.myoMiniSub, mio.unit11, { color: colors.textTertiary }]}>
                       / 100
                     </Text>
                   </View>
                   <View style={[s.scoreBarTrack, { backgroundColor: colors.backgroundTertiary }]}>
-                    <Svg width={`${globalScore}%`} height={6} style={{ borderRadius: 3 }}>
+                    <Svg width={`${globalScore}%`} height={6} style={mio.rad3}>
                       <Defs>
                         <LinearGradient id="sbGrad" x1="0%" y1="0%" x2="100%" y2="0%">
                           <Stop offset="0%" stopColor={scoreScale.low} />
@@ -1504,7 +1501,7 @@ export default function HistoryDetailScreen(): React.JSX.Element {
           <Text
             style={[s.bottomActionLabel, { color: hasLiked ? colors.error : colors.textTertiary }]}
           >
-            J'AIME
+            J&apos;AIME
           </Text>
         </Pressable>
 
@@ -1527,7 +1524,7 @@ export default function HistoryDetailScreen(): React.JSX.Element {
         animationType="slide"
         onRequestClose={() => setCommentsOpen(false)}
       >
-        <View style={{ flex: 1 }}>
+        <View style={L.flex1}>
           <Pressable style={s.commentsOverlay} onPress={() => setCommentsOpen(false)} />
           <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -1659,7 +1656,7 @@ export default function HistoryDetailScreen(): React.JSX.Element {
             </Pressable>
           </View>
           <ScrollView
-            style={{ flex: 1 }}
+            style={L.flex1}
             contentContainerStyle={s.myoFsOrb}
             showsVerticalScrollIndicator={false}
           >
@@ -1673,7 +1670,8 @@ export default function HistoryDetailScreen(): React.JSX.Element {
           <View
             style={[
               s.familySelector,
-              { paddingHorizontal: spacing.s4, paddingBottom: spacing.s3, alignSelf: 'stretch' },
+              mio.stretch,
+              { paddingHorizontal: spacing.s4, paddingBottom: spacing.s3 },
             ]}
           >
             {FAMILY_NAMES_SHORT.map((name, idx) => (

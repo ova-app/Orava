@@ -1,12 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import {
-  View,
-  Text,
-  Pressable,
-  StyleSheet,
-  SafeAreaView,
-  ActivityIndicator,
-} from 'react-native'
+import { View, Text, Pressable, StyleSheet, SafeAreaView, ActivityIndicator } from 'react-native'
 import { useRouter } from 'expo-router'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { CheckCircle } from 'lucide-react-native'
@@ -30,8 +23,20 @@ function DotsProgression({ actif }: { actif: 0 | 1 }): React.JSX.Element {
   const { colors } = useTheme()
   return (
     <View style={dotsStyles.conteneur}>
-      <View style={[dotsStyles.point, { width: actif === 0 ? 8 : 6, height: actif === 0 ? 8 : 6, backgroundColor: actif === 0 ? colors.accent : colors.textTertiary }]} />
-      <View style={[dotsStyles.point, { width: actif === 1 ? 8 : 6, height: actif === 1 ? 8 : 6, backgroundColor: actif === 1 ? colors.accent : colors.textTertiary }]} />
+      <View
+        style={[
+          dotsStyles.point,
+          actif === 0 ? dotsStyles.pointActif : dotsStyles.pointInactif,
+          { backgroundColor: actif === 0 ? colors.accent : colors.textTertiary },
+        ]}
+      />
+      <View
+        style={[
+          dotsStyles.point,
+          actif === 1 ? dotsStyles.pointActif : dotsStyles.pointInactif,
+          { backgroundColor: actif === 1 ? colors.accent : colors.textTertiary },
+        ]}
+      />
     </View>
   )
 }
@@ -39,6 +44,8 @@ function DotsProgression({ actif }: { actif: 0 | 1 }): React.JSX.Element {
 const dotsStyles = StyleSheet.create({
   conteneur: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   point: { borderRadius: 9999 },
+  pointActif: { width: 8, height: 8 },
+  pointInactif: { width: 6, height: 6 },
 })
 
 // ─── Screen ──────────────────────────────────────────────────────────────────
@@ -59,7 +66,7 @@ export default function OnboardingFirstSetScreen(): React.JSX.Element {
         const { data } = await supabase
           .from('exercises')
           .select('id, name_fr, muscle_group, equipment_type')
-          .or("name_fr.ilike.développé couché,name_en.ilike.bench press")
+          .or('name_fr.ilike.développé couché,name_en.ilike.bench press')
           .limit(1)
           .single()
         if (data) {
@@ -90,7 +97,12 @@ export default function OnboardingFirstSetScreen(): React.JSX.Element {
       await AsyncStorage.setItem('onboarding_done', 'true')
       startWorkout()
       if (exercise) {
-        await addExercise(exercise.id, exercise.name_fr, exercise.muscle_group, exercise.equipment_type)
+        await addExercise(
+          exercise.id,
+          exercise.name_fr,
+          exercise.muscle_group,
+          exercise.equipment_type
+        )
       }
       router.replace('/workout/session')
     } catch {
@@ -128,9 +140,7 @@ export default function OnboardingFirstSetScreen(): React.JSX.Element {
           </View>
         ) : (
           <View style={[styles.cardExercice, styles.cardLoading]}>
-            <Text style={[typography.body, { color: colors.textSecondary }]}>
-              Séance libre
-            </Text>
+            <Text style={[typography.body, { color: colors.textSecondary }]}>Séance libre</Text>
           </View>
         )}
       </View>
@@ -140,7 +150,11 @@ export default function OnboardingFirstSetScreen(): React.JSX.Element {
         <DotsProgression actif={1} />
 
         <Pressable
-          style={({ pressed }) => [styles.cta, pressed && styles.ctaAppuye, starting && styles.ctaAppuye]}
+          style={({ pressed }) => [
+            styles.cta,
+            pressed && styles.ctaAppuye,
+            starting && styles.ctaAppuye,
+          ]}
           onPress={() => void allerVersSession()}
           accessibilityRole="button"
           accessibilityLabel="Logger ma première série"

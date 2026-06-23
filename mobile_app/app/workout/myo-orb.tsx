@@ -175,15 +175,6 @@ const DIM_CONFIGS: readonly DimConfig[] = (() => {
 })()
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
-const ss = (t: number): number => t * t * (3 - 2 * t)
-
-function sectorBlend(theta: number): { s0: number; s1: number; t: number } {
-  const a = ((theta % TWO_PI) + TWO_PI) % TWO_PI
-  const sf = a / SECTOR_ANG
-  const s0 = Math.floor(sf) % N_SECTORS
-  return { s0, s1: (s0 + 1) % N_SECTORS, t: ss(sf - Math.floor(sf)) }
-}
-
 function getH(r: number, theta: number, data: number[][], maxH: number): number {
   const rn = r / MAX_R
   const edge = Math.min(rn / 0.1, 1.0) * Math.min((1 - rn) / 0.08, 1.0)
@@ -212,17 +203,6 @@ function getH(r: number, theta: number, data: number[][], maxH: number): number 
   }
 
   return h * maxH * edge
-}
-
-function getC(theta: number): [number, number, number] {
-  const { s0, s1, t } = sectorBlend(theta)
-  const h0 = SECTOR_COLORS[s0]
-  const h1 = SECTOR_COLORS[s1]
-  return [
-    (((h0 >> 16) & 0xff) * (1 - t) + ((h1 >> 16) & 0xff) * t) / 255,
-    (((h0 >> 8) & 0xff) * (1 - t) + ((h1 >> 8) & 0xff) * t) / 255,
-    ((h0 & 0xff) * (1 - t) + (h1 & 0xff) * t) / 255,
-  ]
 }
 
 // ─── Helper SVG arc ────────────────────────────────────────────────────────
@@ -549,6 +529,7 @@ export default function MyoOrb({
   const mountAnim = useAnimatedStyle(() => ({ opacity: mountOpacity.value }))
   useEffect(() => {
     mountOpacity.value = withTiming(1, { duration: 700, easing: Easing.bezier(0.16, 1, 0.3, 1) })
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- effet de montage volontaire (ORA-093)
   }, [])
 
   // ─── Animation panneau détail + barres ───────────────────────────────────
@@ -570,6 +551,7 @@ export default function MyoOrb({
       80,
       withTiming(1, { duration: 480, easing: Easing.bezier(0.16, 1, 0.3, 1) })
     )
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- effet de montage volontaire (ORA-093)
   }, [selectedFamily])
 
   // ─── Refs partagés GL ↔ React ────────────────────────────────────────────
@@ -885,6 +867,7 @@ export default function MyoOrb({
                   key={i}
                   style={[
                     styles.label,
+                    // eslint-disable-next-line react-native/no-inline-styles -- étiquette positionnée + animée par frame (ORA-093)
                     {
                       left: pos.x,
                       top: pos.y,

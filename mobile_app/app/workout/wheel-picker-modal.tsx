@@ -94,12 +94,7 @@ function SingleWheel({ values, selectedValue, onValueChange, label, isEmpty }: S
   if (isEmpty || values.length === 0) {
     return (
       <View style={styles.wheelContainer}>
-        <View
-          style={[
-            styles.wheelScroll,
-            { height: WHEEL_HEIGHT, justifyContent: 'center', alignItems: 'center' },
-          ]}
-        >
+        <View style={[styles.wheelScroll, styles.wheelEmpty]}>
           <Text style={[styles.wheelEmptyText, { color: colors.textTertiary }]}>—</Text>
         </View>
         <View
@@ -234,7 +229,7 @@ function GhostWeightBar({
           style={[
             ghostWeightStyles.value,
             {
-              color: beaten ? '#00E673' : delta < 0 ? 'rgba(255,59,48,0.85)' : colors.textSecondary,
+              color: beaten ? colors.success : delta < 0 ? GHOST_BEHIND : colors.textSecondary,
             },
           ]}
         >
@@ -282,6 +277,9 @@ function GhostWeightBar({
   )
 }
 
+// Rouge « fantôme battu de justesse » — error à 0.85 (pas un token theme exact)
+const GHOST_BEHIND = 'rgba(255,59,48,0.85)'
+
 const ghostWeightStyles = StyleSheet.create({
   container: {
     paddingHorizontal: spacing.s4,
@@ -316,7 +314,6 @@ export default function WheelPickerModal({
   currentReps = 5,
   equipmentType,
   ghostValue,
-  ghostBeaten = false,
 }: WheelPickerModalProps) {
   const { colors } = useTheme()
   const { unit, toKg } = useWeightUnit()
@@ -456,6 +453,7 @@ export default function WheelPickerModal({
 // ─── Styles ───────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
+  wheelEmpty: { height: WHEEL_HEIGHT, justifyContent: 'center', alignItems: 'center' },
   // ── Overlay ──
   modalOverlay: {
     ...StyleSheet.absoluteFillObject,

@@ -33,6 +33,7 @@ function SkeletonRow() {
       -1,
       true
     )
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- effet de montage volontaire (ORA-093)
   }, [])
 
   const shimmerStyle = useAnimatedStyle(() => ({
@@ -50,30 +51,13 @@ function SkeletonRow() {
         shimmerStyle,
       ]}
     >
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s4 }}>
+      <View style={styles.skRow}>
         <View
-          style={[
-            styles.dateBlock,
-            { backgroundColor: colors.backgroundTertiary, borderRadius: 6 },
-          ]}
+          style={[styles.dateBlock, styles.rad6, { backgroundColor: colors.backgroundTertiary }]}
         />
-        <View style={{ flex: 1, gap: 8 }}>
-          <View
-            style={{
-              width: '55%',
-              height: 12,
-              borderRadius: 4,
-              backgroundColor: colors.backgroundTertiary,
-            }}
-          />
-          <View
-            style={{
-              width: '40%',
-              height: 10,
-              borderRadius: 4,
-              backgroundColor: colors.backgroundTertiary,
-            }}
-          />
+        <View style={styles.skCol}>
+          <View style={[styles.skW55, { backgroundColor: colors.backgroundTertiary }]} />
+          <View style={[styles.skW40, { backgroundColor: colors.backgroundTertiary }]} />
         </View>
       </View>
     </Animated.View>
@@ -113,26 +97,10 @@ function HistoryRow({ item, onPress }: HistoryRowProps) {
       <View style={styles.cardInner}>
         {/* Bloc date */}
         <View style={styles.dateBlock}>
-          <Text
-            style={[
-              typography.title,
-              {
-                color: colors.textPrimary,
-                fontSize: 22,
-                lineHeight: 26,
-                letterSpacing: -0.3,
-                fontFamily: 'Barlow_700Bold',
-              },
-            ]}
-          >
+          <Text style={[typography.title, styles.dayText, { color: colors.textPrimary }]}>
             {day}
           </Text>
-          <Text
-            style={[
-              typography.caption,
-              { color: colors.textTertiary, textTransform: 'uppercase', marginTop: 2 },
-            ]}
-          >
+          <Text style={[typography.caption, styles.weekdayText, { color: colors.textTertiary }]}>
             {weekday}
           </Text>
         </View>
@@ -140,13 +108,13 @@ function HistoryRow({ item, onPress }: HistoryRowProps) {
         {/* Centre */}
         <View style={styles.centerCol}>
           <Text
-            style={[typography.body, { color: colors.textPrimary, fontFamily: 'Barlow_700Bold' }]}
+            style={[typography.body, styles.bold, { color: colors.textPrimary }]}
             numberOfLines={1}
           >
             {item.title ?? '—'}
           </Text>
           <Text
-            style={[typography.caption, { color: colors.textSecondary, marginTop: 2 }]}
+            style={[typography.caption, styles.mt2, { color: colors.textSecondary }]}
             numberOfLines={1}
           >
             {subtitleParts.join(' · ')}
@@ -155,34 +123,16 @@ function HistoryRow({ item, onPress }: HistoryRowProps) {
 
         {/* Right : icône PR + volume + chevron */}
         <View style={styles.rightCol}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <View style={styles.rowCenter6}>
             {item.pr_seance === 'gold' && <Trophy size={14} color={colors.prGold} />}
             {item.pr_seance === 'silver' && <Trophy size={14} color={colors.prSilver} />}
             {item.pr_seance === 'bronze' && <Trophy size={14} color={colors.prBronze} />}
-            <Text
-              style={[
-                typography.body,
-                {
-                  color: colors.textPrimary,
-                  fontFamily: 'Barlow_700Bold',
-                  fontVariant: ['tabular-nums'],
-                  fontSize: 14,
-                },
-              ]}
-            >
+            <Text style={[typography.body, styles.volBold, { color: colors.textPrimary }]}>
               {volumeStr}{' '}
-              <Text
-                style={{
-                  fontFamily: 'Barlow_400Regular',
-                  color: colors.textSecondary,
-                  fontSize: 12,
-                }}
-              >
-                {weightUnit}
-              </Text>
+              <Text style={[styles.unitText, { color: colors.textSecondary }]}>{weightUnit}</Text>
             </Text>
           </View>
-          <ChevronRight size={14} color={colors.textTertiary} style={{ marginTop: 2 }} />
+          <ChevronRight size={14} color={colors.textTertiary} style={styles.mt2} />
         </View>
       </View>
     </TouchableOpacity>
@@ -260,10 +210,9 @@ export default function HistoryScreen() {
             <Text
               style={[
                 typography.caption,
+                styles.upcase1,
                 {
                   color: colors.textTertiary,
-                  textTransform: 'uppercase',
-                  letterSpacing: 1,
                   paddingTop: spacing.s6,
                   paddingBottom: spacing.s3,
                 },
@@ -289,6 +238,19 @@ export default function HistoryScreen() {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
+  skRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.s4 },
+  rad6: { borderRadius: 6 },
+  skCol: { flex: 1, gap: 8 },
+  skW55: { width: '55%', height: 12, borderRadius: 4 },
+  skW40: { width: '40%', height: 10, borderRadius: 4 },
+  dayText: { fontSize: 22, lineHeight: 26, letterSpacing: -0.3, fontFamily: 'Barlow_700Bold' },
+  weekdayText: { textTransform: 'uppercase', marginTop: 2 },
+  bold: { fontFamily: 'Barlow_700Bold' },
+  mt2: { marginTop: 2 },
+  rowCenter6: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  volBold: { fontFamily: 'Barlow_700Bold', fontVariant: ['tabular-nums'], fontSize: 14 },
+  unitText: { fontFamily: 'Barlow_400Regular', fontSize: 12 },
+  upcase1: { textTransform: 'uppercase', letterSpacing: 1 },
   container: {
     flex: 1,
   },

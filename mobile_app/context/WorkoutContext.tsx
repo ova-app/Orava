@@ -217,7 +217,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       pr_top3_charge = top3.charge
       pr_top3_serie = top3.serie
       pr_top3_exercice = top3.exercice
-    } catch (_) {
+    } catch {
       // Non-bloquant — top3 vides → aucun PR détecté (sûr, pas de faux PR)
     }
 

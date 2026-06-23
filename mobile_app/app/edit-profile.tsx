@@ -392,8 +392,6 @@ export default function EditProfileScreen(): React.JSX.Element {
   }
 
   const dateHasError = !!errors.dateNaissance
-  const dateIsFilled =
-    form.dateDay.length > 0 || form.dateMonth.length > 0 || form.dateYear.length > 0
 
   return (
     <KeyboardAvoidingView style={s.root} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>

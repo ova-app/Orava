@@ -20,10 +20,22 @@ module.exports = {
     'react/prop-types': 'off',
     'react/no-unescaped-entities': 'warn',
     'no-empty': 'warn',
-    'no-constant-condition': 'warn',
+    // Les boucles `while (true) { … break }` (adapter SecureStore par chunks) sont légitimes.
+    'no-constant-condition': ['warn', { checkLoops: false }],
   },
   env: {
     'react-native/react-native': true,
   },
+  overrides: [
+    {
+      // Outillage hors app (config Jest, scripts Node) — pas de typage RN strict
+      files: ['jest.setup.js', 'scripts/**/*.js', '*.config.js', '.eslintrc.js'],
+      env: { node: true, jest: true },
+      rules: {
+        '@typescript-eslint/no-require-imports': 'off',
+        'no-undef': 'off',
+      },
+    },
+  ],
   ignorePatterns: ['node_modules/', '.expo/', 'dist/'],
 }

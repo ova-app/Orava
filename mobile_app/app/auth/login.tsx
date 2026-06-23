@@ -34,8 +34,10 @@ interface ErreurFormulaire {
 
 // ─── Logo Orava ───────────────────────────────────────────────────────────────
 
+const logoStyles = StyleSheet.create({ logo: { width: 48, height: 48 } })
+
 function LogoOrava(): React.JSX.Element {
-  return <Image source={oravaLogo} style={{ width: 48, height: 48 }} resizeMode="contain" />
+  return <Image source={oravaLogo} style={logoStyles.logo} resizeMode="contain" />
 }
 
 // ─── Screen ──────────────────────────────────────────────────────────────────

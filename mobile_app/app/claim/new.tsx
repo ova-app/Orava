@@ -19,6 +19,7 @@ import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/context/ThemeContext'
 import { useWeightUnit } from '@/context/WeightUnitContext'
 import { spacing, radius, typography, font, touchTarget } from '@/constants/theme'
+import { L } from '@/constants/layout'
 import { createClaim, type ClaimScope, type ClaimType } from '@/lib/claims'
 import { muscleGroupLabel } from '@/lib/muscles'
 
@@ -185,7 +186,7 @@ export default function NewClaimScreen(): React.JSX.Element {
       </View>
 
       <KeyboardAvoidingView
-        style={{ flex: 1 }}
+        style={L.flex1}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <ScrollView
@@ -247,7 +248,7 @@ export default function NewClaimScreen(): React.JSX.Element {
                   onPress={() => setSelectedExercise(null)}
                   accessibilityLabel="Changer d'exercice"
                 >
-                  <View style={{ flex: 1 }}>
+                  <View style={L.flex1}>
                     <Text style={s.selectedExerciseName}>{selectedExercise.name_fr}</Text>
                     <Text style={s.selectedExerciseMuscle}>
                       {muscleGroupLabel(selectedExercise.muscle_group).toUpperCase()}
@@ -339,7 +340,7 @@ export default function NewClaimScreen(): React.JSX.Element {
                           placeholderTextColor={colors.textTertiary}
                           keyboardType="number-pad"
                           maxLength={2}
-                          style={[s.dateInput, { flex: 1 }]}
+                          style={[s.dateInput, L.flex1]}
                         />
                         <Text style={s.dateSep}>/</Text>
                         <TextInput
@@ -349,7 +350,7 @@ export default function NewClaimScreen(): React.JSX.Element {
                           placeholderTextColor={colors.textTertiary}
                           keyboardType="number-pad"
                           maxLength={2}
-                          style={[s.dateInput, { flex: 1 }]}
+                          style={[s.dateInput, L.flex1]}
                         />
                         <Text style={s.dateSep}>/</Text>
                         <TextInput
@@ -359,7 +360,7 @@ export default function NewClaimScreen(): React.JSX.Element {
                           placeholderTextColor={colors.textTertiary}
                           keyboardType="number-pad"
                           maxLength={4}
-                          style={[s.dateInput, { flex: 1.4 }]}
+                          style={[s.dateInput, s.flex14]}
                         />
                       </View>
                       <Text style={s.scopeNote}>
@@ -410,7 +411,7 @@ export default function NewClaimScreen(): React.JSX.Element {
 
           {/* Public */}
           <View style={s.publicRow}>
-            <View style={{ flex: 1 }}>
+            <View style={L.flex1}>
               <Text style={s.publicLabel}>Public</Text>
               <Text style={s.publicSub}>
                 {isPublic
@@ -431,11 +432,7 @@ export default function NewClaimScreen(): React.JSX.Element {
         {/* CTA */}
         <View style={s.footer}>
           <Pressable
-            style={[
-              s.submitBtn,
-              { backgroundColor: colors.accent },
-              !canSubmit && { opacity: 0.4 },
-            ]}
+            style={[s.submitBtn, { backgroundColor: colors.accent }, !canSubmit && s.dim]}
             onPress={() => void handleSubmit()}
             disabled={!canSubmit || submitting}
           >
@@ -459,6 +456,8 @@ export default function NewClaimScreen(): React.JSX.Element {
 function buildStyles(colors: ReturnType<typeof useTheme>['colors']) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
+    flex14: { flex: 1.4 },
+    dim: { opacity: 0.4 },
     header: {
       flexDirection: 'row',
       alignItems: 'center',

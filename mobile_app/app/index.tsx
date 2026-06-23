@@ -15,10 +15,15 @@ import { useTheme } from '@/context/ThemeContext'
 import { spacing, font } from '@/constants/theme'
 import oravaLogo from '@/assets/orava_logo.png'
 
+const m = StyleSheet.create({
+  logo: { width: 72, height: 72 },
+  spinBox: { width: 40, height: 40 },
+})
+
 // ─── Logo Orava ───────────────────────────────────────────────────────────────
 
 function LogoOrava(): React.JSX.Element {
-  return <Image source={oravaLogo} style={{ width: 72, height: 72 }} resizeMode="contain" />
+  return <Image source={oravaLogo} style={m.logo} resizeMode="contain" />
 }
 
 // ─── Spinner — arc jaune animé ────────────────────────────────────────────────
@@ -41,7 +46,7 @@ function LoadingSpinner({ color }: { color: string }): React.JSX.Element {
   }))
 
   return (
-    <Animated.View style={[{ width: 40, height: 40 }, spinStyle]}>
+    <Animated.View style={[m.spinBox, spinStyle]}>
       <Svg width={40} height={40} viewBox="0 0 40 40">
         {/* Arc partiel ~270° — de 12h à 9h dans le sens horaire */}
         <Path

@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { ChevronLeft } from 'lucide-react-native'
 import { useTheme } from '@/context/ThemeContext'
-import { spacing, typography, dark, radius } from '@/constants/theme'
+import { spacing, typography, radius } from '@/constants/theme'
 
 export default function ChatScreen() {
   const router = useRouter()
@@ -20,7 +20,7 @@ export default function ChatScreen() {
           <ChevronLeft size={24} color={colors.textPrimary} strokeWidth={1.5} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Ova Chat</Text>
-        <View style={{ width: 24 }} />
+        <View style={styles.spacer24} />
       </View>
 
       <View style={styles.content}>
@@ -38,6 +38,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  spacer24: { width: 24 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',

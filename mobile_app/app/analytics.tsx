@@ -1,5 +1,13 @@
 import React, { useCallback, useEffect, useState } from 'react'
-import { View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator } from 'react-native'
+import {
+  View,
+  Text,
+  ScrollView,
+  Pressable,
+  StyleSheet,
+  ActivityIndicator,
+  type DimensionValue,
+} from 'react-native'
 import {
   useSharedValue,
   useAnimatedReaction,
@@ -13,6 +21,7 @@ import { ChevronLeft, Dumbbell, TrendingUp, Zap, Target } from 'lucide-react-nat
 import { useTheme } from '@/context/ThemeContext'
 import { useWeightUnit } from '@/context/WeightUnitContext'
 import { spacing, radius, typography, font } from '@/constants/theme'
+import { L } from '@/constants/layout'
 import { useAnalyticsData } from '@/lib/hooks/useAnalyticsData'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -63,6 +72,7 @@ function AnimatedCounter({
 
   useEffect(() => {
     sv.value = withDelay(delay, withTiming(target, { duration, easing: easeOutCubic }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- effet de montage volontaire (ORA-093)
   }, [target, delay, duration])
 
   useAnimatedReaction(
@@ -108,6 +118,11 @@ export default function AnalyticsScreen(): React.JSX.Element {
 
   const prLevelColor = (level: 'gold' | 'silver' | 'bronze'): string =>
     level === 'gold' ? colors.prGold : level === 'silver' ? colors.prSilver : colors.prBronze
+
+  const bar7Width: DimensionValue =
+    volumeRolling != null && volumeRolling.vol30j > 0
+      ? `${Math.min(Math.round((volumeRolling.vol7j / volumeRolling.vol30j) * 100 * (7 / 30) * 4), 100)}%`
+      : '0%'
 
   return (
     <View style={s.container}>
@@ -181,7 +196,7 @@ export default function AnalyticsScreen(): React.JSX.Element {
                     {deltaSign(volumeRolling.delta7vs30)} vs moy.
                   </Text>
                 </View>
-                <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
+                <View style={L.rowBaseline}>
                   <AnimatedCounter
                     target={volumeRolling.vol7j}
                     duration={1200}
@@ -198,7 +213,7 @@ export default function AnalyticsScreen(): React.JSX.Element {
               {/* Ligne 30j */}
               <View style={s.rollingRow}>
                 <Text style={s.rollingPeriod}>30J</Text>
-                <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
+                <View style={L.rowBaseline}>
                   <AnimatedCounter
                     target={volumeRolling.vol30j}
                     duration={1200}
@@ -215,7 +230,7 @@ export default function AnalyticsScreen(): React.JSX.Element {
               {/* Ligne 90j */}
               <View style={s.rollingRow}>
                 <Text style={s.rollingPeriod}>90J</Text>
-                <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
+                <View style={L.rowBaseline}>
                   <AnimatedCounter
                     target={volumeRolling.vol90j}
                     duration={1200}
@@ -231,17 +246,7 @@ export default function AnalyticsScreen(): React.JSX.Element {
               <View style={s.chartContainer}>
                 <Text style={s.chartLabel}>RÉPARTITION 7J VS 30J</Text>
                 <View style={s.barTrackWide}>
-                  <View
-                    style={[
-                      s.barFill,
-                      {
-                        width:
-                          volumeRolling.vol30j > 0
-                            ? `${Math.min(Math.round((volumeRolling.vol7j / volumeRolling.vol30j) * 100 * (7 / 30) * 4), 100)}%`
-                            : '0%',
-                      },
-                    ]}
-                  />
+                  <View style={[s.barFill, { width: bar7Width }]} />
                 </View>
                 <View style={s.chartLegendRow}>
                   <Text style={s.chartLegendItem}>
@@ -338,7 +343,7 @@ export default function AnalyticsScreen(): React.JSX.Element {
             accessibilityRole="button"
             accessibilityLabel="Voir l'Armurerie complète"
           >
-            <Text style={s.armurerieBtnText}>Voir l'Armurerie →</Text>
+            <Text style={s.armurerieBtnText}>Voir l&apos;Armurerie →</Text>
           </Pressable>
         </View>
 

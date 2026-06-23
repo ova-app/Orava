@@ -25,12 +25,13 @@ import Animated, {
 } from 'react-native-reanimated'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
-import { Camera, Dumbbell, Flame, Image as ImageIcon, Trophy, Zap } from 'lucide-react-native'
+import { Camera, Dumbbell, Flame, Trophy, Zap } from 'lucide-react-native'
 import * as ImagePicker from 'expo-image-picker'
 import { useTheme } from '@/context/ThemeContext'
 import { useWeightUnit } from '@/context/WeightUnitContext'
 import { spacing, radius, typography, touchTarget, spring, font } from '@/constants/theme'
-import { prBadgeRecipe, type PrType } from '@/constants/recipes'
+import { type PrType } from '@/constants/recipes'
+import { L } from '@/constants/layout'
 import { useWorkout, computePodium, WorkoutExercise, PrLevel } from '@/context/WorkoutContext'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { saveMyoSignature } from '@/lib/myo'
@@ -51,6 +52,53 @@ import { supabase } from '@/lib/supabase'
 import { formatDuration, epley1RM } from '@/lib/utils'
 
 const { width: SCREEN_W } = Dimensions.get('window')
+
+// ─── Styles statiques du chart volume (sortis du inline, rendu-identique — ORA-093) ──
+const DOT_INACTIVE = 'rgba(255,255,255,0.70)'
+const chartSt = StyleSheet.create({
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.s2,
+  },
+  chartLabel: {
+    color: 'rgba(255,255,255,0.28)',
+    fontSize: 9,
+    fontFamily: font.medium,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+  },
+  chartLabel2: {
+    color: 'rgba(255,255,255,0.28)',
+    fontSize: 9,
+    fontFamily: font.medium,
+    letterSpacing: 0.5,
+  },
+  abs: { position: 'absolute' },
+  hidden: { overflow: 'hidden' },
+  vline: { position: 'absolute', top: 0, width: 1, backgroundColor: 'rgba(255,255,255,0.18)' },
+  activeDot: { position: 'absolute', width: 8, height: 8, borderRadius: 4, borderWidth: 1.5 },
+  bubble: {
+    position: 'absolute',
+    backgroundColor: 'rgba(26,26,36,0.92)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.10)',
+  },
+  bubbleText: {
+    fontSize: 11,
+    fontFamily: font.bold,
+    fontVariant: ['tabular-nums'],
+    letterSpacing: -0.2,
+  },
+  w28: { width: 28 },
+  colRight52: { width: 52, textAlign: 'right' },
+  colCenter28: { width: 28, textAlign: 'center' },
+  bb1: { borderBottomWidth: 1 },
+})
 
 // ─── PR Icons ────────────────────────────────────────────────────────────────
 
@@ -101,6 +149,7 @@ function PrRow({
 
   useEffect(() => {
     anim.value = withDelay(delay, withSpring(1, spring.bouncy))
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- effet de montage volontaire (ORA-093)
   }, [])
 
   const animStyle = useAnimatedStyle(() => ({
@@ -208,6 +257,7 @@ function MuscleBar({
       delay,
       withTiming(pct, { duration: 620, easing: Easing.bezier(0.16, 1, 0.3, 1) })
     )
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- effet de montage volontaire (ORA-093)
   }, [])
 
   const barStyle = useAnimatedStyle(() => ({
@@ -314,13 +364,6 @@ function generateWorkoutName(exercises: WorkoutExercise[], startedAt: Date | nul
   return `${label} — ${slot}`
 }
 
-function formatRestTimeSummary(sec: number): string {
-  if (sec < 60) return `${sec}s`
-  const m = Math.floor(sec / 60)
-  const s = sec % 60
-  return s > 0 ? `${m}m ${s}s` : `${m}m`
-}
-
 function muscleLabelFr(key: string): string {
   const map: Record<string, string> = {
     pectoraux: 'Pectoraux',
@@ -367,6 +410,7 @@ function VolumeTrendSparkline({ history, current }: { history: number[]; current
         onPanResponderRelease: () => setActiveIdx(null),
         onPanResponderTerminate: () => setActiveIdx(null),
       }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- effet de montage volontaire (ORA-093)
     [n, W]
   )
 
@@ -401,6 +445,7 @@ function VolumeTrendSparkline({ history, current }: { history: number[]; current
       600,
       withTiming(1, { duration: 820, easing: Easing.bezier(0.16, 1, 0.3, 1) })
     )
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- effet de montage volontaire (ORA-093)
   }, [all.length])
 
   const revealStyle = useAnimatedStyle(() => ({ width: lineReveal.value * W }))
@@ -414,40 +459,14 @@ function VolumeTrendSparkline({ history, current }: { history: number[]; current
   return (
     <View style={{ width: W, marginTop: spacing.s3 }}>
       {/* En-tête explicatif */}
-      <View
-        style={{
-          flexDirection: 'row',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: spacing.s2,
-        }}
-      >
-        <Text
-          style={{
-            color: 'rgba(255,255,255,0.28)',
-            fontSize: 9,
-            fontFamily: font.medium,
-            letterSpacing: 1.2,
-            textTransform: 'uppercase',
-          }}
-        >
-          VOLUME · {n} séances
-        </Text>
-        <Text
-          style={{
-            color: 'rgba(255,255,255,0.28)',
-            fontSize: 9,
-            fontFamily: font.medium,
-            letterSpacing: 0.5,
-          }}
-        >
-          cette séance →
-        </Text>
+      <View style={chartSt.headerRow}>
+        <Text style={chartSt.chartLabel}>VOLUME · {n} séances</Text>
+        <Text style={chartSt.chartLabel2}>cette séance →</Text>
       </View>
       {/* Canvas + touch */}
       <View style={{ width: W, height: H }} {...panResponder.panHandlers}>
         {/* Zone remplie */}
-        <Canvas style={{ width: W, height: H, position: 'absolute' }}>
+        <Canvas style={[chartSt.abs, { width: W, height: H }]}>
           <SkiaPath path={fillPath} style="fill" opacity={0.1}>
             <SkiaLinearGradient
               start={vec(0, 0)}
@@ -457,9 +476,7 @@ function VolumeTrendSparkline({ history, current }: { history: number[]; current
           </SkiaPath>
         </Canvas>
         {/* Ligne */}
-        <View
-          style={{ overflow: 'hidden', position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
-        >
+        <View style={[StyleSheet.absoluteFill, chartSt.hidden]}>
           <Animated.View style={[{ height: H }, revealStyle]}>
             <Canvas style={{ width: W, height: H }}>
               <SkiaPath
@@ -474,7 +491,7 @@ function VolumeTrendSparkline({ history, current }: { history: number[]; current
           </Animated.View>
         </View>
         {/* Dot séance courante */}
-        <Canvas style={{ width: W, height: H, position: 'absolute' }} pointerEvents="none">
+        <Canvas style={[chartSt.abs, { width: W, height: H }]} pointerEvents="none">
           <SkiaPath
             path={(() => {
               const p = Skia.Path.Make()
@@ -492,52 +509,31 @@ function VolumeTrendSparkline({ history, current }: { history: number[]; current
         {activeIdx !== null && activePt && (
           <View pointerEvents="none" style={[StyleSheet.absoluteFill]}>
             {/* Ligne verticale */}
-            <View
-              style={{
-                position: 'absolute',
-                left: activePt.x - 0.5,
-                top: 0,
-                width: 1,
-                height: H,
-                backgroundColor: 'rgba(255,255,255,0.18)',
-              }}
-            />
+            <View style={[chartSt.vline, { left: activePt.x - 0.5, height: H }]} />
             {/* Dot */}
             <View
-              style={{
-                position: 'absolute',
-                left: activePt.x - 4,
-                top: activePt.y - 4,
-                width: 8,
-                height: 8,
-                borderRadius: 4,
-                backgroundColor: isLast ? colors.accent : 'rgba(255,255,255,0.70)',
-                borderWidth: 1.5,
-                borderColor: colors.background,
-              }}
+              style={[
+                chartSt.activeDot,
+                {
+                  left: activePt.x - 4,
+                  top: activePt.y - 4,
+                  backgroundColor: isLast ? colors.accent : DOT_INACTIVE,
+                  borderColor: colors.background,
+                },
+              ]}
             />
             {/* Bulle valeur */}
             <View
-              style={{
-                position: 'absolute',
-                left: Math.max(0, Math.min(activePt.x - 36, W - 72)),
-                top: activePt.y < H / 2 ? activePt.y + 10 : activePt.y - 28,
-                backgroundColor: 'rgba(26,26,36,0.92)',
-                paddingHorizontal: 8,
-                paddingVertical: 3,
-                borderRadius: 6,
-                borderWidth: 1,
-                borderColor: 'rgba(255,255,255,0.10)',
-              }}
+              style={[
+                chartSt.bubble,
+                {
+                  left: Math.max(0, Math.min(activePt.x - 36, W - 72)),
+                  top: activePt.y < H / 2 ? activePt.y + 10 : activePt.y - 28,
+                },
+              ]}
             >
               <Text
-                style={{
-                  color: isLast ? colors.accent : colors.textPrimary,
-                  fontSize: 11,
-                  fontFamily: font.bold,
-                  fontVariant: ['tabular-nums'],
-                  letterSpacing: -0.2,
-                }}
+                style={[chartSt.bubbleText, { color: isLast ? colors.accent : colors.textPrimary }]}
               >
                 {formatVolume(activeVal!, { suffix: true })}
               </Text>
@@ -643,6 +639,7 @@ export default function SummaryScreen() {
       800,
       withTiming(totalVolume, { duration: 500, easing: Easing.bezier(0.16, 1, 0.3, 1) })
     )
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- effet de montage volontaire (ORA-093)
   }, [])
 
   // ─── Métriques ─────────────────────────────────────────────────────────────
@@ -668,10 +665,6 @@ export default function SummaryScreen() {
         ? 'bronze'
         : null
 
-  const prSerieMax = prSerieDetected.reduce(
-    (best, s) => Math.max(best, Math.round(s.weight_kg * s.reps)),
-    0
-  )
   const prSerieLevels: PrLevel[] = prSerieDetected.map((s) => s.pr_serie)
   const bestPrSerie: PrLevel = prSerieLevels.includes('gold')
     ? 'gold'
@@ -1348,20 +1341,22 @@ export default function SummaryScreen() {
                       <Text
                         style={[
                           styles.recapSetHeaderCell,
-                          { color: colors.textTertiary, width: 28 },
+                          chartSt.w28,
+                          { color: colors.textTertiary },
                         ]}
                       >
                         #
                       </Text>
                       <Text
-                        style={[styles.recapSetHeaderCell, { color: colors.textTertiary, flex: 1 }]}
+                        style={[styles.recapSetHeaderCell, L.flex1, { color: colors.textTertiary }]}
                       >
                         POIDS
                       </Text>
                       <Text
                         style={[
                           styles.recapSetHeaderCell,
-                          { color: colors.textTertiary, width: 52, textAlign: 'right' },
+                          chartSt.colRight52,
+                          { color: colors.textTertiary },
                         ]}
                       >
                         REPS
@@ -1369,7 +1364,8 @@ export default function SummaryScreen() {
                       <Text
                         style={[
                           styles.recapSetHeaderCell,
-                          { color: colors.textTertiary, width: 28, textAlign: 'center' },
+                          chartSt.colCenter28,
+                          { color: colors.textTertiary },
                         ]}
                       >
                         PR
@@ -1388,10 +1384,10 @@ export default function SummaryScreen() {
                           key={s.set_number}
                           style={[
                             styles.recapSetRow,
-                            si < exSets.length - 1 && {
-                              borderBottomWidth: 1,
-                              borderBottomColor: colors.separator,
-                            },
+                            si < exSets.length - 1 && [
+                              chartSt.bb1,
+                              { borderBottomColor: colors.separator },
+                            ],
                             prLevel != null && { backgroundColor: `${prColor}10` },
                           ]}
                         >
@@ -1399,7 +1395,7 @@ export default function SummaryScreen() {
                             {s.set_number}
                           </Text>
                           <Text
-                            style={[styles.recapSetWeight, { color: colors.textPrimary, flex: 1 }]}
+                            style={[styles.recapSetWeight, L.flex1, { color: colors.textPrimary }]}
                           >
                             {s.weight_kg > 0 ? formatWeight(s.weight_kg) : 'Poids corps'}
                           </Text>

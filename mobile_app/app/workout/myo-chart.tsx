@@ -16,8 +16,7 @@ import Animated, {
   withSpring,
   withTiming,
 } from 'react-native-reanimated'
-import Svg, { Path as SvgPath, Text as SvgText } from 'react-native-svg'
-import { X } from 'lucide-react-native'
+import Svg, { Text as SvgText } from 'react-native-svg'
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 const TWO_PI = Math.PI * 2
@@ -146,13 +145,6 @@ function rgba(hex: string, a: number): string {
   return `rgba(${r},${g},${b},${a})`
 }
 
-// Centre angulaire d'un secteur (pour le zoom)
-function sectorCenter(fi: number, score: number, maxR: number): { ax: number; ay: number } {
-  const a = ((fi + 0.5) / N_FAM) * TWO_PI - Math.PI / 2
-  const r = score * maxR * 0.55 // point au milieu radial du secteur
-  return { ax: r * Math.cos(a), ay: r * Math.sin(a) }
-}
-
 // ─── Paths Skia ───────────────────────────────────────────────────────────────
 const N_ARC = 48
 
@@ -278,9 +270,9 @@ function ScoreArc({
   const textColor = score === 0 ? '#4A4A5A' : color
 
   return (
-    <View style={{ width: size, height: size * 0.72, alignSelf: 'center' }}>
+    <View style={[styles.centerSelf, { width: size, height: size * 0.72 }]}>
       {/* Arcs GPU — un seul Canvas */}
-      <Canvas style={{ width: size, height: size, position: 'absolute', top: 0 }}>
+      <Canvas style={[styles.absTop, { width: size, height: size }]}>
         {/* Track gris */}
         <Path
           path={trackPath}
@@ -317,7 +309,7 @@ function ScoreArc({
         height={size * 0.72}
         viewBox={`0 0 ${size} ${size}`}
         pointerEvents="none"
-        style={{ position: 'absolute', top: 0 }}
+        style={styles.absTop}
       >
         <SvgText
           x={cx}
@@ -369,6 +361,7 @@ function FamilyRadar({
 
   const gradColors = useMemo(
     () => sessionVals.map(() => [rgba(color, 0), rgba(color, 0.8)] as [string, string]),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- effet de montage volontaire (ORA-093)
     [color, N]
   )
   const sectorPaths = useMemo(
@@ -493,14 +486,14 @@ function FamilyRadar({
               ]}
             >
               <Text
-                style={[styles.labelName, { color: 'rgba(255,255,255,0.55)', fontSize: 8 }]}
+                style={[styles.labelName, styles.labelNameSmall]}
                 numberOfLines={1}
                 adjustsFontSizeToFit
                 minimumFontScale={0.65}
               >
                 {dimNames[i] ?? `D${i}`}
               </Text>
-              <Text style={[styles.labelScore, { fontSize: 10 }]}>
+              <Text style={[styles.labelScore, styles.labelScoreSmall]}>
                 {Math.round(sessionVals[i] * 100)}
               </Text>
               {delta !== 0 && (
@@ -617,7 +610,6 @@ export default function MyoChart({
   )
 
   const accentHex = sel !== null ? SECTOR_COLORS_HEX[sel] : '#8a8a9a'
-  const famScore = sel !== null ? famScores[sel] : 0
 
   // ─── Animation zoom in-place ──────────────────────────────────────────────
   const mainOpacity = useSharedValue(1)
@@ -654,6 +646,7 @@ export default function MyoChart({
       hdrOpacity.value = withTiming(1, { duration: 260 })
       hdrTy.value = withSpring(0, sElegant)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- effet de montage volontaire (ORA-093)
   }, [sel])
 
   const mainAnimStyle = useAnimatedStyle(() => ({
@@ -770,7 +763,7 @@ export default function MyoChart({
                     ]}
                   >
                     <Text
-                      style={[styles.labelName, { color: 'rgba(255,255,255,0.42)' }]}
+                      style={[styles.labelName, styles.labelNameDim]}
                       numberOfLines={1}
                       adjustsFontSizeToFit
                       minimumFontScale={0.8}
@@ -838,6 +831,11 @@ export default function MyoChart({
 }
 
 const styles = StyleSheet.create({
+  centerSelf: { alignSelf: 'center' },
+  absTop: { position: 'absolute', top: 0 },
+  labelNameSmall: { color: 'rgba(255,255,255,0.55)', fontSize: 8 },
+  labelNameDim: { color: 'rgba(255,255,255,0.42)' },
+  labelScoreSmall: { fontSize: 10 },
   labelWrap: {
     position: 'absolute',
     alignItems: 'center',

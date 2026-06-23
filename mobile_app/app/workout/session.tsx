@@ -43,7 +43,6 @@ import {
   Check,
   ChevronLeft,
 } from 'lucide-react-native'
-import Svg, { Path as SvgPath } from 'react-native-svg'
 import {
   Canvas,
   Path,
@@ -96,6 +95,7 @@ function GhostCompareBar({
   useEffect(() => {
     barProg.value = 0
     barProg.value = withSpring(1, { damping: 18, stiffness: 200 })
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- effet de montage volontaire (ORA-093)
   }, [currentWeight])
 
   const currStyle = useAnimatedStyle(() => ({
@@ -120,28 +120,11 @@ function GhostCompareBar({
       style={{ paddingHorizontal: spacing.s4, paddingTop: spacing.s1, paddingBottom: spacing.s2 }}
     >
       {/* Barre */}
-      <View
-        style={{
-          height: H,
-          borderRadius: H / 2,
-          overflow: 'hidden',
-          backgroundColor: 'rgba(255,255,255,0.06)',
-        }}
-      >
+      <View style={[ghostSt.trackBg, { height: H, borderRadius: H / 2 }]}>
         {/* Marqueur fantôme */}
-        <View
-          style={{
-            position: 'absolute',
-            left: ghostPx - 1,
-            top: -1,
-            width: 2,
-            height: H + 2,
-            backgroundColor: 'rgba(255,255,255,0.30)',
-            borderRadius: 1,
-          }}
-        />
+        <View style={[ghostSt.marker, { left: ghostPx - 1, height: H + 2 }]} />
         {/* Barre courante */}
-        <Animated.View style={[{ height: H, borderRadius: H / 2, overflow: 'hidden' }, currStyle]}>
+        <Animated.View style={[ghostSt.hidden, { height: H, borderRadius: H / 2 }, currStyle]}>
           <Canvas style={{ width: W, height: H }}>
             <Path path={trackPath} style="fill">
               <SkiaLinearGradient
@@ -161,14 +144,10 @@ function GhostCompareBar({
       </View>
       {/* Label delta */}
       <Text
-        style={{
-          color: beaten ? '#00E673' : delta < 0 ? 'rgba(255,59,48,0.80)' : 'rgba(255,255,255,0.32)',
-          fontSize: 11,
-          fontFamily: font.medium,
-          marginTop: spacing.s1,
-          letterSpacing: 0.3,
-          fontVariant: ['tabular-nums'],
-        }}
+        style={[
+          ghostSt.deltaLabel,
+          { color: beaten ? GHOST_WIN : delta < 0 ? GHOST_LOSS_TEXT : GHOST_NEUTRAL_TEXT },
+        ]}
       >
         {delta > 0
           ? `↑ +${delta} ${unit} vs fantôme`
@@ -224,10 +203,44 @@ function bestPrLevel(a: PrLevel, b: PrLevel): PrLevel {
   return rank(a) >= rank(b) ? a : b
 }
 
+// ─── Couleurs fantôme (rendu-identique, sorties du inline — ORA-093) ─────────
+const GHOST_WIN = '#00E673'
+const GHOST_LOSS_TEXT = 'rgba(255,59,48,0.80)'
+const GHOST_NEUTRAL_TEXT = 'rgba(255,255,255,0.32)'
+const GHOST_FILL_LOSS = 'rgba(255,59,48,0.55)'
+
+const ghostSt = StyleSheet.create({
+  trackBg: { overflow: 'hidden', backgroundColor: 'rgba(255,255,255,0.06)' },
+  hidden: { overflow: 'hidden' },
+  marker: {
+    position: 'absolute',
+    top: -1,
+    width: 2,
+    backgroundColor: 'rgba(255,255,255,0.30)',
+    borderRadius: 1,
+  },
+  deltaLabel: {
+    fontSize: 11,
+    fontFamily: font.medium,
+    marginTop: spacing.s1,
+    letterSpacing: 0.3,
+    fontVariant: ['tabular-nums'],
+  },
+  logo: { width: 48, height: 48 },
+  z200: { zIndex: 200 },
+  headerTitle: {
+    fontFamily: 'Barlow_700Bold',
+    fontSize: 32,
+    letterSpacing: -0.5,
+    fontVariant: ['tabular-nums'],
+  },
+  tabActiveWidth: { borderBottomWidth: 2 },
+})
+
 // ─── LogoOrava ───────────────────────────────────────────────────────────────
 
 function LogoOrava() {
-  return <Image source={oravaLogo} style={{ width: 48, height: 48 }} resizeMode="contain" />
+  return <Image source={oravaLogo} style={ghostSt.logo} resizeMode="contain" />
 }
 
 // ─── SetRow (swipe delete) ────────────────────────────────────────────────────
@@ -338,7 +351,7 @@ function SetRow({ set, onDelete, colors, ghostVolume }: SetRowProps) {
                     width:
                       `${Math.min(((set.weight_kg * set.reps) / ghostVolume) * 100, 100)}%` as `${number}%`,
                     backgroundColor:
-                      set.weight_kg * set.reps >= ghostVolume ? '#00E673' : 'rgba(255,59,48,0.55)',
+                      set.weight_kg * set.reps >= ghostVolume ? GHOST_WIN : GHOST_FILL_LOSS,
                   },
                 ]}
               />
@@ -677,7 +690,7 @@ function PrFlashOverlay({ events, onDismiss }: PrFlashOverlayProps) {
 
   return (
     <Animated.View
-      style={[baseRecipe.backdrop, backdropStyle, { zIndex: 200 }]}
+      style={[baseRecipe.backdrop, backdropStyle, ghostSt.z200]}
       pointerEvents="auto"
       onTouchEnd={dismiss}
     >
@@ -1014,13 +1027,7 @@ export default function SessionScreen() {
           )}
           <View style={styles.headerCenter}>
             <Text
-              style={{
-                color: colors.textPrimary,
-                fontFamily: 'Barlow_700Bold',
-                fontSize: 32,
-                letterSpacing: -0.5,
-                fontVariant: ['tabular-nums'],
-              }}
+              style={[ghostSt.headerTitle, { color: colors.textPrimary }]}
               accessibilityLabel={`Durée de la séance : ${Math.floor(elapsedSeconds / 60)} minutes`}
             >
               {(() => {
@@ -1063,10 +1070,10 @@ export default function SessionScreen() {
               key={ex.exercise_id + idx}
               style={[
                 styles.tab,
-                idx === currentIndex && {
-                  borderBottomColor: colors.accent,
-                  borderBottomWidth: 2,
-                },
+                idx === currentIndex && [
+                  ghostSt.tabActiveWidth,
+                  { borderBottomColor: colors.accent },
+                ],
               ]}
               onPress={() => setCurrentIndex(idx)}
               activeOpacity={0.7}

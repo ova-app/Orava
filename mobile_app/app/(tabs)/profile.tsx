@@ -203,6 +203,7 @@ function ClaimBand({
   const mount = useSharedValue(0)
   useEffect(() => {
     mount.value = withDelay(120, withTiming(1, { duration: 350, easing: Easing.out(Easing.cubic) }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- effet de montage volontaire (ORA-093)
   }, [])
   const mountStyle = useAnimatedStyle(() => ({
     opacity: mount.value,
@@ -249,6 +250,7 @@ function ClaimBand({
       300,
       withTiming(Math.min(1, current / target), { duration: 700, easing: Easing.out(Easing.cubic) })
     )
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- effet de montage volontaire (ORA-093)
   }, [current, target])
   const barStyle = useAnimatedStyle(() => ({ width: `${progress.value * 100}%` }))
 
@@ -446,6 +448,7 @@ function PrVedetteCard({
   const mount = useSharedValue(0)
   useEffect(() => {
     mount.value = withDelay(200, withSpring(1, spring.standard))
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- effet de montage volontaire (ORA-093)
   }, [])
   const mountStyle = useAnimatedStyle(() => ({
     opacity: mount.value,
@@ -559,6 +562,7 @@ function ChartTooltip({
   const mount = useSharedValue(0)
   useEffect(() => {
     mount.value = withSpring(1, spring.snappy)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- effet de montage volontaire (ORA-093)
   }, [])
   const mountStyle = useAnimatedStyle(() => ({
     opacity: mount.value,
@@ -928,9 +932,9 @@ function WeeklyVolumeChart({
       </View>
       <View style={s.volChartArea} onLayout={(e) => setW(e.nativeEvent.layout.width)}>
         {/* lignes de repère discrètes (alignées sur les ticks) */}
-        <View style={[s.volGrid, { top: 0 }]} />
-        <View style={[s.volGrid, { top: '50%' }]} />
-        <View style={[s.volGrid, { bottom: 0 }]} />
+        <View style={[s.volGrid, pst.top0]} />
+        <View style={[s.volGrid, pst.top50]} />
+        <View style={[s.volGrid, pst.bottom0]} />
 
         {sw && (
           <ChartTooltip
@@ -1004,6 +1008,23 @@ function WeeklyVolumeChart({
 
 const STACK_MAX = 4 // vignettes affichées dans la pile avant le badge « +N »
 
+// Styles statiques sortis du inline (rendu-identique — ORA-093)
+const pst = StyleSheet.create({
+  top0: { top: 0 },
+  top50: { top: '50%' },
+  bottom0: { bottom: 0 },
+  ml13: { marginLeft: -13 },
+  dayBig: { fontSize: 22, lineHeight: 26, letterSpacing: -0.3 },
+  upMt2: { textTransform: 'uppercase', marginTop: 2 },
+  mt2: { marginTop: 2 },
+  fs14: { fontSize: 14 },
+  fs12: { fontSize: 12 },
+  blw3: { borderLeftWidth: 3 },
+  rowPv4: { flexDirection: 'row', alignItems: 'center', paddingVertical: 4 },
+  fs10ls08: { fontSize: 10, letterSpacing: 0.8 },
+  mb0: { marginBottom: 0 },
+})
+
 function PhotoStack({
   photos,
   colors,
@@ -1017,6 +1038,7 @@ function PhotoStack({
   const mount = useSharedValue(0)
   useEffect(() => {
     mount.value = withDelay(160, withSpring(1, spring.standard))
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- effet de montage volontaire (ORA-093)
   }, [])
   const mountStyle = useAnimatedStyle(() => ({
     opacity: mount.value,
@@ -1048,7 +1070,7 @@ function PhotoStack({
             {[0, 1].map((i) => (
               <View
                 key={i}
-                style={[s.vitrineThumb, s.vitrineThumbEmpty, { marginLeft: -13, zIndex: -i }]}
+                style={[s.vitrineThumb, s.vitrineThumbEmpty, pst.ml13, { zIndex: -i }]}
               />
             ))}
           </View>
@@ -1078,16 +1100,14 @@ function PhotoStack({
               <ExpoImage
                 key={p.id}
                 source={{ uri: p.photoUrl }}
-                style={[s.vitrineThumb, { marginLeft: -13, zIndex: -1 - i }]}
+                style={[s.vitrineThumb, pst.ml13, { zIndex: -1 - i }]}
                 contentFit="cover"
                 transition={120}
                 cachePolicy="memory-disk"
               />
             ))}
             {extra > 0 && (
-              <View
-                style={[s.vitrineThumb, s.vitrineMore, { marginLeft: -13, zIndex: -STACK_MAX }]}
-              >
+              <View style={[s.vitrineThumb, s.vitrineMore, pst.ml13, { zIndex: -STACK_MAX }]}>
                 <Text style={s.vitrineMoreText} allowFontScaling={false}>
                   +{extra}
                 </Text>
@@ -1425,23 +1445,13 @@ function HistoryRowInProfile({ item, onPress, colors }: HistoryRowProps) {
           <Text
             style={[
               typography.title,
-              {
-                color: colors.textPrimary,
-                fontSize: 22,
-                lineHeight: 26,
-                letterSpacing: -0.3,
-                fontFamily: font.bold,
-              },
+              pst.dayBig,
+              { color: colors.textPrimary, fontFamily: font.bold },
             ]}
           >
             {day}
           </Text>
-          <Text
-            style={[
-              typography.caption,
-              { color: colors.textTertiary, textTransform: 'uppercase', marginTop: 2 },
-            ]}
-          >
+          <Text style={[typography.caption, pst.upMt2, { color: colors.textTertiary }]}>
             {weekday}
           </Text>
         </View>
@@ -1455,7 +1465,7 @@ function HistoryRowInProfile({ item, onPress, colors }: HistoryRowProps) {
             {item.title ?? '—'}
           </Text>
           <Text
-            style={[typography.caption, { color: colors.textSecondary, marginTop: 2 }]}
+            style={[typography.caption, pst.mt2, { color: colors.textSecondary }]}
             numberOfLines={1}
           >
             {subtitleParts.join(' · ')}
@@ -1470,26 +1480,16 @@ function HistoryRowInProfile({ item, onPress, colors }: HistoryRowProps) {
           <Text
             style={[
               typography.body,
-              {
-                color: colors.textPrimary,
-                fontFamily: font.bold,
-                fontVariant: ['tabular-nums'],
-                fontSize: 14,
-              },
+              pst.fs14,
+              { color: colors.textPrimary, fontFamily: font.bold, fontVariant: ['tabular-nums'] },
             ]}
           >
             {volumeStr}{' '}
-            <Text
-              style={{
-                fontFamily: font.regular,
-                color: colors.textSecondary,
-                fontSize: 12,
-              }}
-            >
+            <Text style={[pst.fs12, { fontFamily: font.regular, color: colors.textSecondary }]}>
               {weightUnit}
             </Text>
           </Text>
-          <ChevronRight size={14} color={colors.textTertiary} style={{ marginTop: 2 }} />
+          <ChevronRight size={14} color={colors.textTertiary} style={pst.mt2} />
         </View>
       </View>
     </TouchableOpacity>
@@ -1522,10 +1522,10 @@ function ClaimHistoryRowInProfile({
     <View
       style={[
         styles.card,
+        pst.blw3,
         {
           backgroundColor: colors.backgroundSecondary,
           marginBottom: spacing.s2,
-          borderLeftWidth: 3,
           borderLeftColor: tone,
         },
       ]}
@@ -1536,23 +1536,13 @@ function ClaimHistoryRowInProfile({
           <Text
             style={[
               typography.title,
-              {
-                color: colors.textPrimary,
-                fontSize: 22,
-                lineHeight: 26,
-                letterSpacing: -0.3,
-                fontFamily: font.bold,
-              },
+              pst.dayBig,
+              { color: colors.textPrimary, fontFamily: font.bold },
             ]}
           >
             {day}
           </Text>
-          <Text
-            style={[
-              typography.caption,
-              { color: colors.textTertiary, textTransform: 'uppercase', marginTop: 2 },
-            ]}
-          >
+          <Text style={[typography.caption, pst.upMt2, { color: colors.textTertiary }]}>
             {weekday}
           </Text>
         </View>
@@ -1566,7 +1556,7 @@ function ClaimHistoryRowInProfile({
             Claim · {targetLabel}
           </Text>
           <Text
-            style={[typography.caption, { color: colors.textSecondary, marginTop: 2 }]}
+            style={[typography.caption, pst.mt2, { color: colors.textSecondary }]}
             numberOfLines={1}
           >
             {sub}
@@ -1575,22 +1565,22 @@ function ClaimHistoryRowInProfile({
 
         {/* Badge statut (vert réussi / rouge raté) */}
         <View
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: spacing.s1,
-            paddingVertical: 4,
-            paddingHorizontal: spacing.s2,
-            borderRadius: radius.full,
-            backgroundColor: `${tone}1A`,
-          }}
+          style={[
+            pst.rowPv4,
+            {
+              gap: spacing.s1,
+              paddingHorizontal: spacing.s2,
+              borderRadius: radius.full,
+              backgroundColor: `${tone}1A`,
+            },
+          ]}
         >
           {succeeded ? (
             <CheckCircle2 size={13} color={tone} strokeWidth={2.5} />
           ) : (
             <X size={13} color={tone} strokeWidth={2.5} />
           )}
-          <Text style={{ fontSize: 10, fontFamily: font.bold, color: tone, letterSpacing: 0.8 }}>
+          <Text style={[pst.fs10ls08, { fontFamily: font.bold, color: tone }]}>
             {succeeded ? 'RÉUSSI' : 'MANQUÉ'}
           </Text>
         </View>
@@ -1628,6 +1618,7 @@ function AnimatedCounter({
 
   useEffect(() => {
     sv.value = withDelay(delay, withTiming(target, { duration, easing: easeOutCubic }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- effet de montage volontaire (ORA-093)
   }, [target, delay, duration])
 
   useAnimatedReaction(
@@ -1905,7 +1896,7 @@ export default function ProfileScreen(): React.JSX.Element {
               )}
               <View style={s.weekInCard}>
                 <View style={s.weekHeaderRow}>
-                  <Text style={[s.sectionLabel, { marginBottom: 0 }]}>CETTE SEMAINE</Text>
+                  <Text style={[s.sectionLabel, pst.mb0]}>CETTE SEMAINE</Text>
                   <Pressable
                     onPress={() => setMonthOpen(true)}
                     hitSlop={10}

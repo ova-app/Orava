@@ -12,6 +12,7 @@ import { ThemeProvider } from '@/context/ThemeContext'
 import { WeightUnitProvider } from '@/context/WeightUnitContext'
 import { WorkoutProvider } from '@/context/WorkoutContext'
 import { dark, radius, spacing, typography } from '@/constants/theme'
+import { L } from '@/constants/layout'
 import { useFonts } from 'expo-font'
 import {
   Barlow_400Regular,
@@ -149,7 +150,7 @@ export default function RootLayout() {
           navigationRef,
         }}
       >
-        <GestureHandlerRootView style={{ flex: 1 }}>
+        <GestureHandlerRootView style={L.flex1}>
           <ThemeProvider>
             <WeightUnitProvider>
               <WorkoutProvider>

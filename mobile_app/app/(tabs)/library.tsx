@@ -55,6 +55,7 @@ function SkeletonRow() {
       -1,
       true
     )
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- effet de montage volontaire (ORA-093)
   }, [])
 
   const shimmerStyle = useAnimatedStyle(() => ({
@@ -62,21 +63,10 @@ function SkeletonRow() {
   }))
 
   return (
-    <Animated.View
-      style={[
-        {
-          minHeight: touchTarget.comfort,
-          flexDirection: 'row',
-          alignItems: 'center',
-          paddingHorizontal: spacing.s5,
-          marginBottom: 2,
-        },
-        shimmerStyle,
-      ]}
-    >
-      <View style={{ flex: 1, gap: spacing.s2 }}>
-        <View style={[sk.line, { width: '45%' }]} />
-        <View style={[sk.line, { width: '30%', height: 10 }]} />
+    <Animated.View style={[styles.skeletonRow, shimmerStyle]}>
+      <View style={styles.skeletonCol}>
+        <View style={[sk.line, styles.skW45]} />
+        <View style={[sk.line, styles.skW30]} />
       </View>
     </Animated.View>
   )
@@ -122,7 +112,7 @@ function ExerciseRow({ item, isFavorite, onPress, onToggleFavorite }: ExerciseRo
       accessibilityLabel={`${item.name_fr}, ${subtitle}`}
       accessibilityHint="Voir la fiche de l'exercice"
     >
-      <View style={{ flex: 1, gap: spacing.s1 }}>
+      <View style={styles.itemCol}>
         <Text
           style={[typography.body, { color: colors.textPrimary, fontFamily: font.bold }]}
           numberOfLines={1}
@@ -301,11 +291,10 @@ export default function LibraryScreen() {
       <Text
         style={[
           typography.caption,
+          styles.upcase,
           {
             color: colors.textPrimary,
             fontFamily: font.bold,
-            textTransform: 'uppercase',
-            letterSpacing: 1,
             paddingHorizontal: spacing.s5,
             paddingTop: spacing.s10,
             paddingBottom: spacing.s4,
@@ -321,11 +310,10 @@ export default function LibraryScreen() {
         <TextInput
           style={[
             typography.body,
+            styles.searchInputBase,
             {
-              flex: 1,
               color: colors.textPrimary,
               marginLeft: spacing.s2,
-              paddingVertical: 0,
             },
           ]}
           placeholder="Rechercher..."
@@ -416,11 +404,10 @@ export default function LibraryScreen() {
             <Text
               style={[
                 typography.caption,
+                styles.upcase,
                 {
                   color: colors.textTertiary,
                   fontFamily: font.bold,
-                  textTransform: 'uppercase',
-                  letterSpacing: 1,
                   paddingHorizontal: spacing.s5,
                   paddingVertical: spacing.s2,
                   paddingTop: spacing.s6,
@@ -455,6 +442,19 @@ export default function LibraryScreen() {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
+  upcase: { textTransform: 'uppercase', letterSpacing: 1 },
+  searchInputBase: { flex: 1, paddingVertical: 0 },
+  skeletonRow: {
+    minHeight: touchTarget.comfort,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.s5,
+    marginBottom: 2,
+  },
+  skeletonCol: { flex: 1, gap: spacing.s2 },
+  skW45: { width: '45%' },
+  itemCol: { flex: 1, gap: spacing.s1 },
+  skW30: { width: '30%', height: 10 },
   container: {
     flex: 1,
   },

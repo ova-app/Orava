@@ -318,13 +318,10 @@ export default function ExerciseDetailScreen(): React.JSX.Element {
                       </Text>
                     </View>
                     <View
-                      style={{
-                        height: 3,
-                        borderRadius: 2,
-                        backgroundColor: colors.accent,
-                        width: `${m.activation_pct}%`,
-                        marginLeft: spacing.s4,
-                      }}
+                      style={[
+                        s.barFill,
+                        { backgroundColor: colors.accent, width: `${m.activation_pct}%` },
+                      ]}
                     />
                   </View>
                 ))}
@@ -349,13 +346,10 @@ export default function ExerciseDetailScreen(): React.JSX.Element {
                       </Text>
                     </View>
                     <View
-                      style={{
-                        height: 3,
-                        borderRadius: 2,
-                        backgroundColor: DOT_SECONDARY,
-                        width: `${m.activation_pct}%`,
-                        marginLeft: spacing.s4,
-                      }}
+                      style={[
+                        s.barFill,
+                        { backgroundColor: DOT_SECONDARY, width: `${m.activation_pct}%` },
+                      ]}
                     />
                   </View>
                 ))}
@@ -383,13 +377,10 @@ export default function ExerciseDetailScreen(): React.JSX.Element {
                       </Text>
                     </View>
                     <View
-                      style={{
-                        height: 3,
-                        borderRadius: 2,
-                        backgroundColor: colors.textTertiary,
-                        width: `${m.activation_pct}%`,
-                        marginLeft: spacing.s4,
-                      }}
+                      style={[
+                        s.barFill,
+                        { backgroundColor: colors.textTertiary, width: `${m.activation_pct}%` },
+                      ]}
                     />
                   </View>
                 ))}
@@ -503,6 +494,7 @@ export default function ExerciseDetailScreen(): React.JSX.Element {
 
 function buildStyles(colors: ReturnType<typeof useTheme>['colors']) {
   return StyleSheet.create({
+    barFill: { height: 3, borderRadius: 2, marginLeft: spacing.s4 },
     container: {
       flex: 1,
       backgroundColor: colors.background,

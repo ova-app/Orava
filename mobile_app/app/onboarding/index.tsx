@@ -1,11 +1,10 @@
 import React from 'react'
-import { View, Text, Pressable, StyleSheet, SafeAreaView, Dimensions } from 'react-native'
+import { View, Text, Pressable, StyleSheet, SafeAreaView } from 'react-native'
 import { useRouter } from 'expo-router'
 import Svg, { Circle, Path } from 'react-native-svg'
 import { useTheme } from '@/context/ThemeContext'
 import { spacing, radius, typography } from '@/constants/theme'
 
-const { width: LARGEUR_ECRAN } = Dimensions.get('window')
 const TAILLE_ORB = 200
 
 // ─── Placeholder Myo — arcs SVG colorés ─────────────────────────────────────
@@ -62,21 +61,15 @@ function DotsProgression({ actif }: { actif: 0 | 1 }): React.JSX.Element {
       <View
         style={[
           dotsStyles.point,
-          {
-            width: actif === 0 ? 8 : 6,
-            height: actif === 0 ? 8 : 6,
-            backgroundColor: actif === 0 ? colors.accent : colors.textTertiary,
-          },
+          actif === 0 ? dotsStyles.pointActif : dotsStyles.pointInactif,
+          { backgroundColor: actif === 0 ? colors.accent : colors.textTertiary },
         ]}
       />
       <View
         style={[
           dotsStyles.point,
-          {
-            width: actif === 1 ? 8 : 6,
-            height: actif === 1 ? 8 : 6,
-            backgroundColor: actif === 1 ? colors.accent : colors.textTertiary,
-          },
+          actif === 1 ? dotsStyles.pointActif : dotsStyles.pointInactif,
+          { backgroundColor: actif === 1 ? colors.accent : colors.textTertiary },
         ]}
       />
     </View>
@@ -84,6 +77,8 @@ function DotsProgression({ actif }: { actif: 0 | 1 }): React.JSX.Element {
 }
 
 const dotsStyles = StyleSheet.create({
+  pointActif: { width: 8, height: 8 },
+  pointInactif: { width: 6, height: 6 },
   conteneur: {
     flexDirection: 'row',
     alignItems: 'center',
