@@ -8,9 +8,11 @@ import {
   StatusBar,
   ViewStyle,
   Modal,
+  ActivityIndicator,
 } from 'react-native'
 import Animated, { useSharedValue, withSpring, useAnimatedStyle } from 'react-native-reanimated'
 import { useRouter } from 'expo-router'
+import { usePostHog } from 'posthog-react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { ChevronLeft, ChevronRight, Check } from 'lucide-react-native'
 import { useTheme } from '@/context/ThemeContext'
@@ -20,6 +22,8 @@ import { toggleRecipe } from '@/constants/recipes'
 import { supabase } from '@/lib/supabase'
 import { cacheUserPlan } from '@/lib/plan'
 import { storage } from '@/lib/storage'
+import { exportUserData } from '@/lib/dataExport'
+import { log } from '@/lib/logger'
 
 // ─── ToggleRow (inline) ──────────────────────────────────────────────────────
 // Custom toggle wired via toggleRecipe + Reanimated spring (snappy).
@@ -117,6 +121,7 @@ export default function SettingsScreen(): React.JSX.Element {
   const { colors } = useTheme()
   const { unit: weightUnit, setUnit: setWeightUnit } = useWeightUnit()
   const router = useRouter()
+  const posthog = usePostHog()
 
   const [settings, setSettings] = useState<SettingsState>({
     vibrationEnabled: true,
@@ -126,6 +131,10 @@ export default function SettingsScreen(): React.JSX.Element {
   })
   const [userPlan, setUserPlan] = useState<'free' | 'premium'>('free')
   const [timerPickerVisible, setTimerPickerVisible] = useState(false)
+  // ORA-003 — opt-in analytics. PostHog est opted-out par défaut (`defaultOptIn: false`
+  // dans _layout) → la collecte n'a lieu que si l'utilisateur l'active ici.
+  const [analyticsEnabled, setAnalyticsEnabled] = useState(false)
+  const [exporting, setExporting] = useState(false)
 
   // ─── Persistance load ─────────────────────────────────────────────────────
 
@@ -191,6 +200,31 @@ export default function SettingsScreen(): React.JSX.Element {
     setSettings((prev) => ({ ...prev, defaultTimerSeconds: seconds }))
     storage.setNumber(TIMER_PRESET_KEY, seconds) // cache RAM + AsyncStorage (lu par timer.tsx)
     setTimerPickerVisible(false)
+  }
+
+  // ─── ORA-003 — analytics opt-in + export RGPD ───────────────────────────────
+  // L'état de consentement est persisté par PostHog lui-même (propriété OptedOut).
+  useEffect(() => {
+    if (posthog) setAnalyticsEnabled(!posthog.optedOut)
+  }, [posthog])
+
+  function setAnalytics(enabled: boolean): void {
+    setAnalyticsEnabled(enabled)
+    if (!posthog) return
+    if (enabled) void posthog.optIn()
+    else void posthog.optOut()
+  }
+
+  async function handleExport(): Promise<void> {
+    if (exporting) return
+    setExporting(true)
+    try {
+      await exportUserData()
+    } catch (e) {
+      log.error('[settings] export', e)
+    } finally {
+      setExporting(false)
+    }
   }
 
   const s = buildStyles(colors)
@@ -298,6 +332,50 @@ export default function SettingsScreen(): React.JSX.Element {
             accessibilityLabel="Séances publiques par défaut"
             rowStyle={s.rowInGroup}
           />
+
+          <View style={s.separator} />
+
+          {/* Statistiques d'usage — opt-in (ORA-003) */}
+          <ToggleRow
+            label="Partager mes statistiques d'usage"
+            subtitle="Aide à améliorer l'app. Désactivé par défaut."
+            value={analyticsEnabled}
+            onChange={setAnalytics}
+            accessibilityLabel="Partager mes statistiques d'usage"
+            rowStyle={s.rowInGroup}
+          />
+
+          <View style={s.separator} />
+
+          {/* Exporter mes données — portabilité RGPD (art. 20) */}
+          <Pressable
+            style={[s.row, s.rowPressable]}
+            onPress={handleExport}
+            disabled={exporting}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: exporting }}
+            accessibilityLabel="Exporter mes données"
+          >
+            <Text style={s.rowLabel}>Exporter mes données</Text>
+            {exporting ? (
+              <ActivityIndicator size="small" color={colors.textSecondary} />
+            ) : (
+              <ChevronRight size={16} color={colors.textTertiary} strokeWidth={2} />
+            )}
+          </Pressable>
+
+          <View style={s.separator} />
+
+          {/* Politique de confidentialité */}
+          <Pressable
+            style={[s.row, s.rowPressable]}
+            onPress={() => router.push('/privacy')}
+            accessibilityRole="button"
+            accessibilityLabel="Politique de confidentialité"
+          >
+            <Text style={s.rowLabel}>Politique de confidentialité</Text>
+            <ChevronRight size={16} color={colors.textTertiary} strokeWidth={2} />
+          </Pressable>
         </View>
 
         {/* GROUPE MYO */}
@@ -348,6 +426,19 @@ export default function SettingsScreen(): React.JSX.Element {
               </Text>
             </View>
           </View>
+
+          <View style={s.separator} />
+
+          {/* Supprimer mon compte (ORA-001) */}
+          <Pressable
+            style={[s.row, s.rowPressable]}
+            onPress={() => router.push('/delete-account')}
+            accessibilityRole="button"
+            accessibilityLabel="Supprimer mon compte"
+          >
+            <Text style={[s.rowLabel, { color: colors.error }]}>Supprimer mon compte</Text>
+            <ChevronRight size={16} color={colors.error} strokeWidth={2} />
+          </Pressable>
         </View>
 
         <View style={s.bottomPad} />

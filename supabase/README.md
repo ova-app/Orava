@@ -28,6 +28,7 @@ Les fichiers de `migrations/` ci-dessous sont les **changements incrémentaux do
 
 | Planned | Contenu | À faire |
 |---|---|---|
+| `ora001_delete_account.sql` | RPC `delete_account()` (`SECURITY DEFINER`) — suppression de compte + toutes données + blobs Storage (ORA-001, Apple 5.1.1(v) + RGPD art. 17) | ⚠️ **À appliquer** (client déjà codé : `app/delete-account.tsx` + settings). Prérequis : `gyms.created_by` nullable |
 | `ora020_rls_write_hardening.sql` | Durcissement RLS écritures (11 tables, WITH CHECK/USING) | ⚠️ **À appliquer APRÈS revue** du diagnostic `pg_policies` (en bas du fichier) |
 | `ora023_comment_length_check.sql` | CHECK `comments.content` ≤ 500 | ⚠️ À appliquer |
 | `claims_and_featured_pr.sql` | `users.featured_pr` (jsonb) + tables `claims` + `claim_votes` (+RLS) — vitrine sociale du profil (called-shot + PR vedette) | ⚠️ **À appliquer** (client déjà codé : profil/feed/summary) |

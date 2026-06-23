@@ -138,7 +138,12 @@ export default function RootLayout() {
     <ErrorBoundary>
       <PostHogProvider
         apiKey={process.env.EXPO_PUBLIC_POSTHOG_KEY ?? ''}
-        options={{ host: process.env.EXPO_PUBLIC_POSTHOG_HOST ?? 'https://eu.i.posthog.com' }}
+        options={{
+          host: process.env.EXPO_PUBLIC_POSTHOG_HOST ?? 'https://eu.i.posthog.com',
+          // ORA-003 — opt-out par défaut : aucune capture (ni autocapture écrans) tant que
+          // l'utilisateur n'a pas activé « Partager mes statistiques » dans Réglages.
+          defaultOptIn: false,
+        }}
         autocapture={{
           captureScreens: true,
           navigationRef,

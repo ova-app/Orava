@@ -2,6 +2,8 @@ import PostHog from 'posthog-react-native'
 
 export const posthog = new PostHog(process.env.EXPO_PUBLIC_POSTHOG_KEY ?? '', {
   host: process.env.EXPO_PUBLIC_POSTHOG_HOST ?? 'https://eu.i.posthog.com',
+  // ORA-003 — opt-out par défaut (RGPD). Cohérent avec le PostHogProvider (_layout).
+  defaultOptIn: false,
 })
 
 export const Events = {

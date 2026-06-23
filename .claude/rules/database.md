@@ -386,3 +386,16 @@ Le client génère `id` (workout), `exercises[].id` (workout_exercise) et `exerc
 - **[ORA-084] `users.featured_photo (jsonb NULL)`** — ✅ appliquée (21/06/2026). Photo épinglée en tête de vitrine, snapshot `{ id, photo_url, source, workout_id }`. NULL → la plus récente fait foi (fallback client). Lecture/écriture isolée best-effort (`lib/featuredPhoto.ts`). Client codé (`PhotoStack` hero + badge 📌, toggle épingler dans le zoom vitrine).
 - **[ORA-085] `users.bio (text NULL)`** — ✅ appliquée (21/06/2026). Bio courte affichée **sous l'avatar** (bande à gauche, extensible jusqu'à la pile vitrine à droite, au-dessus de la carte « cette semaine »), plafonnée à 70 caractères (CHECK serveur en défense en profondeur) ; saisie dans Modifier le profil (section IDENTITÉ, compteur live). Aperçu profil = 3 lignes max (`numberOfLines`), espaces normalisés à l'écriture. Lecture/écriture isolée best-effort (`lib/profileBio.ts`). Tap sur la bio (ou sur « + Ajouter une bio » si vide) → `/edit-profile`.
 - RLS : lecture publique si `is_public` (cohérent feed) ; écriture propriétaire strict (cohérent ORA-020). Échec d'un claim = **discret** (feed n'affiche que `active`+`succeeded`) ; track record profil = `succeeded/(succeeded+failed)`, `expired` exclu.
+
+### [Conformité / ORA-001] Suppression de compte — RPC `delete_account`
+⚠️ **À APPLIQUER** — SQL exécutable : [`supabase/planned/ora001_delete_account.sql`](../../supabase/planned/ora001_delete_account.sql). Client déjà codé (`app/delete-account.tsx` + entrée settings COMPTE).
+
+- RPC `delete_account()` **`SECURITY DEFINER`** (la suppression de `auth.users` exige des droits hors RLS) — bornée strictement à `auth.uid()` : chacun n'efface que son propre compte. Apple Guideline 5.1.1(v) + RGPD art. 17.
+- Efface dans l'ordre FK : likes/comments/follows émis · claims (+votes/likes/comments, guardés `to_regclass`) · profile_photos · myo_signatures · body_metrics · workout_metrics · workout_sets → workout_exercises · likes/comments des autres sur mes séances · workouts · `gyms.created_by → NULL` (**prérequis : colonne nullable**) · lignes `storage.objects` (`avatars` + `workout-photos`, dossier `${uid}/`) · `public.users` · `auth.users`.
+- Le client purge **en amont** les blobs Storage via l'API (`storage.from(b).list(uid)` → `remove`) tant qu'il est authentifié, puis appelle la RPC, puis `signOut` → `/auth/login`. Friction : taper « SUPPRIMER » (règle UX #6).
+
+### [Conformité RGPD / ORA-003] Consentement + analytics opt-in + export
+Pas de migration SQL — 100 % client.
+- **Consentement** à l'inscription (`auth/register.tsx`) : case à cocher **bloquante** + lien vers `app/privacy.tsx` (mention données de santé art. 9). Pas de compte créé sans consentement.
+- **Analytics opt-out par défaut** : `PostHogProvider` (`_layout.tsx`) + instance `lib/analytics.ts` en `defaultOptIn: false`. Toggle d'opt-in dans Réglages › Confidentialité (`posthog.optIn()/optOut()`, état lu/persisté par PostHog via `optedOut`). Aucune autocapture écran tant que l'utilisateur n'a pas activé.
+- **Export RGPD** (portabilité art. 20) : `lib/dataExport.ts` agrège users/workouts(+exercises+sets)/body_metrics/myo_signatures/claims → JSON partagé via `Share` natif (zéro dep). *(Upgrade futur : `expo-file-system` + `expo-sharing` pour un export fichier.)*

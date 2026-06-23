@@ -12,7 +12,7 @@ import {
   Image,
 } from 'react-native'
 import { useRouter } from 'expo-router'
-import { AlertCircle } from 'lucide-react-native'
+import { AlertCircle, Check } from 'lucide-react-native'
 import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/context/ThemeContext'
 import { spacing, radius, typography, font } from '@/constants/theme'
@@ -31,6 +31,7 @@ interface ErreurFormulaire {
   nomUtilisateur?: string
   email?: string
   motDePasse?: string
+  consentement?: string
   global?: string
 }
 
@@ -52,6 +53,7 @@ export default function RegisterScreen(): React.JSX.Element {
     motDePasse: '',
   })
   const [erreurs, setErreurs] = useState<ErreurFormulaire>({})
+  const [consentement, setConsentement] = useState<boolean>(false)
   const [chargement, setChargement] = useState<boolean>(false)
   const [motDePasseVisible, setMotDePasseVisible] = useState<boolean>(false)
   const [nomUtilisateurFocused, setNomUtilisateurFocused] = useState<boolean>(false)
@@ -76,6 +78,9 @@ export default function RegisterScreen(): React.JSX.Element {
       nouvellesErreurs.motDePasse = 'Mot de passe requis'
     } else if (form.motDePasse.length < 8) {
       nouvellesErreurs.motDePasse = '8 caractères minimum'
+    }
+    if (!consentement) {
+      nouvellesErreurs.consentement = 'Tu dois accepter la politique de confidentialité'
     }
     setErreurs(nouvellesErreurs)
     return Object.keys(nouvellesErreurs).length === 0
@@ -255,6 +260,37 @@ export default function RegisterScreen(): React.JSX.Element {
             )
           })()}
 
+          {/* Consentement RGPD (ORA-003) — données de santé art. 9 */}
+          <View style={styles.consentGroupe}>
+            <Pressable
+              style={styles.consentRow}
+              onPress={() => setConsentement((v) => !v)}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: consentement }}
+              accessibilityLabel="Accepter la politique de confidentialité et le traitement des données de santé"
+            >
+              <View style={[styles.checkbox, consentement && styles.checkboxChecked]}>
+                {consentement ? (
+                  <Check size={14} color={colors.background} strokeWidth={3} />
+                ) : null}
+              </View>
+              <Text style={styles.consentTexte}>
+                J&apos;accepte la{' '}
+                <Text
+                  style={styles.consentLien}
+                  onPress={() => router.push('/privacy')}
+                  accessibilityRole="link"
+                >
+                  politique de confidentialité
+                </Text>{' '}
+                et le traitement de mes données de santé (séances, mesures).
+              </Text>
+            </Pressable>
+            {erreurs.consentement ? (
+              <Text style={styles.consentErreur}>{erreurs.consentement}</Text>
+            ) : null}
+          </View>
+
           {/* Erreur globale */}
           {erreurs.global ? (
             <View style={styles.banniereErreur}>
@@ -339,6 +375,43 @@ function buildStyles(colors: ReturnType<typeof useTheme>['colors']) {
       ...typography.caption,
       color: colors.textSecondary,
       paddingHorizontal: spacing.s2,
+    },
+    consentGroupe: {
+      gap: spacing.s1,
+    },
+    consentRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: spacing.s3,
+    },
+    checkbox: {
+      width: 22,
+      height: 22,
+      borderRadius: radius.sm,
+      borderWidth: 1.5,
+      borderColor: colors.textTertiary,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginTop: 1,
+    },
+    checkboxChecked: {
+      backgroundColor: colors.accent,
+      borderColor: colors.accent,
+    },
+    consentTexte: {
+      ...typography.caption,
+      color: colors.textSecondary,
+      flex: 1,
+      lineHeight: 18,
+    },
+    consentLien: {
+      color: colors.textPrimary,
+      fontFamily: font.bold,
+    },
+    consentErreur: {
+      ...typography.caption,
+      color: colors.error,
+      marginLeft: 34,
     },
     banniereErreur: {
       backgroundColor: `${colors.error}18`,
